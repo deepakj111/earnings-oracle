@@ -5,6 +5,11 @@ env/
 venv/
 ENV/
 
+data/transcripts/
+
+repo_code.py
+repo_export.txt
+
 # Python
 __pycache__/
 *.py[cod]
