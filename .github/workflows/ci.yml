@@ -2,13 +2,14 @@ name: CI Quality Gate
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  lint-and-test:
+  quality:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -16,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"        # matches pyproject.toml >=3.11
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -35,11 +36,29 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
-      - name: Run Ruff (Linting & Formatting Check)
+      # ── Linting ────────────────────────────────────────────────────────
+      - name: Ruff — lint
         run: poetry run ruff check .
 
-      - name: Run Mypy (Type Checking)
-        run: poetry run mypy .
+      - name: Ruff — format check
+        run: poetry run ruff format --check .
 
-      - name: Run Pytest (Unit Tests)
-        run: poetry run pytest tests/
+      # ── Type checking ──────────────────────────────────────────────────
+      - name: Mypy — type check
+        run: |
+          poetry run mypy ingestion/ \
+            --ignore-missing-imports \
+            --disallow-untyped-defs \
+            --no-strict-optional \
+            --pretty
+
+      # ── Security ───────────────────────────────────────────────────────
+      - name: Bandit — security scan
+        run: |
+          poetry run bandit -r ingestion/ \
+            -c pyproject.toml \
+            --exit-zero-on-skipped
+
+      # ── Tests ──────────────────────────────────────────────────────────
+      - name: Pytest — unit tests
+        run: poetry run pytest tests/ -v --durations=10
