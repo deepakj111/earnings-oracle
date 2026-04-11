@@ -1,0 +1,58 @@
+[tool.poetry]
+name = "financial-rag-system"
+version = "0.1.0"
+description = "Financial Earnings Call RAG System"
+authors = ["Deepak <deepak@example.com>"]
+readme = "README.md"
+packages = [
+    { include = "api" },
+    { include = "retrieval" },
+    { include = "ingestion" },
+    { include = "query" },
+    { include = "generation" },
+    { include = "evaluation" },
+    { include = "cache" },
+    { include = "crag" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+fastapi = "^0.111.0"
+uvicorn = "^0.30.1"
+streamlit = "^1.35.0"
+langchain = "^0.2.0"
+langgraph = "^0.0.60"
+langchain-google-genai = "^1.0.6"
+llama-index = "^0.10.43"
+qdrant-client = "^1.9.1"
+rank_bm25 = "^0.2.2"
+flashrank = "^0.2.5"
+tavily-python = "^0.3.3"
+unstructured = {extras = ["pdf"], version = "^0.14.4"}
+gptcache = "^0.1.43"
+redis = "^5.0.4"
+ragas = "^0.1.9"
+deepeval = "^0.21.50"
+google-generativeai = "^0.5.4"
+loguru = "^0.7.2"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.4.8"
+mypy = "^1.10.0"
+pytest = "^8.2.2"
+pytest-asyncio = "^0.23.7"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
