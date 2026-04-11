@@ -66,21 +66,23 @@ def index_document(
         embedding = _get_embedding(chunk.text)
         time.sleep(0.05)  # respect Gemini free-tier rate limits
 
-        points.append(PointStruct(
-            id=str(uuid.uuid4()),
-            vector=embedding,
-            payload={
-                "chunk_id": chunk.chunk_id,
-                "parent_id": chunk.parent_id,
-                "text": chunk.text,
-                "ticker": metadata.ticker,
-                "company": metadata.company,
-                "date": metadata.date,
-                "year": metadata.year,
-                "quarter": metadata.quarter,
-                "fiscal_period": metadata.fiscal_period,
-            },
-        ))
+        points.append(
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=embedding,
+                payload={
+                    "chunk_id": chunk.chunk_id,
+                    "parent_id": chunk.parent_id,
+                    "text": chunk.text,
+                    "ticker": metadata.ticker,
+                    "company": metadata.company,
+                    "date": metadata.date,
+                    "year": metadata.year,
+                    "quarter": metadata.quarter,
+                    "fiscal_period": metadata.fiscal_period,
+                },
+            )
+        )
         bm25_texts.append(chunk.text.lower().split())
 
     for i in range(0, len(points), UPSERT_BATCH_SIZE):

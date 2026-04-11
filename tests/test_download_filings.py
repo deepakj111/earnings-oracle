@@ -12,15 +12,13 @@ Coverage:
   - download_document returns None on HTTP failure
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
-from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from ingestion.download_filings import (
+    download_document,
     get_8k_filings,
     get_filing_documents,
     pick_best_document,
-    download_document,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -30,8 +28,8 @@ from ingestion.download_filings import (
 SEC_SUBMISSIONS_JSON = {
     "filings": {
         "recent": {
-            "form":          ["8-K",         "10-Q",        "8-K",         "8-K"],
-            "filingDate":    ["2024-10-31",   "2024-08-01",  "2022-12-01",  "2026-01-01"],
+            "form": ["8-K", "10-Q", "8-K", "8-K"],
+            "filingDate": ["2024-10-31", "2024-08-01", "2022-12-01", "2026-01-01"],
             #                                                                ^^^^^^^^^^
             #                                                  was "2025-06-01" — inside range
             "accessionNumber": [
@@ -86,10 +84,13 @@ def _mock_response(json_data=None, text="", status_code=200):
 
 # ── get_8k_filings ────────────────────────────────────────────────────────────
 
+
 class TestGet8kFilings:
     def _run(self, start="2023-01-01", end="2025-12-31"):
-        with patch("ingestion.download_filings.requests.get",
-                   return_value=_mock_response(json_data=SEC_SUBMISSIONS_JSON)):
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(json_data=SEC_SUBMISSIONS_JSON),
+        ):
             return get_8k_filings("0000320193", "AAPL", start, end)
 
     def test_returns_only_8k_forms(self):
@@ -126,10 +127,13 @@ class TestGet8kFilings:
 
 # ── get_filing_documents ──────────────────────────────────────────────────────
 
+
 class TestGetFilingDocuments:
     def _run(self, html=FILING_INDEX_HTML, status=200):
-        with patch("ingestion.download_filings.requests.get",
-                   return_value=_mock_response(text=html, status_code=status)):
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(text=html, status_code=status),
+        ):
             return get_filing_documents("0000320193", "0001234567-24-000001")
 
     def test_returns_list(self):
@@ -158,11 +162,12 @@ class TestGetFilingDocuments:
 
 # ── pick_best_document ────────────────────────────────────────────────────────
 
+
 class TestPickBestDocument:
     def test_prefers_ex99_1_over_8k(self):
         docs = [
-            {"name": "form8k.htm",  "type": "8-K",     "description": "form 8-k"},
-            {"name": "ex99_1.htm",  "type": "EX-99.1", "description": "press release"},
+            {"name": "form8k.htm", "type": "8-K", "description": "form 8-k"},
+            {"name": "ex99_1.htm", "type": "EX-99.1", "description": "press release"},
         ]
         assert pick_best_document(docs) == "ex99_1.htm"
 
@@ -189,53 +194,72 @@ class TestPickBestDocument:
 
     def test_description_keyword_match(self):
         docs = [
-            {"name": "results.htm", "type": "OTHER",
-             "description": "earnings press release"},
+            {"name": "results.htm", "type": "OTHER", "description": "earnings press release"},
         ]
         assert pick_best_document(docs) == "results.htm"
 
 
 # ── download_document ─────────────────────────────────────────────────────────
 
+
 class TestDownloadDocument:
     def _filing_meta(self):
         return {"ticker": "AAPL", "date": "2024-10-31"}
 
     def test_returns_path_on_success(self, tmp_path):
-        with patch("ingestion.download_filings.requests.get",
-                   return_value=_mock_response(text="<html>content</html>")):
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(text="<html>content</html>"),
+        ):
             result = download_document(
-                "0000320193", "0001234567-24-000001",
-                "ex99_1.htm", self._filing_meta(), str(tmp_path)
+                "0000320193",
+                "0001234567-24-000001",
+                "ex99_1.htm",
+                self._filing_meta(),
+                str(tmp_path),
             )
         assert result is not None
         assert result.endswith(".htm")
 
     def test_file_written_to_disk(self, tmp_path):
-        with patch("ingestion.download_filings.requests.get",
-                   return_value=_mock_response(text="<html>earnings</html>")):
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(text="<html>earnings</html>"),
+        ):
             download_document(
-                "0000320193", "0001234567-24-000001",
-                "ex99_1.htm", self._filing_meta(), str(tmp_path)
+                "0000320193",
+                "0001234567-24-000001",
+                "ex99_1.htm",
+                self._filing_meta(),
+                str(tmp_path),
             )
         files = list(tmp_path.glob("*.htm"))
         assert len(files) == 1
 
     def test_returns_none_on_http_error(self, tmp_path):
-        with patch("ingestion.download_filings.requests.get",
-                   return_value=_mock_response(status_code=403)):
+        with patch(
+            "ingestion.download_filings.requests.get", return_value=_mock_response(status_code=403)
+        ):
             result = download_document(
-                "0000320193", "0001234567-24-000001",
-                "ex99_1.htm", self._filing_meta(), str(tmp_path)
+                "0000320193",
+                "0001234567-24-000001",
+                "ex99_1.htm",
+                self._filing_meta(),
+                str(tmp_path),
             )
         assert result is None
 
     def test_filename_contains_ticker_and_date(self, tmp_path):
-        with patch("ingestion.download_filings.requests.get",
-                   return_value=_mock_response(text="<html>content</html>")):
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(text="<html>content</html>"),
+        ):
             result = download_document(
-                "0000320193", "0001234567-24-000001",
-                "ex99_1.htm", self._filing_meta(), str(tmp_path)
+                "0000320193",
+                "0001234567-24-000001",
+                "ex99_1.htm",
+                self._filing_meta(),
+                str(tmp_path),
             )
         assert "AAPL" in result
         assert "2024-10-31" in result

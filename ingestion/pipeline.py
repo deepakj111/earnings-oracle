@@ -1,11 +1,13 @@
 import os
-import pickle
+
+# nosec tells bandit this is a known, accepted risk
+import pickle  # nosec B403
 from pathlib import Path
 
 from dotenv import load_dotenv
 from loguru import logger
-from tqdm import tqdm
 from rank_bm25 import BM25Okapi
+from tqdm import tqdm
 
 from ingestion.chunker import create_parent_child_chunks
 from ingestion.indexer import index_document, init_qdrant, setup_genai
@@ -43,9 +45,7 @@ def run_pipeline() -> None:
         bm25_texts = index_document(chunks, metadata, qdrant, bm25_texts)
 
         indexed_count += 1
-        logger.info(
-            f"{file_path.name} | {metadata.fiscal_period} | {child_count} child chunks"
-        )
+        logger.info(f"{file_path.name} | {metadata.fiscal_period} | {child_count} child chunks")
 
     if bm25_texts:
         bm25 = BM25Okapi(bm25_texts)
@@ -54,9 +54,7 @@ def run_pipeline() -> None:
             pickle.dump(bm25, f)
         logger.info(f"BM25 index saved → {BM25_INDEX_PATH} ({len(bm25_texts)} chunks)")
 
-    logger.info(
-        f"Pipeline complete: {indexed_count} docs indexed, {skipped_count} skipped"
-    )
+    logger.info(f"Pipeline complete: {indexed_count} docs indexed, {skipped_count} skipped")
 
 
 if __name__ == "__main__":

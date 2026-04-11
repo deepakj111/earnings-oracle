@@ -11,10 +11,10 @@ produces BM25 texts, and handles empty/skippable files gracefully.
 """
 
 import pickle
-import pytest
-import numpy as np
-from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
 
 VECTOR_DIM = 768
 _BODY = " ".join(["revenue"] * 120)
@@ -43,9 +43,7 @@ def _mock_qdrant():
 
 def _mock_genai():
     mock = MagicMock()
-    mock.models.embed_content.return_value.embeddings = [
-        MagicMock(values=_fake_embedding())
-    ]
+    mock.models.embed_content.return_value.embeddings = [MagicMock(values=_fake_embedding())]
     return mock
 
 
@@ -64,50 +62,43 @@ def bm25_path(tmp_path):
 class TestRunPipeline:
     def _run(self, transcript_dir, bm25_path):
         mock_qdrant_client = _mock_qdrant()
-        mock_genai_client  = _mock_genai()
+        mock_genai_client = _mock_genai()
 
-        with patch("ingestion.pipeline.TRANSCRIPTS_DIR", transcript_dir), \
-             patch("ingestion.pipeline.BM25_INDEX_PATH", bm25_path), \
-             patch("ingestion.pipeline.init_qdrant", return_value=mock_qdrant_client), \
-             patch("ingestion.pipeline.setup_genai"), \
-             patch("ingestion.indexer._genai_client", mock_genai_client), \
-             patch("ingestion.indexer.time.sleep"):
+        with (
+            patch("ingestion.pipeline.TRANSCRIPTS_DIR", transcript_dir),
+            patch("ingestion.pipeline.BM25_INDEX_PATH", bm25_path),
+            patch("ingestion.pipeline.init_qdrant", return_value=mock_qdrant_client),
+            patch("ingestion.pipeline.setup_genai"),
+            patch("ingestion.indexer._genai_client", mock_genai_client),
+            patch("ingestion.indexer.time.sleep"),
+        ):
             from ingestion.pipeline import run_pipeline
+
             run_pipeline()
 
         return mock_qdrant_client
 
     def test_pipeline_runs_without_error(self, transcript_dir, bm25_path):
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(
-            VALID_HTML, encoding="utf-8"
-        )
+        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
         self._run(transcript_dir, bm25_path)
 
     def test_valid_file_triggers_qdrant_upsert(self, transcript_dir, bm25_path):
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(
-            VALID_HTML, encoding="utf-8"
-        )
+        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
         mock_qdrant = self._run(transcript_dir, bm25_path)
         assert mock_qdrant.upsert.called
 
     def test_short_file_is_skipped(self, transcript_dir, bm25_path):
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(
-            SHORT_HTML, encoding="utf-8"
-        )
+        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(SHORT_HTML, encoding="utf-8")
         mock_qdrant = self._run(transcript_dir, bm25_path)
         mock_qdrant.upsert.assert_not_called()
 
     def test_bm25_index_written_to_disk(self, transcript_dir, bm25_path):
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(
-            VALID_HTML, encoding="utf-8"
-        )
+        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
         self._run(transcript_dir, bm25_path)
         assert bm25_path.exists()
 
     def test_bm25_file_is_valid_pickle(self, transcript_dir, bm25_path):
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(
-            VALID_HTML, encoding="utf-8"
-        )
+        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
         self._run(transcript_dir, bm25_path)
         with open(bm25_path, "rb") as f:
             obj = pickle.load(f)

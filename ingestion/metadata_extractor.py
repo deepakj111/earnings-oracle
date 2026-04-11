@@ -15,10 +15,18 @@ COMPANY_MAP: dict[str, str] = {
 }
 
 MONTH_TO_QUARTER: dict[int, str] = {
-    1: "Q1", 2: "Q1", 3: "Q1",
-    4: "Q2", 5: "Q2", 6: "Q2",
-    7: "Q3", 8: "Q3", 9: "Q3",
-    10: "Q4", 11: "Q4", 12: "Q4",
+    1: "Q1",
+    2: "Q1",
+    3: "Q1",
+    4: "Q2",
+    5: "Q2",
+    6: "Q2",
+    7: "Q3",
+    8: "Q3",
+    9: "Q3",
+    10: "Q4",
+    11: "Q4",
+    12: "Q4",
 }
 
 QUARTER_PATTERNS: list[tuple[str, str]] = [

@@ -13,12 +13,12 @@ Coverage:
   - init_qdrant skips collection creation if already exists
 """
 
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch, call
 
 from ingestion.chunker import Chunk
-from ingestion.metadata_extractor import DocumentMetadata
 from ingestion.indexer import (
     COLLECTION_NAME,
     UPSERT_BATCH_SIZE,
@@ -26,35 +26,44 @@ from ingestion.indexer import (
     _get_embedding,
     index_document,
     init_qdrant,
-    setup_genai,
 )
-
+from ingestion.metadata_extractor import DocumentMetadata
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def _make_chunk(chunk_type: str, index: int = 0, parent_id: str = None) -> Chunk:
     return Chunk(
-        chunk_id      = f"AAPL_2024-10-31_abc12345_{index}",
-        parent_id     = parent_id,
-        ticker        = "AAPL",
-        date          = "2024-10-31",
-        doc_type      = "earnings_release",
-        chunk_type    = chunk_type,
-        text          = f"[Context: AAPL | earnings_release | 2024-10-31] Sample text {index}.",
-        section_title = "Revenue",
-        metadata      = {
-            "ticker": "AAPL", "date": "2024-10-31",
-            "doc_type": "earnings_release", "chunk_index": index,
-            "section": "Revenue", "has_overlap": False, "is_table": False,
-            "parent_id": parent_id, "child_index": index,
+        chunk_id=f"AAPL_2024-10-31_abc12345_{index}",
+        parent_id=parent_id,
+        ticker="AAPL",
+        date="2024-10-31",
+        doc_type="earnings_release",
+        chunk_type=chunk_type,
+        text=f"[Context: AAPL | earnings_release | 2024-10-31] Sample text {index}.",
+        section_title="Revenue",
+        metadata={
+            "ticker": "AAPL",
+            "date": "2024-10-31",
+            "doc_type": "earnings_release",
+            "chunk_index": index,
+            "section": "Revenue",
+            "has_overlap": False,
+            "is_table": False,
+            "parent_id": parent_id,
+            "child_index": index,
         },
     )
 
 
 def _make_metadata() -> DocumentMetadata:
     return DocumentMetadata(
-        ticker="AAPL", company="Apple", date="2024-10-31",
-        year=2024, quarter="Q4", fiscal_period="Q4 2024",
+        ticker="AAPL",
+        company="Apple",
+        date="2024-10-31",
+        year=2024,
+        quarter="Q4",
+        fiscal_period="Q4 2024",
     )
 
 
@@ -64,6 +73,7 @@ def _fake_embedding(dim: int = VECTOR_DIM) -> list[float]:
 
 
 # ── setup_genai / _get_embedding ──────────────────────────────────────────────
+
 
 class TestGetEmbedding:
     def test_returns_list_of_floats(self):
@@ -88,9 +98,7 @@ class TestGetEmbedding:
     def test_output_is_unit_normalized(self):
         mock_client = MagicMock()
         raw = np.array([3.0, 4.0] + [0.0] * (VECTOR_DIM - 2), dtype=np.float32)
-        mock_client.models.embed_content.return_value.embeddings = [
-            MagicMock(values=raw.tolist())
-        ]
+        mock_client.models.embed_content.return_value.embeddings = [MagicMock(values=raw.tolist())]
         with patch("ingestion.indexer._genai_client", mock_client):
             result = _get_embedding("test")
         norm = np.linalg.norm(result)
@@ -103,6 +111,7 @@ class TestGetEmbedding:
 
 
 # ── index_document ────────────────────────────────────────────────────────────
+
 
 class TestIndexDocument:
     def _run(self, chunks, metadata=None, existing_bm25=None):
@@ -130,8 +139,8 @@ class TestIndexDocument:
 
     def test_only_children_are_embedded(self):
         parent = _make_chunk("parent", 0)
-        child  = _make_chunk("child",  1, parent.chunk_id)
-        table  = _make_chunk("table",  2)
+        child = _make_chunk("child", 1, parent.chunk_id)
+        table = _make_chunk("table", 2)
         _, _, mock_client = self._run([parent, child, table])
         assert mock_client.models.embed_content.call_count == 1
 
@@ -162,14 +171,23 @@ class TestIndexDocument:
         _, mock_qdrant, _ = self._run([child])
         points = mock_qdrant.upsert.call_args_list[0][1]["points"]
         payload = points[0].payload
-        required = {"chunk_id", "parent_id", "text", "ticker",
-                    "company", "date", "year", "quarter", "fiscal_period"}
+        required = {
+            "chunk_id",
+            "parent_id",
+            "text",
+            "ticker",
+            "company",
+            "date",
+            "year",
+            "quarter",
+            "fiscal_period",
+        }
         missing = required - payload.keys()
         assert not missing, f"Payload missing fields: {missing}"
 
     def test_point_payload_ticker_matches_metadata(self):
         child = _make_chunk("child", 0, "parent_0")
-        meta  = _make_metadata()
+        meta = _make_metadata()
         _, mock_qdrant, _ = self._run([child], metadata=meta)
         points = mock_qdrant.upsert.call_args_list[0][1]["points"]
         assert points[0].payload["ticker"] == "AAPL"
@@ -187,6 +205,7 @@ class TestIndexDocument:
 
 
 # ── init_qdrant ───────────────────────────────────────────────────────────────
+
 
 class TestInitQdrant:
     def test_creates_collection_if_not_exists(self):

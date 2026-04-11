@@ -22,7 +22,7 @@ def parse_html(file_path: Path) -> ParsedDocument | None:
     ticker = stem_parts[0]
     date = stem_parts[1] if len(stem_parts) > 1 else "unknown"
 
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(file_path, encoding="utf-8", errors="ignore") as f:
         html = f.read()
 
     soup = BeautifulSoup(html, "lxml")
@@ -36,11 +36,7 @@ def parse_html(file_path: Path) -> ParsedDocument | None:
     if len(text.split()) < 100:
         return None
 
-    sections = [
-        s.strip()
-        for s in text.split("\n\n")
-        if len(s.strip().split()) >= 15
-    ]
+    sections = [s.strip() for s in text.split("\n\n") if len(s.strip().split()) >= 15]
 
     if not sections:
         return None

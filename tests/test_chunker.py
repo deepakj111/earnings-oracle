@@ -14,16 +14,9 @@ Coverage:
   - Public API contract (create_parent_child_chunks)
 """
 
-import re
-import uuid
-
 import pytest
 
 from ingestion.chunker import (
-    CHILD_OVERLAP_TOKENS,
-    CHILD_TOKEN_TARGET,
-    PARENT_OVERLAP_TOKENS,
-    PARENT_TOKEN_TARGET,
     TABLE_LINE_THRESHOLD,
     Chunk,
     _contextual_prefix,
@@ -34,11 +27,10 @@ from ingestion.chunker import (
     create_parent_child_chunks,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-TICKER  = "AAPL"
-DATE    = "2024-10-31"
+TICKER = "AAPL"
+DATE = "2024-10-31"
 DOCTYPE = "earnings_release"
 
 # A realistic minimal earnings release (enough words to pass the 10-word floor)
@@ -64,12 +56,14 @@ MARKDOWN_TABLE = (
     "| Wearables | 9.0         | -3% |"
 )
 
+
 def _long_prose(n_words: int = 600) -> str:
     word = "revenue"
     return " ".join([f"{word}{i}" for i in range(n_words)])
 
 
 # ── _token_count ──────────────────────────────────────────────────────────────
+
 
 class TestTokenCount:
     def test_empty_string_returns_zero(self):
@@ -80,7 +74,7 @@ class TestTokenCount:
 
     def test_longer_text_returns_more_tokens(self):
         short = _token_count("hello world")
-        long  = _token_count("hello world " * 50)
+        long = _token_count("hello world " * 50)
         assert long > short
 
     def test_financial_notation_handled(self):
@@ -90,6 +84,7 @@ class TestTokenCount:
 
 
 # ── _is_table_block ───────────────────────────────────────────────────────────
+
 
 class TestIsTableBlock:
     def test_markdown_table_detected(self):
@@ -131,6 +126,7 @@ class TestIsTableBlock:
 
 # ── _make_chunk_id ────────────────────────────────────────────────────────────
 
+
 class TestMakeChunkId:
     def test_deterministic_same_inputs(self):
         id1 = _make_chunk_id(TICKER, DATE, 0)
@@ -166,6 +162,7 @@ class TestMakeChunkId:
 
 
 # ── _contextual_prefix ────────────────────────────────────────────────────────
+
 
 class TestContextualPrefix:
     def test_contains_ticker(self):
@@ -208,6 +205,7 @@ class TestContextualPrefix:
 
 
 # ── _split_into_semantic_sections ────────────────────────────────────────────
+
 
 class TestSplitIntoSemanticSections:
     def test_returns_list_of_tuples(self):
@@ -263,8 +261,8 @@ class TestSplitIntoSemanticSections:
 
 # ── create_parent_child_chunks (public API) ───────────────────────────────────
 
-class TestCreateParentChildChunks:
 
+class TestCreateParentChildChunks:
     def _run(self, sections=None, ticker=TICKER, date=DATE, doc_type=DOCTYPE):
         if sections is None:
             sections = [EARNINGS_PROSE]
@@ -356,7 +354,15 @@ class TestCreateParentChildChunks:
 
     def test_metadata_keys_present_on_parent(self):
         chunks = self._run()
-        required_keys = {"ticker", "date", "doc_type", "chunk_index", "section", "has_overlap", "is_table"}
+        required_keys = {
+            "ticker",
+            "date",
+            "doc_type",
+            "chunk_index",
+            "section",
+            "has_overlap",
+            "is_table",
+        }
         for parent in [c for c in chunks if c.chunk_type == "parent"]:
             missing = required_keys - parent.metadata.keys()
             assert not missing, f"Parent {parent.chunk_id} missing metadata keys: {missing}"
@@ -371,6 +377,7 @@ class TestCreateParentChildChunks:
     def test_child_index_sequential_per_parent(self):
         chunks = self._run([_long_prose(300)])
         from collections import defaultdict
+
         children_by_parent: dict[str, list[int]] = defaultdict(list)
         for c in chunks:
             if c.chunk_type == "child":
@@ -390,8 +397,8 @@ class TestCreateParentChildChunks:
 
 # ── Table protection ──────────────────────────────────────────────────────────
 
-class TestTableProtection:
 
+class TestTableProtection:
     def _run_with_table(self):
         sections = [EARNINGS_PROSE, MARKDOWN_TABLE, OUTLOOK_PROSE]
         return create_parent_child_chunks(TICKER, DATE, sections, DOCTYPE)
@@ -415,11 +422,15 @@ class TestTableProtection:
     def test_table_child_has_same_text_as_parent(self):
         chunks = self._run_with_table()
         table_parents = {c.chunk_id: c for c in chunks if c.chunk_type == "table"}
-        table_children = [c for c in chunks if c.chunk_type == "child" and c.metadata.get("is_table")]
+        table_children = [
+            c for c in chunks if c.chunk_type == "child" and c.metadata.get("is_table")
+        ]
         for child in table_children:
             parent = table_parents.get(child.parent_id)
             assert parent is not None, f"Table child {child.chunk_id} has no matching table parent"
-            assert child.text == parent.text, "Table child text should be identical to table parent text"
+            assert child.text == parent.text, (
+                "Table child text should be identical to table parent text"
+            )
 
     def test_table_produces_exactly_one_child(self):
         chunks = self._run_with_table()
@@ -444,8 +455,8 @@ class TestTableProtection:
 
 # ── Overlap behaviour ─────────────────────────────────────────────────────────
 
-class TestOverlapBehaviour:
 
+class TestOverlapBehaviour:
     def test_multiple_parents_generated_for_long_input(self):
         chunks = create_parent_child_chunks(TICKER, DATE, [_long_prose(1200)], DOCTYPE)
         parents = [c for c in chunks if c.chunk_type == "parent"]
@@ -470,16 +481,14 @@ class TestOverlapBehaviour:
         for i in range(len(children) - 1):
             words_a = set(children[i].text.split())
             words_b = set(children[i + 1].text.split())
-            shared  = words_a & words_b
-            assert len(shared) > 0, (
-                f"Children {i} and {i+1} share no words — overlap is missing"
-            )
+            shared = words_a & words_b
+            assert len(shared) > 0, f"Children {i} and {i + 1} share no words — overlap is missing"
 
 
 # ── Edge cases ────────────────────────────────────────────────────────────────
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     def test_single_section_minimum_viable(self):
         chunks = create_parent_child_chunks(TICKER, DATE, [EARNINGS_PROSE], DOCTYPE)
         assert len(chunks) >= 2  # at least 1 parent + 1 child
@@ -493,8 +502,7 @@ class TestEdgeCases:
                 all_ids.add(c.chunk_id)
         # No ID collision across different tickers
         total = sum(
-            len(create_parent_child_chunks(t, DATE, [EARNINGS_PROSE], DOCTYPE))
-            for t in tickers
+            len(create_parent_child_chunks(t, DATE, [EARNINGS_PROSE], DOCTYPE)) for t in tickers
         )
         assert len(all_ids) == total
 
@@ -517,6 +525,3 @@ class TestEdgeCases:
         # Should produce at least a table chunk + its child
         table_chunks = [c for c in chunks if c.chunk_type == "table"]
         assert len(table_chunks) >= 1
-
-
-        

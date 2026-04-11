@@ -1,0 +1,52 @@
+# .pre-commit-config.yaml
+default_language_version:
+  python: python3.11
+
+repos:
+
+  # ── 1. General file hygiene ──────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace       # remove trailing spaces
+      - id: end-of-file-fixer         # ensure files end with a newline
+      - id: check-yaml                # validate .yaml files parse correctly
+      - id: check-toml                # validate pyproject.toml is valid
+      - id: check-json                # validate any .json files
+      - id: check-merge-conflict      # catch leftover <<<< merge markers
+      - id: check-added-large-files   # block files > 500KB from being committed
+        args: ["--maxkb=500"]
+      - id: detect-private-key        # block accidental API key commits
+      - id: debug-statements          # catch forgotten breakpoint() / pdb calls
+      - id: check-ast                 # verify Python files parse as valid syntax
+
+  # ── 2. Ruff — linting + import sorting (replaces flake8 + isort) ────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff                      # lint + auto-fix what it can
+        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-format               # format (replaces Black)
+
+  # ── 3. Mypy — static type checking ──────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-beautifulsoup4
+        args:
+          - "--ignore-missing-imports"
+          - "--disallow-untyped-defs"
+          - "--no-strict-optional"
+          - "--pretty"
+        files: ^ingestion/
+
+  # ── 4. Bandit — security scanning ───────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"]
+        files: ^ingestion/

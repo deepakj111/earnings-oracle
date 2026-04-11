@@ -12,22 +12,23 @@ Architecture:
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple
 
 try:
     import tiktoken
+
     _ENC = tiktoken.get_encoding("cl100k_base")
+
     def _token_count(text: str) -> int:
         return len(_ENC.encode(text, disallowed_special=()))
 except ImportError:
-    raise ImportError("tiktoken is required: poetry add tiktoken")
+    raise ImportError("tiktoken is required: poetry add tiktoken") from None
 
 
-PARENT_TOKEN_TARGET   = 512
-CHILD_TOKEN_TARGET    = 128
+PARENT_TOKEN_TARGET = 512
+CHILD_TOKEN_TARGET = 128
 PARENT_OVERLAP_TOKENS = 64
-CHILD_OVERLAP_TOKENS  = 32
-TABLE_LINE_THRESHOLD  = 2
+CHILD_OVERLAP_TOKENS = 32
+TABLE_LINE_THRESHOLD = 2
 
 # Real SEC section headers are short: "Revenue", "## Segment Results", "Outlook".
 # Prose sentences that happen to start with "Revenue grew 6 percent year over year..."
@@ -35,40 +36,42 @@ TABLE_LINE_THRESHOLD  = 2
 HEADER_MAX_WORDS = 8
 
 SECTION_HEADERS_RE = re.compile(
-    "|".join([
-        r"^(financial highlights?|financial results?)",
-        r"^(revenue|net (revenue|sales))",
-        r"^(earnings per share|eps|diluted)",
-        r"^(segment (results?|performance|revenue))",
-        r"^(products?|services?|iphone|mac|ipad|wearables)",
-        r"^(outlook|guidance|forward.looking)",
-        r"^(balance sheet|cash flow|liquidity)",
-        r"^(operating (income|expenses?|margin))",
-        r"^(gross (margin|profit))",
-        r"^(quarterly|annual|fiscal (year|quarter))",
-        r"^(management|ceo|cfo).{0,30}(comment|remark|statement)",
-        r"^(about|conference call|webcast|investor)",
-        r"^(cautionary|forward.looking|safe harbor)",
-        r"^#{1,4}\s+\S",
-    ]),
+    "|".join(
+        [
+            r"^(financial highlights?|financial results?)",
+            r"^(revenue|net (revenue|sales))",
+            r"^(earnings per share|eps|diluted)",
+            r"^(segment (results?|performance|revenue))",
+            r"^(products?|services?|iphone|mac|ipad|wearables)",
+            r"^(outlook|guidance|forward.looking)",
+            r"^(balance sheet|cash flow|liquidity)",
+            r"^(operating (income|expenses?|margin))",
+            r"^(gross (margin|profit))",
+            r"^(quarterly|annual|fiscal (year|quarter))",
+            r"^(management|ceo|cfo).{0,30}(comment|remark|statement)",
+            r"^(about|conference call|webcast|investor)",
+            r"^(cautionary|forward.looking|safe harbor)",
+            r"^#{1,4}\s+\S",
+        ]
+    ),
     re.IGNORECASE | re.MULTILINE,
 )
 
-_TABLE_ROW_RE      = re.compile(r"^\s*\|.*\|$")
-_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+(?=[A-Z])')
+_TABLE_ROW_RE = re.compile(r"^\s*\|.*\|$")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
 
 
 @dataclass
 class Chunk:
-    chunk_id:      str
-    parent_id:     Optional[str]
-    ticker:        str
-    date:          str
-    doc_type:      str
-    chunk_type:    str
-    text:          str
+    chunk_id: str
+    parent_id: str | None
+    ticker: str
+    date: str
+    doc_type: str
+    chunk_type: str
+    text: str
     section_title: str = ""
-    metadata:      dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 def _is_table_block(lines: list) -> bool:
@@ -79,29 +82,31 @@ def _is_table_block(lines: list) -> bool:
       - Pipe rows must make up >= 40% of non-blank lines
         (prevents a stray pipe in prose from triggering a false positive)
     """
-    non_blank  = [l for l in lines if l.strip()]
+    non_blank = [line for line in lines if line.strip()]
     if not non_blank:
         return False
-    pipe_lines = [l for l in non_blank if _TABLE_ROW_RE.match(l.strip())]
+    pipe_lines = [line for line in non_blank if _TABLE_ROW_RE.match(line.strip())]
     if len(pipe_lines) < TABLE_LINE_THRESHOLD:
         return False
     return (len(pipe_lines) / len(non_blank)) >= 0.40
 
 
-def _split_text_by_token_budget(text: str, budget: int) -> List[str]:
+def _split_text_by_token_budget(text: str, budget: int) -> list[str]:
     tokens = _ENC.encode(text, disallowed_special=())
-    pages  = []
+    pages = []
     for start in range(0, len(tokens), budget):
         chunk_tokens = tokens[start : start + budget]
         pages.append(_ENC.decode(chunk_tokens))
     return pages
 
+
 _ABBREV_RE = re.compile(
-    r'\b(U\.S|No|vs|approx|est|Corp|Inc|Ltd|Dr|Mr|Mrs|e\.g|i\.e|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$',
+    r"\b(U\.S|No|vs|approx|est|Corp|Inc|Ltd|Dr|Mr|Mrs|e\.g|i\.e|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$",
     re.IGNORECASE,
 )
 
-def _split_into_sentences(text: str) -> List[str]:
+
+def _split_into_sentences(text: str) -> list[str]:
     parts = _SENTENCE_SPLIT_RE.split(text)
     merged, buf = [], ""
     for part in parts:
@@ -118,7 +123,7 @@ def _split_into_sentences(text: str) -> List[str]:
 
 
 def _make_chunk_id(ticker: str, date: str, index: int, suffix: str = "") -> str:
-    ns   = uuid.uuid5(uuid.NAMESPACE_DNS, f"{ticker}:{date}")
+    ns = uuid.uuid5(uuid.NAMESPACE_DNS, f"{ticker}:{date}")
     base = f"{ticker}_{date}_{str(ns)[:8]}_{index}"
     return f"{base}_{suffix}" if suffix else base
 
@@ -130,11 +135,11 @@ def _contextual_prefix(ticker: str, date: str, doc_type: str, section_title: str
     return prefix + "]\n\n"
 
 
-def _split_into_semantic_sections(sections: List[str]) -> List[Tuple[str, str]]:
-    result:        List[Tuple[str, str]] = []
-    current_title: str                   = ""
-    current_lines: List[str]             = []
-    table_buffer:  List[str]             = []
+def _split_into_semantic_sections(sections: list[str]) -> list[tuple[str, str]]:
+    result: list[tuple[str, str]] = []
+    current_title: str = ""
+    current_lines: list[str] = []
+    table_buffer: list[str] = []
 
     def _is_section_header(line: str) -> bool:
         """
@@ -150,7 +155,7 @@ def _split_into_semantic_sections(sections: List[str]) -> List[Tuple[str, str]]:
             and bool(SECTION_HEADERS_RE.match(line))
         )
 
-    def flush_text(title: str, lines: List[str]) -> None:
+    def flush_text(title: str, lines: list[str]) -> None:
         block = "\n".join(lines).strip()
         if _token_count(block) > 10:
             result.append((title, block))
@@ -179,7 +184,7 @@ def _split_into_semantic_sections(sections: List[str]) -> List[Tuple[str, str]]:
             if _is_section_header(stripped):
                 flush_text(current_title, current_lines)
                 current_title = stripped.lstrip("#").strip()
-                current_lines = []   # header is captured in current_title; don't duplicate in body
+                current_lines = []  # header is captured in current_title; don't duplicate in body
             else:
                 if not current_title and _is_section_header(stripped):
                     current_title = stripped.lstrip("#").strip()
@@ -193,39 +198,39 @@ def _split_into_semantic_sections(sections: List[str]) -> List[Tuple[str, str]]:
 
 
 def _build_parents(
-    sections: List[Tuple[str, str]],
-    ticker:   str,
-    date:     str,
+    sections: list[tuple[str, str]],
+    ticker: str,
+    date: str,
     doc_type: str,
-) -> List[Chunk]:
-    parents:        List[Chunk] = []
-    current_texts:  List[str]   = []
-    current_tokens: int         = 0
-    current_title:  str         = ""
-    overlap_text:   str         = ""
+) -> list[Chunk]:
+    parents: list[Chunk] = []
+    current_texts: list[str] = []
+    current_tokens: int = 0
+    current_title: str = ""
+    overlap_text: str = ""
 
-    def emit_parent(texts: List[str], title: str, has_overlap: bool) -> Chunk:
-        body   = "\n\n".join(texts)
+    def emit_parent(texts: list[str], title: str, has_overlap: bool) -> Chunk:
+        body = "\n\n".join(texts)
         prefix = _contextual_prefix(ticker, date, doc_type, title)
-        full   = (prefix + body).strip()
-        pid    = _make_chunk_id(ticker, date, len(parents))
+        full = (prefix + body).strip()
+        pid = _make_chunk_id(ticker, date, len(parents))
         return Chunk(
-            chunk_id      = pid,
-            parent_id     = None,
-            ticker        = ticker,
-            date          = date,
-            doc_type      = doc_type,
-            chunk_type    = "parent",
-            text          = full,
-            section_title = title,
-            metadata      = {
-                "ticker":      ticker,
-                "date":        date,
-                "doc_type":    doc_type,
+            chunk_id=pid,
+            parent_id=None,
+            ticker=ticker,
+            date=date,
+            doc_type=doc_type,
+            chunk_type="parent",
+            text=full,
+            section_title=title,
+            metadata={
+                "ticker": ticker,
+                "date": date,
+                "doc_type": doc_type,
                 "chunk_index": len(parents),
-                "section":     title,
+                "section": title,
                 "has_overlap": has_overlap,
-                "is_table":    False,
+                "is_table": False,
             },
         )
 
@@ -244,12 +249,12 @@ def _build_parents(
         tokens = _token_count(text)
 
         if current_tokens + tokens > PARENT_TOKEN_TARGET and current_texts:
-            overlap_text   = _flush_and_reset()
-            current_texts  = []
+            overlap_text = _flush_and_reset()
+            current_texts = []
             current_tokens = 0
 
         if not current_texts and overlap_text:
-            current_texts  = [overlap_text.strip()]
+            current_texts = [overlap_text.strip()]
             current_tokens = _token_count(overlap_text)
 
         if title and title != current_title:
@@ -259,34 +264,35 @@ def _build_parents(
         current_tokens += tokens
 
     for section_title, section_text in sections:
-
         if section_title == "__TABLE__":
             if current_texts:
-                overlap_text   = _flush_and_reset()
-                current_texts  = []
+                overlap_text = _flush_and_reset()
+                current_texts = []
                 current_tokens = 0
 
             prefix = _contextual_prefix(ticker, date, doc_type, "Financial Table")
-            tid    = _make_chunk_id(ticker, date, len(parents), "tbl")
-            parents.append(Chunk(
-                chunk_id      = tid,
-                parent_id     = None,
-                ticker        = ticker,
-                date          = date,
-                doc_type      = doc_type,
-                chunk_type    = "table",
-                text          = (prefix + section_text).strip(),
-                section_title = "Financial Table",
-                metadata      = {
-                    "ticker":      ticker,
-                    "date":        date,
-                    "doc_type":    doc_type,
-                    "chunk_index": len(parents),
-                    "section":     "Financial Table",
-                    "has_overlap": False,
-                    "is_table":    True,
-                },
-            ))
+            tid = _make_chunk_id(ticker, date, len(parents), "tbl")
+            parents.append(
+                Chunk(
+                    chunk_id=tid,
+                    parent_id=None,
+                    ticker=ticker,
+                    date=date,
+                    doc_type=doc_type,
+                    chunk_type="table",
+                    text=(prefix + section_text).strip(),
+                    section_title="Financial Table",
+                    metadata={
+                        "ticker": ticker,
+                        "date": date,
+                        "doc_type": doc_type,
+                        "chunk_index": len(parents),
+                        "section": "Financial Table",
+                        "has_overlap": False,
+                        "is_table": True,
+                    },
+                )
+            )
             overlap_text = ""
             continue
 
@@ -306,54 +312,56 @@ def _build_parents(
     return parents
 
 
-def _split_parent_into_children(parent: Chunk) -> List[Chunk]:
+def _split_parent_into_children(parent: Chunk) -> list[Chunk]:
     if parent.chunk_type == "table":
-        return [Chunk(
-            chunk_id      = f"{parent.chunk_id}_c0",
-            parent_id     = parent.chunk_id,
-            ticker        = parent.ticker,
-            date          = parent.date,
-            doc_type      = parent.doc_type,
-            chunk_type    = "child",
-            text          = parent.text,
-            section_title = parent.section_title,
-            metadata      = {
-                **parent.metadata,
-                "parent_id":   parent.chunk_id,
-                "child_index": 0,
-                "is_table":    True,
-            },
-        )]
+        return [
+            Chunk(
+                chunk_id=f"{parent.chunk_id}_c0",
+                parent_id=parent.chunk_id,
+                ticker=parent.ticker,
+                date=parent.date,
+                doc_type=parent.doc_type,
+                chunk_type="child",
+                text=parent.text,
+                section_title=parent.section_title,
+                metadata={
+                    **parent.metadata,
+                    "parent_id": parent.chunk_id,
+                    "child_index": 0,
+                    "is_table": True,
+                },
+            )
+        ]
 
-    sentinel  = "]\n\n"
+    sentinel = "]\n\n"
     body_text = parent.text.split(sentinel, 1)[-1] if sentinel in parent.text else parent.text
 
-    sentences:      List[str] = _split_into_sentences(body_text)
-    children:       List[Chunk] = []
-    current_sents:  List[str] = []
-    current_tokens: int       = 0
-    child_index:    int       = 0
+    sentences: list[str] = _split_into_sentences(body_text)
+    children: list[Chunk] = []
+    current_sents: list[str] = []
+    current_tokens: int = 0
+    child_index: int = 0
 
-    def emit_child(sents: List[str]) -> Chunk:
+    def emit_child(sents: list[str]) -> Chunk:
         nonlocal child_index
         child_text = " ".join(sents)
-        prefix     = _contextual_prefix(
+        prefix = _contextual_prefix(
             parent.ticker, parent.date, parent.doc_type, parent.section_title
         )
         c = Chunk(
-            chunk_id      = f"{parent.chunk_id}_c{child_index}",
-            parent_id     = parent.chunk_id,
-            ticker        = parent.ticker,
-            date          = parent.date,
-            doc_type      = parent.doc_type,
-            chunk_type    = "child",
-            text          = (prefix + child_text).strip(),
-            section_title = parent.section_title,
-            metadata      = {
+            chunk_id=f"{parent.chunk_id}_c{child_index}",
+            parent_id=parent.chunk_id,
+            ticker=parent.ticker,
+            date=parent.date,
+            doc_type=parent.doc_type,
+            chunk_type="child",
+            text=(prefix + child_text).strip(),
+            section_title=parent.section_title,
+            metadata={
                 **parent.metadata,
-                "parent_id":   parent.chunk_id,
+                "parent_id": parent.chunk_id,
                 "child_index": child_index,
-                "is_table":    False,
+                "is_table": False,
             },
         )
         child_index += 1
@@ -365,8 +373,8 @@ def _split_parent_into_children(parent: Chunk) -> List[Chunk]:
         if current_tokens + sent_tokens > CHILD_TOKEN_TARGET and current_sents:
             children.append(emit_child(current_sents))
 
-            overlap_sents:  List[str] = []
-            overlap_tokens: int       = 0
+            overlap_sents: list[str] = []
+            overlap_tokens: int = 0
             for s in reversed(current_sents):
                 t = _token_count(s)
                 if overlap_tokens + t <= CHILD_OVERLAP_TOKENS:
@@ -375,7 +383,7 @@ def _split_parent_into_children(parent: Chunk) -> List[Chunk]:
                 else:
                     break
 
-            current_sents  = overlap_sents
+            current_sents = overlap_sents
             current_tokens = overlap_tokens
 
         current_sents.append(sentence)
@@ -388,16 +396,16 @@ def _split_parent_into_children(parent: Chunk) -> List[Chunk]:
 
 
 def create_parent_child_chunks(
-    ticker:   str,
-    date:     str,
-    sections: List[str],
+    ticker: str,
+    date: str,
+    sections: list[str],
     doc_type: str = "earnings_release",
-) -> List[Chunk]:
+) -> list[Chunk]:
     semantic_sections = _split_into_semantic_sections(sections)
     if not semantic_sections:
         return []
 
-    parents    = _build_parents(semantic_sections, ticker, date, doc_type)
+    parents = _build_parents(semantic_sections, ticker, date, doc_type)
     all_chunks = []
     for parent in parents:
         all_chunks.append(parent)

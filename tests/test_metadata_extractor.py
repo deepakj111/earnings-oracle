@@ -12,15 +12,16 @@ Coverage:
 """
 
 import pytest
+
 from ingestion.metadata_extractor import (
     COMPANY_MAP,
     DocumentMetadata,
-    extract_metadata,
     _detect_quarter,
+    extract_metadata,
 )
 
 TICKER = "AAPL"
-DATE   = "2024-10-31"
+DATE = "2024-10-31"
 
 EARNINGS_Q1 = "This press release covers first quarter fiscal 2024 results."
 EARNINGS_Q2 = "Second quarter revenue reached 94 billion dollars."
@@ -98,21 +99,23 @@ class TestExtractMetadata:
         assert result.company == "XYZ"
 
     def test_all_10_tickers_in_company_map(self):
-        expected = {"AAPL", "NVDA", "MSFT", "AMZN", "META",
-                    "JPM", "XOM", "UNH", "TSLA", "WMT"}
+        expected = {"AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", "WMT"}
         assert expected.issubset(set(COMPANY_MAP.keys()))
 
     def test_malformed_date_does_not_crash(self):
         result = extract_metadata(TICKER, "2024", PLAIN_PROSE)
         assert result.year == 2024
 
-    @pytest.mark.parametrize("ticker,company", [
-        ("AAPL", "Apple"),
-        ("NVDA", "NVIDIA"),
-        ("MSFT", "Microsoft"),
-        ("TSLA", "Tesla"),
-        ("WMT", "Walmart"),
-    ])
+    @pytest.mark.parametrize(
+        "ticker,company",
+        [
+            ("AAPL", "Apple"),
+            ("NVDA", "NVIDIA"),
+            ("MSFT", "Microsoft"),
+            ("TSLA", "Tesla"),
+            ("WMT", "Walmart"),
+        ],
+    )
     def test_company_map_spot_check(self, ticker, company):
         result = extract_metadata(ticker, DATE, PLAIN_PROSE)
         assert result.company == company

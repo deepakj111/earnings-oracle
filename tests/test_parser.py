@@ -11,9 +11,11 @@ Coverage:
   - ParsedDocument fields populated correctly
 """
 
-import pytest
 from pathlib import Path
-from ingestion.parser import parse_html, ParsedDocument
+
+import pytest
+
+from ingestion.parser import ParsedDocument, parse_html
 
 # Minimal HTML that produces enough words to pass the 100-word guard
 _BODY = " ".join(["word"] * 120)
@@ -58,10 +60,12 @@ SHORT_HTML = "<html><body><p>Too short.</p></body></html>"
 @pytest.fixture
 def tmp_htm(tmp_path):
     """Returns a helper that writes HTML to a temp .htm file with a given stem."""
+
     def _write(stem: str, content: str) -> Path:
         p = tmp_path / f"{stem}.htm"
         p.write_text(content, encoding="utf-8")
         return p
+
     return _write
 
 
@@ -110,9 +114,7 @@ class TestParseHtml:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MULTI_SECTION_HTML)
         result = parse_html(path)
         for section in result.sections:
-            assert len(section.split()) >= 15, (
-                f"Section below 15-word floor: {section[:60]!r}"
-            )
+            assert len(section.split()) >= 15, f"Section below 15-word floor: {section[:60]!r}"
 
     def test_short_file_returns_none(self, tmp_htm):
         path = tmp_htm("AAPL_2024-10-31_0001234567", SHORT_HTML)
@@ -137,8 +139,6 @@ class TestParseHtml:
     def test_encoding_errors_do_not_crash(self, tmp_path):
         path = tmp_path / "AAPL_2024-10-31_0001234567.htm"
         # Write with latin-1 encoding — parser uses errors='ignore'
-        path.write_bytes(
-            (MINIMAL_HTML + "\nCaf\xe9 revenue grew strongly.").encode("latin-1")
-        )
+        path.write_bytes((MINIMAL_HTML + "\nCaf\xe9 revenue grew strongly.").encode("latin-1"))
         result = parse_html(path)
         assert result is not None
