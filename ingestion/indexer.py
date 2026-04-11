@@ -1,10 +1,8 @@
-import os
-import time
 import uuid
 
 import numpy as np
-from google import genai
-from google.genai import types as genai_types
+from fastembed import TextEmbedding
+from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
@@ -12,29 +10,28 @@ from ingestion.chunker import Chunk
 from ingestion.metadata_extractor import DocumentMetadata
 
 COLLECTION_NAME = "earnings_transcripts"
-VECTOR_DIM = 768
-EMBEDDING_MODEL = "gemini-embedding-001"
+VECTOR_DIM = 1024
+EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
 UPSERT_BATCH_SIZE = 50
 
-_genai_client: genai.Client | None = None
+_embed_model: TextEmbedding | None = None
 
 
-def setup_genai() -> None:
-    global _genai_client
-    _genai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+def setup_embedder() -> None:
+    """
+    Load the ONNX embedding model into memory.
+    First call downloads the model (~340MB) to ~/.cache/fastembed/
+    and caches it permanently — subsequent runs are instant.
+    """
+    global _embed_model
+    logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
+    _embed_model = TextEmbedding(model_name=EMBEDDING_MODEL)
+    logger.info("Embedding model ready.")
 
 
 def _get_embedding(text: str) -> list[float]:
-    assert _genai_client is not None, "Call setup_genai() before indexing"
-    result = _genai_client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=text,
-        config=genai_types.EmbedContentConfig(
-            task_type="RETRIEVAL_DOCUMENT",
-            output_dimensionality=VECTOR_DIM,
-        ),
-    )
-    vec = result.embeddings[0].values
+    assert _embed_model is not None, "Call setup_embedder() before indexing"
+    vec = next(iter(_embed_model.embed([text])))
     arr = np.array(vec, dtype=np.float32)
     norm = np.linalg.norm(arr)
     if norm > 0:
@@ -50,6 +47,9 @@ def init_qdrant(url: str) -> QdrantClient:
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
         )
+        logger.info(f"Created Qdrant collection '{COLLECTION_NAME}' (dim={VECTOR_DIM})")
+    else:
+        logger.info(f"Qdrant collection '{COLLECTION_NAME}' already exists — reusing.")
     return client
 
 
@@ -64,7 +64,6 @@ def index_document(
 
     for chunk in child_chunks:
         embedding = _get_embedding(chunk.text)
-        time.sleep(0.05)  # respect Gemini free-tier rate limits
 
         points.append(
             PointStruct(

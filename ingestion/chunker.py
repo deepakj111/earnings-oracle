@@ -186,8 +186,6 @@ def _split_into_semantic_sections(sections: list[str]) -> list[tuple[str, str]]:
                 current_title = stripped.lstrip("#").strip()
                 current_lines = []  # header is captured in current_title; don't duplicate in body
             else:
-                if not current_title and _is_section_header(stripped):
-                    current_title = stripped.lstrip("#").strip()
                 current_lines.append(line)
 
     if table_buffer:

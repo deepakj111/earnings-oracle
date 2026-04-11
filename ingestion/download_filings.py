@@ -43,13 +43,13 @@ def get_8k_filings(
     results = []
     for i, form in enumerate(filings["form"]):
         if form == "8-K":
-            date = filings["filingDate"][i]
-            if start_date <= date <= end_date:
+            filing_date = filings["filingDate"][i]
+            if start_date <= filing_date <= end_date:
                 results.append(
                     {
                         "ticker": ticker,
                         "cik": cik,
-                        "date": date,
+                        "date": filing_date,
                         "accession": filings["accessionNumber"][i],
                     }
                 )
@@ -141,9 +141,9 @@ def download_document(
         return None
 
     ticker = filing_meta["ticker"]
-    date = filing_meta["date"]
+    filing_date = filing_meta["date"]
     safe_acc = accession_clean[:10]
-    file_path = Path(output_dir) / f"{ticker}_{date}_{safe_acc}.htm"
+    file_path = Path(output_dir) / f"{ticker}_{filing_date}_{safe_acc}.htm"
     file_path.write_text(resp.text, encoding="utf-8")
     print(f"  Downloaded: {file_path.name}  [{doc_name}]")
     return str(file_path)
