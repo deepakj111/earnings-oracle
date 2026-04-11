@@ -54,10 +54,7 @@ jobs:
 
       # ── Security ───────────────────────────────────────────────────────
       - name: Bandit — security scan
-        run: |
-          poetry run bandit -r ingestion/ \
-            -c pyproject.toml \
-            --exit-zero-on-skipped
+        run: poetry run bandit -r ingestion/ -c pyproject.toml
 
       # ── Tests ──────────────────────────────────────────────────────────
       - name: Pytest — unit tests
