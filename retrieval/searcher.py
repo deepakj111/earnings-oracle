@@ -152,14 +152,15 @@ def _qdrant_search(
     Returns a list of payload dicts, ordered by cosine similarity (best first).
     """
     vector = _embed(query_text)
-    hits = client.search(
+
+    hits = client.query_points(
         collection_name=settings.embedding.collection_name,
-        query_vector=vector,
+        query=vector,  # <-- Changed from query_vector to query
         limit=top_k,
         query_filter=qdrant_filter,
         with_payload=True,
     )
-    return [hit.payload for hit in hits if hit.payload]
+    return [hit.payload for hit in hits.points if hit.payload]
 
 
 # ── BM25 keyword search ────────────────────────────────────────────────────────

@@ -338,6 +338,28 @@ files = [
 ]
 
 [[package]]
+name = "flashrank"
+version = "0.2.10"
+description = "Ultra lite & Super fast SoTA cross-encoder based re-ranking for your search & retrieval pipelines."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "FlashRank-0.2.10-py3-none-any.whl", hash = "sha256:5d3272ae657d793c132d1e7917ed9e2adf49e0e1c60735583a67b051c6f0434a"},
+    {file = "FlashRank-0.2.10.tar.gz", hash = "sha256:f8f82a25c32fdfc668a09dc4089421d6aab8e7f71308424b541f40bb3f01d9db"},
+]
+
+[package.dependencies]
+numpy = "*"
+onnxruntime = "*"
+requests = "*"
+tokenizers = "*"
+tqdm = "*"
+
+[package.extras]
+listwise = ["llama-cpp-python (==0.2.76)"]
+
+[[package]]
 name = "flatbuffers"
 version = "25.12.19"
 description = "The FlatBuffers serialization format for Python"
@@ -2820,4 +2842,4 @@ dev = ["black (>=19.3b0) ; python_version >= \"3.6\"", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "862444f9cf98e0ffe3279c1f683ed0b4e026fec2f74de78761b943d5d8855476"
+content-hash = "1f0e349564856cd22451f46edebd8303c42ff15bc38d989c9964af4d92a6f13a"

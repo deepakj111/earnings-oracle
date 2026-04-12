@@ -132,11 +132,11 @@ def _call_llm(
             response = client.chat.completions.create(
                 model=QUERY_TRANSFORM_MODEL,
                 messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
+                    # Merge system and user into a single user message
+                    {"role": "user", "content": f"{system}\n\n{user}"},
                 ],
-                temperature=temperature,
-                max_tokens=max_tokens,
+                # temperature=temperature,
+                max_completion_tokens=max_tokens,
             )
             text = response.choices[0].message.content or ""
             text = text.strip()

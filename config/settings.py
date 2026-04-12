@@ -86,13 +86,13 @@ class QueryTransformConfig:
 
     # Max output tokens per technique — kept tight to control cost
     max_tokens_hyde: int = field(
-        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_HYDE", 250)
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_HYDE", 4096)
     )
     max_tokens_multi_query: int = field(
-        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_MULTI_QUERY", 200)
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_MULTI_QUERY", 4096)
     )
     max_tokens_stepback: int = field(
-        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_STEPBACK", 100)
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_STEPBACK", 4096)
     )
 
     # Retry / backoff
@@ -160,7 +160,7 @@ class GenerationConfig:
 
     model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5-nano"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
-    max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 1024))
+    max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(
         default_factory=lambda: _env_int("RAG_GENERATION_MAX_CONTEXT_TOKENS", 4096)
     )
@@ -184,7 +184,7 @@ class EmbeddingConfig:
     model: str = field(
         default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
     )
-    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 1024))
+    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 4096))
     collection_name: str = field(
         default_factory=lambda: _env_str("RAG_QDRANT_COLLECTION", "earnings_transcripts")
     )
