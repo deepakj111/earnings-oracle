@@ -45,6 +45,14 @@ def _env_float(key: str, default: float) -> float:
         raise ValueError(f"Config error: {key}={raw!r} is not a valid float.") from None
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    """Read a boolean from an env var. Accepts: 1/0, true/false, yes/no, on/off."""
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 # ── Layer 2: Query Transformation ─────────────────────────────────────────────
 
 
@@ -99,7 +107,39 @@ class QueryTransformConfig:
     )
 
 
-# ── Layer 4: Generation (placeholder — populated when generation/ is built) ───
+# ── Layer 3: Reranking ─────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RerankerConfig:
+    """
+    Configuration for retrieval/reranker.py (Layer 3 — FlashRank cross-encoder).
+
+    Model: ms-marco-MiniLM-L-12-v2
+      - Fully local ONNX model (~66MB, cached after first download via flashrank)
+      - No API costs, no rate limits, runs entirely on CPU
+      - Trained on MS MARCO passage ranking — strong relevance scoring for
+        question-document pairs across domains including financial text
+      - L-12 (12-layer) gives better precision than L-6 at acceptable latency:
+        ~8–15ms for 20 candidates on CPU — well within real-time budget
+
+    top_k_pre_rerank: number of RRF-fused candidates passed to the cross-encoder.
+      20 is the recommended sweet spot — broad enough not to miss relevant chunks,
+      small enough that reranking stays fast. Do not set above 40.
+
+    enabled: set RAG_RERANKER_ENABLED=false to bypass reranking entirely.
+      Useful for latency benchmarks or retrieval quality ablation studies.
+      When disabled, retrieval returns top_k_final chunks sorted by RRF score.
+    """
+
+    model: str = field(
+        default_factory=lambda: _env_str("RAG_RERANKER_MODEL", "ms-marco-MiniLM-L-12-v2")
+    )
+    top_k_pre_rerank: int = field(default_factory=lambda: _env_int("RAG_RERANKER_TOP_K_PRE", 20))
+    enabled: bool = field(default_factory=lambda: _env_bool("RAG_RERANKER_ENABLED", True))
+
+
+# ── Layer 4: Generation ────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -109,13 +149,21 @@ class GenerationConfig:
 
     Model tier rationale:
       gpt-5-nano — $0.05/1M input, $0.005/1M output.
-      Generation prompts are long (retrieved context = 2000–5000 tokens).
-      Mini-tier provides better reasoning over dense financial text than nano.
+      Generation prompts carry 2000–5000 tokens of retrieved financial context.
+      gpt-5-nano handles long-context financial reasoning at this tier.
+
+    max_context_tokens: hard cap on total tokens in the retrieved context block.
+      Prevents runaway costs and mitigates the "lost in the middle" problem where
+      models ignore chunks in the middle of very long contexts.
+      4096 comfortably fits 5 parent chunks (~512 tokens each) + prompt overhead.
     """
 
     model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5-nano"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 1024))
+    max_context_tokens: int = field(
+        default_factory=lambda: _env_int("RAG_GENERATION_MAX_CONTEXT_TOKENS", 4096)
+    )
     max_retries: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_RETRIES", 3))
     retry_base_delay_seconds: float = field(
         default_factory=lambda: _env_float("RAG_GENERATION_RETRY_DELAY", 1.0)
@@ -129,7 +177,7 @@ class GenerationConfig:
 class EmbeddingConfig:
     """
     Configuration for ingestion/indexer.py (fastembed + Qdrant).
-    Kept here so retrieval layer can reference the same model name
+    Kept here so the retrieval layer can reference the same model name
     when embedding HyDE documents for dense search.
     """
 
@@ -145,20 +193,44 @@ class EmbeddingConfig:
     )
 
 
-# ── Retrieval ──────────────────────────────────────────────────────────────────
+# ── Layer 3: Retrieval ─────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
 class RetrievalConfig:
     """
     Configuration for retrieval/searcher.py (Layer 3 — BM25 + Qdrant + RRF).
-    Populated now so retrieval/ module can import these on implementation.
+
+    top_k_dense / top_k_bm25: candidates fetched per individual query variant.
+      With 6 query variants (4 multi-queries + 1 step-back + 1 HyDE for dense),
+      the raw pool before deduplication is up to 6×10=60 dense + 5×10=50 BM25.
+      After dedup the realistic pool is 30–60 unique chunks.
+
+    top_k_final: final chunks passed to the generation layer after reranking.
+      5 parent chunks × ~512 tokens ≈ 2560 context tokens — comfortably under
+      GenerationConfig.max_context_tokens (4096).
+
+    rrf_k_constant: the k in RRF score = 1/(k + rank). Standard default from
+      the original RRF paper. 60 works well across retrieval domains.
+
+    parent_fetch_enabled: after child chunk retrieval, fetch the full parent
+      chunk text from Qdrant for context-aware reranking and generation.
+      Should always be True in production. Set False only for ablation testing.
+
+    metadata_filter_enabled: allow MetadataFilter to be passed to Qdrant queries.
+      Disabling removes ticker/year/quarter scoping for all search calls.
     """
 
     top_k_dense: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_DENSE", 10))
     top_k_bm25: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_BM25", 10))
     top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 5))
     rrf_k_constant: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_RRF_K", 60))
+    parent_fetch_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_RETRIEVAL_PARENT_FETCH", True)
+    )
+    metadata_filter_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_RETRIEVAL_META_FILTER", True)
+    )
 
 
 # ── Infrastructure ─────────────────────────────────────────────────────────────
@@ -166,7 +238,7 @@ class RetrievalConfig:
 
 @dataclass(frozen=True)
 class InfraConfig:
-    """Infrastructure endpoints and secrets. All four values come from .env only."""
+    """Infrastructure endpoints and secrets. All values come from .env only."""
 
     qdrant_url: str = field(default_factory=lambda: _env_str("QDRANT_URL", "http://localhost:6333"))
     openai_api_key: str = field(default_factory=lambda: _env_str("OPENAI_API_KEY", ""))
@@ -186,13 +258,18 @@ class Settings:
     Root config object. Import `settings` from `config` in any module:
 
         from config import settings
-        model = settings.query_transform.model
+
+        settings.query_transform.model        # Layer 2
+        settings.retrieval.top_k_final        # Layer 3 search
+        settings.reranker.enabled             # Layer 3 reranker
+        settings.generation.max_context_tokens  # Layer 4
     """
 
     query_transform: QueryTransformConfig = field(default_factory=QueryTransformConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
+    reranker: RerankerConfig = field(default_factory=RerankerConfig)
     infra: InfraConfig = field(default_factory=InfraConfig)
 
     def validate(self) -> None:
