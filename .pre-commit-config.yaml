@@ -50,3 +50,19 @@ repos:
       - id: bandit
         args: ["-c", "pyproject.toml"]
         files: ^ingestion/
+
+# .pre-commit-config.yaml  — add this as a new entry after bandit
+
+  # ── 5. TruffleHog — verified secret scanning ─────────────────────────
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: v3.88.30       # pin to latest stable — check github.com/trufflesecurity/trufflehog/releases
+    hooks:
+      - id: trufflehog
+        name: TruffleHog
+        description: Scan staged changes for verified leaked secrets
+        entry: trufflehog git file://.
+          --since-commit HEAD
+          --results=verified
+          --fail
+        language: golang
+        pass_filenames: false
