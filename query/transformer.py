@@ -137,6 +137,8 @@ def _call_llm(
                 ],
                 # temperature=temperature,
                 max_completion_tokens=max_tokens,
+                # Force the model to think as quickly as possible
+                reasoning_effort="low",
             )
             text = response.choices[0].message.content or ""
             text = text.strip()

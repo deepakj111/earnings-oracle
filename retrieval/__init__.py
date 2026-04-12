@@ -22,10 +22,11 @@ from qdrant_client import QdrantClient
 
 from retrieval.models import MetadataFilter, RetrievalResult, SearchResult
 from retrieval.reranker import rerank
-from retrieval.searcher import search
 
 if TYPE_CHECKING:
     from query.models import TransformedQuery
+
+from retrieval.searcher import _fetch_parent_texts, search  # <-- Add _fetch_parent_texts here
 
 
 def retrieve(
@@ -33,33 +34,25 @@ def retrieve(
     qdrant_client: QdrantClient,
     metadata_filter: MetadataFilter | None = None,
 ) -> RetrievalResult:
-    """
-    Full Layer 3 pipeline: search → rerank → RetrievalResult.
-
-    Args:
-        query           : TransformedQuery from Layer 2 (HyDE + multi-query + step-back)
-        qdrant_client   : connected QdrantClient instance
-        metadata_filter : optional ticker/year/quarter scoping
-
-    Returns:
-        RetrievalResult containing top-k ranked chunks ready for generation.
-    """
-    # 3a — Hybrid search + RRF + parent fetch
+    # 3a — Hybrid search + RRF (Returns small child chunks)
     candidates: list[SearchResult] = search(
         query=query,
         qdrant_client=qdrant_client,
         metadata_filter=metadata_filter,
     )
 
-    # 3b — Cross-encoder reranking
-    final: list[SearchResult] = rerank(
+    # 3b — Cross-encoder reranking (Fast because it's only reading 128-token chunks)
+    top_children: list[SearchResult] = rerank(
         query=query.original,
         candidates=candidates,
     )
 
+    # 3c — Late Parent Fetch (Only fetching the final 5 parent chunks for the LLM)
+    final_parents = _fetch_parent_texts(qdrant_client, top_children)
+
     return RetrievalResult(
         query=query.original,
-        results=final,
+        results=final_parents,
         reranked=True,
         total_candidates=len(candidates),
         metadata_filter=metadata_filter,

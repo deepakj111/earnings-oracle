@@ -70,6 +70,8 @@ from generation.models import GenerationResult
 from query import QueryTransformer
 from retrieval import retrieve
 from retrieval.models import MetadataFilter, RetrievalResult
+from retrieval.reranker import _get_ranker
+from retrieval.searcher import _get_embed_client, _load_bm25
 
 
 class FinancialRAGPipeline:
@@ -85,21 +87,26 @@ class FinancialRAGPipeline:
     are lazy-loaded on first use and cached as module-level singletons.
     """
 
+    # Modify the __init__ method:
     def __init__(
         self,
         qdrant_client: QdrantClient,
         enable_query_cache: bool = True,
     ) -> None:
-        """
-        Args:
-            qdrant_client     : connected QdrantClient (caller owns lifecycle)
-            enable_query_cache: cache QueryTransformer results in-memory
-                                to avoid redundant API calls for repeated queries
-                                (e.g. during evaluation, CRAG loops, UI demos)
-        """
         self.qdrant_client = qdrant_client
         self._transformer = QueryTransformer(enable_cache=enable_query_cache)
         self._generator = Generator()
+
+        logger.info("Pre-loading models into memory to prevent cold-start latency...")
+        _get_embed_client()  # Loads BAAI/bge-large-en-v1.5
+        _load_bm25()  # Loads BM25 Index
+        if _settings.reranker.enabled:
+            try:
+                _get_ranker()  # Loads FlashRank cross-encoder
+            except ImportError:
+                pass
+        # ---------------------------------------------
+
         logger.info(
             "FinancialRAGPipeline ready | "
             f"qdrant={_settings.infra.qdrant_url} | "
