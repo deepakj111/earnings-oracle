@@ -56,7 +56,10 @@ class TestRunPipeline:
             patch("ingestion.pipeline.init_qdrant", return_value=mock_qdrant),
             patch(
                 "ingestion.pipeline.index_document",
-                side_effect=lambda chunks, meta, qdrant, bm25: bm25 + [["revenue", "grew"]],
+                side_effect=lambda chunks, metadata, qdrant, bm25_texts, bm25_corpus: (
+                    bm25_texts + [["token"]],
+                    bm25_corpus + [{"chunk_id": "x", "text": "x"}],
+                ),
             ),
         ):
             run_pipeline()
