@@ -5,12 +5,11 @@ from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 
-load_dotenv()
+from config import settings as _settings
 
 HEADERS = {
-    "User-Agent": os.getenv("SEC_USER_AGENT", "Your Name your@email.com"),
+    "User-Agent": _settings.infra.sec_user_agent,
     "Accept-Encoding": "gzip, deflate",
 }
 

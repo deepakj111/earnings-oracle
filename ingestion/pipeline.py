@@ -1,18 +1,15 @@
-import os
 import pickle  # nosec B403
 from pathlib import Path
 
-from dotenv import load_dotenv
 from loguru import logger
 from rank_bm25 import BM25Okapi
 from tqdm import tqdm
 
+from config import settings as _settings
 from ingestion.chunker import create_parent_child_chunks
 from ingestion.indexer import index_document, init_qdrant, setup_embedder
 from ingestion.metadata_extractor import extract_metadata
 from ingestion.parser import parse_html
-
-load_dotenv()
 
 TRANSCRIPTS_DIR = Path("data/transcripts")
 BM25_INDEX_PATH = Path("data/bm25_index.pkl")
@@ -45,7 +42,8 @@ def _save_bm25(bm25_texts: list[list[str]]) -> None:
 
 def run_pipeline() -> None:
     setup_embedder()
-    qdrant = init_qdrant(os.getenv("QDRANT_URL", "http://localhost:6333"))
+
+    qdrant = init_qdrant(_settings.infra.qdrant_url)
 
     transcript_files = sorted(TRANSCRIPTS_DIR.glob("*.htm"))
     logger.info(f"Found {len(transcript_files)} .htm files in {TRANSCRIPTS_DIR}")

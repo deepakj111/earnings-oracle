@@ -6,13 +6,15 @@ from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
+from config import settings as _settings
 from ingestion.chunker import Chunk
 from ingestion.metadata_extractor import DocumentMetadata
 
-COLLECTION_NAME = "earnings_transcripts"
-VECTOR_DIM = 1024
-EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
-UPSERT_BATCH_SIZE = 50
+_cfg = _settings.embedding
+COLLECTION_NAME: str = _cfg.collection_name
+VECTOR_DIM: int = _cfg.vector_dim
+EMBEDDING_MODEL: str = _cfg.model
+UPSERT_BATCH_SIZE: int = _cfg.upsert_batch_size
 
 _embed_model: TextEmbedding | None = None
 
