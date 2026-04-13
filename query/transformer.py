@@ -135,10 +135,8 @@ def _call_llm(
                     # Merge system and user into a single user message
                     {"role": "user", "content": f"{system}\n\n{user}"},
                 ],
-                # temperature=temperature,
+                temperature=temperature,
                 max_completion_tokens=max_tokens,
-                # Force the model to think as quickly as possible
-                reasoning_effort="low",
             )
             text = response.choices[0].message.content or ""
             text = text.strip()
@@ -165,8 +163,10 @@ def _call_llm(
             delay *= 2.0
 
         except APIError as exc:
-            # Retry on 5xx server errors, propagate on 4xx client errors
-            if exc.status_code is not None and exc.status_code < 500:
+            # Retry on 5xx server errors and connection errors (no status code).
+            # Propagate on 4xx client errors immediately.
+            status = getattr(exc, "status_code", None)
+            if status is not None and status < 500:
                 raise
             if attempt == MAX_RETRIES:
                 raise

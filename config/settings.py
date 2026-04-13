@@ -62,13 +62,15 @@ class QueryTransformConfig:
     Configuration for query/transformer.py (Layer 2 — HyDE + Multi-Query + Step-Back).
 
     Model tier rationale:
-      gpt-5-nano — $0.05/1M input, $0.005/1M output.
+      gpt-4.1-nano — $0.10/1M input, $0.40/1M output.
       Query transformation prompts are short (~120–350 tokens input, ~80–250 output).
       At this scale, nano-tier models are more than sufficient for instruction-following
       tasks like rephrasing and hypothetical passage generation.
     """
 
-    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-5-nano"))
+    model: str = field(
+        default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-4.1-nano")
+    )
 
     # Per-technique temperatures — intentionally different
     # HyDE: moderate creativity for realistic-sounding passages
@@ -158,7 +160,7 @@ class GenerationConfig:
       4096 comfortably fits 5 parent chunks (~512 tokens each) + prompt overhead.
     """
 
-    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5-nano"))
+    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-4.1-nano"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(
@@ -184,7 +186,7 @@ class EmbeddingConfig:
     model: str = field(
         default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
     )
-    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 4096))
+    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 1024))
     collection_name: str = field(
         default_factory=lambda: _env_str("RAG_QDRANT_COLLECTION", "earnings_transcripts")
     )

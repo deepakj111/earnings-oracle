@@ -178,12 +178,13 @@ def _call_llm(prompt_messages: list[dict]) -> tuple[str, int, int]:
         response = client.chat.completions.create(
             model=_cfg.model,
             messages=prompt_messages,
-            # temperature=_cfg.temperature,
+            temperature=_cfg.temperature,
             max_completion_tokens=_cfg.max_tokens,
         )
     except APIError as exc:
         # Retry on 5xx server errors; propagate on 4xx client errors immediately
-        if exc.status_code is not None and exc.status_code < 500:
+        status = getattr(exc, "status_code", None)
+        if status is not None and status < 500:
             raise
         raise  # tenacity will decide whether to retry based on exception type
 
@@ -375,7 +376,7 @@ class Generator:
         with client.chat.completions.create(
             model=_cfg.model,
             messages=prompt_messages,
-            # temperature=_cfg.temperature,
+            temperature=_cfg.temperature,
             max_completion_tokens=_cfg.max_tokens,
             stream=True,
         ) as stream:
