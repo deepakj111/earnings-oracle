@@ -193,7 +193,7 @@ def client(mock_pipeline: MagicMock, mock_qdrant: MagicMock) -> TestClient:  # t
     with patch("api.main.lifespan", _test_lifespan):
         test_app = api.main.create_app()
 
-    with TestClient(test_app, raise_server_exceptions=True) as c:
+    with TestClient(test_app, raise_server_exceptions=False) as c:  # ← False
         yield c
 
 

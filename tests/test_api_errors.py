@@ -34,10 +34,12 @@ from fastapi.testclient import TestClient
 def _make_rate_limit_error() -> Exception:
     from openai import RateLimitError
 
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
     response = httpx.Response(
         429,
         content=b'{"error":{"message":"rate limit","type":"tokens","code":"rate_limit_exceeded"}}',
         headers={"content-type": "application/json"},
+        request=request,  # ← add this
     )
     return RateLimitError("Rate limit exceeded", response=response, body=None)
 
@@ -45,10 +47,12 @@ def _make_rate_limit_error() -> Exception:
 def _make_auth_error() -> Exception:
     from openai import AuthenticationError
 
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
     response = httpx.Response(
         401,
         content=b'{"error":{"message":"invalid api key","type":"invalid_request_error"}}',
         headers={"content-type": "application/json"},
+        request=request,  # ← add this
     )
     return AuthenticationError("Invalid API key", response=response, body=None)
 
