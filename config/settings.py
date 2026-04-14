@@ -288,6 +288,30 @@ class CRAGConfig:
     )
 
 
+# ── Evaluation ─────────────────────────────────────────────────────────────────
+
+
+@dataclass()  # mutable so monkeypatch can redirect output_dir in tests
+class EvaluationConfig:
+    """
+    Configuration for evaluation/harness.py (LLMOps evaluation harness).
+
+    model: LLM used to compute faithfulness, relevancy, precision, recall.
+      Uses the same nano tier as query transformation — short prompts, cheap.
+
+    max_workers: parallel pipeline calls during evaluation.
+      Keep low to avoid OpenAI rate limits. 2 is safe for gpt-4.1-nano.
+
+    output_dir: where EvalReports (JSON + CSV) are written.
+    """
+
+    model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-4.1-nano"))
+    max_workers: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_WORKERS", 2))
+    output_dir: str = field(
+        default_factory=lambda: _env_str("RAG_EVAL_OUTPUT_DIR", "data/eval_reports")
+    )
+
+
 # ── Root Settings (single import point for all modules) ───────────────────────
 
 
@@ -311,6 +335,7 @@ class Settings:
     reranker: RerankerConfig = field(default_factory=RerankerConfig)
     infra: InfraConfig = field(default_factory=InfraConfig)
     crag: CRAGConfig = field(default_factory=CRAGConfig)
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
 
     def validate(self) -> None:
         if not self.infra.openai_api_key:

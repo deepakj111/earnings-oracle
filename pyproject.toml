@@ -25,9 +25,11 @@ tiktoken       = "^0.12.0"
 openai         = ">=2.0.0"
 tenacity       = "^9.1.4"
 flashrank      = "^0.2.9"
-# ── Layer 5: API ──────────────────────────────────────────────────────────────
+tavily-python     = {version = ">=0.5.0", optional = true}
+duckduckgo-search = {version = ">=6.0.0", optional = true}
 fastapi        = ">=0.115.0,<1.0.0"
 uvicorn        = {extras = ["standard"], version = ">=0.34.0"}
+
 # uvicorn[standard] includes: uvloop (fast event loop), httptools (fast HTTP
 # parser), and websockets — all are production-grade performance improvements
 # over the minimal uvicorn install.
@@ -84,4 +86,9 @@ exclude_dirs = ["tests", ".venv"]
 skips        = ["B101"]  # skip assert warnings (fine in tests)
 
 [tool.ruff.lint.isort]
-known-first-party = ["ingestion", "query", "retrieval", "generation", "api", "config"]
+known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "evaluation", "api", "config"]
+
+[tool.poetry.extras]
+crag-tavily = ["tavily-python"]
+crag-ddg    = ["duckduckgo-search"]
+crag        = ["tavily-python", "duckduckgo-search"]

@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -72,6 +73,9 @@ from retrieval import retrieve
 from retrieval.models import MetadataFilter, RetrievalResult
 from retrieval.reranker import _get_ranker
 from retrieval.searcher import _get_embed_client, _load_bm25
+
+if TYPE_CHECKING:
+    from crag.models import CRAGResult
 
 
 class FinancialRAGPipeline:
@@ -271,3 +275,69 @@ class FinancialRAGPipeline:
             retrieval_result=retrieval_result,
         )
         return result, transformed.summary(), retrieval_result.summary()
+
+    # ── CRAG variant
+
+    def ask_with_crag(
+        self,
+        question: str,
+        metadata_filter: MetadataFilter | None = None,
+    ) -> CRAGResult:
+        """
+        Full pipeline with CRAG correction loop.
+
+        Runs L2 + L3 + L4 exactly as ask(), then passes the result through
+        the CRAGCorrector which grades retrieved chunks, optionally triggers
+        web-search fallback, and re-generates if necessary.
+
+        Returns CRAGResult which wraps both the original and final
+        GenerationResult alongside grading diagnostics.
+
+        Args:
+            question       : natural language financial question
+            metadata_filter: optional ticker/year/quarter scoping
+
+        Returns:
+            CRAGResult with .final_result, .action, .was_corrected, etc.
+        """
+        from crag import CRAGCorrector
+
+        question = question.strip()
+        if not question:
+            raise ValueError("question must not be empty.")
+
+        # Lazy-init corrector (avoids import at module load; web client is optional)
+        if not hasattr(self, "_corrector"):
+            self._corrector = CRAGCorrector()
+
+        pipeline_start = time.perf_counter()
+
+        # L2
+        transformed = self._transformer.transform(question)
+
+        # L3
+        retrieval_result: RetrievalResult = retrieve(
+            query=transformed,
+            qdrant_client=self.qdrant_client,
+            metadata_filter=metadata_filter,
+        )
+
+        # L4
+        generation_result = self._generator.generate(
+            question=question,
+            retrieval_result=retrieval_result,
+        )
+
+        # L5 — CRAG
+        crag_result = self._corrector.correct(
+            question=question,
+            generation_result=generation_result,
+            retrieval_result=retrieval_result,
+        )
+
+        total = time.perf_counter() - pipeline_start
+        logger.info(
+            f"Pipeline+CRAG complete | action={crag_result.action.value} | "
+            f"corrected={crag_result.was_corrected} | total={total:.2f}s"
+        )
+        return crag_result
