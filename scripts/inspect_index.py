@@ -117,6 +117,7 @@ else:
 
 # ─── 3. QDRANT VECTOR DATABASE ────────────────────────────────────────────────
 section("3. QDRANT VECTOR DATABASE")
+total_points: int = 0
 
 try:
     client = QdrantClient(url=QDRANT_URL)
@@ -205,9 +206,23 @@ except Exception as exc:
 # ─── 4. CONSISTENCY CHECK ─────────────────────────────────────────────────────
 section("4. CONSISTENCY CHECK")
 
-bm25_count = len(corpus) if BM25_CORPUS_PATH.exists() else 0
-qdrant_count = total_points if "total_points" in dir() else 0
-checkpoint_count = len(lines) if CHECKPOINT_PATH.exists() else 0
+# Initialize with safe defaults before checking
+bm25_count: int = 0
+qdrant_count: int = 0
+checkpoint_count: int = 0
+
+if BM25_CORPUS_PATH.exists():
+    bm25_count = len(corpus)  # corpus is already loaded in section 2
+
+if CHECKPOINT_PATH.exists():
+    checkpoint_count = len(lines)  # lines already loaded in section 1
+
+# total_points is set inside the Qdrant try/except block above
+# Use a module-level sentinel instead of dir() hack:
+try:
+    qdrant_count = total_points  # type: ignore[possibly-undefined]
+except NameError:
+    qdrant_count = 0
 
 print(f"  .htm files on disk   : {fmt(len(htm_files))}")
 print(f"  Checkpoint entries   : {fmt(checkpoint_count)}")

@@ -132,9 +132,6 @@ class UsageOut(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
-    cost_estimate_usd: float = Field(
-        ..., description="Rough cost estimate in USD based on gpt-4o-mini pricing."
-    )
 
 
 class ContextOut(BaseModel):

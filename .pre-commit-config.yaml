@@ -51,8 +51,6 @@ repos:
         args: ["-c", "pyproject.toml"]
         files: ^ingestion/
 
-# .pre-commit-config.yaml  — add this as a new entry after bandit
-
   # ── 5. TruffleHog — verified secret scanning ─────────────────────────
   - repo: https://github.com/trufflesecurity/trufflehog
     rev: v3.88.30       # pin to latest stable — check github.com/trufflesecurity/trufflehog/releases

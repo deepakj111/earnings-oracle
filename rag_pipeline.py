@@ -69,10 +69,8 @@ from config import settings as _settings
 from generation import Generator
 from generation.models import GenerationResult
 from query import QueryTransformer
-from retrieval import retrieve
+from retrieval import retrieve, warmup_bm25, warmup_embed_client, warmup_reranker
 from retrieval.models import MetadataFilter, RetrievalResult
-from retrieval.reranker import _get_ranker
-from retrieval.searcher import _get_embed_client, _load_bm25
 
 if TYPE_CHECKING:
     from crag.models import CRAGResult
@@ -102,11 +100,12 @@ class FinancialRAGPipeline:
         self._generator = Generator()
 
         logger.info("Pre-loading models into memory to prevent cold-start latency...")
-        _get_embed_client()  # Loads BAAI/bge-large-en-v1.5
-        _load_bm25()  # Loads BM25 Index
+        warmup_embed_client()
+        warmup_bm25()
+
         if _settings.reranker.enabled:
             try:
-                _get_ranker()  # Loads FlashRank cross-encoder
+                warmup_reranker()  # Loads FlashRank cross-encoder
             except ImportError:
                 pass
         # ---------------------------------------------
@@ -258,7 +257,7 @@ class FinancialRAGPipeline:
             print(r_summary)
             print("\\n=== Answer ===")
             print(result.format_answer_with_citations())
-            print(f"\\nTokens: {result.total_tokens} | Cost: ${result.cost_estimate_usd:.5f}")
+
         """
         question = question.strip()
         if not question:
@@ -306,8 +305,9 @@ class FinancialRAGPipeline:
         if not question:
             raise ValueError("question must not be empty.")
 
-        # Lazy-init corrector (avoids import at module load; web client is optional)
-        if not hasattr(self, "_corrector"):
+        # Lazy-init: import is deferred to avoid loading crag at startup if unused.
+        # Thread-safe: the GIL ensures only one thread constructs CRAGCorrector.
+        if self._corrector is None:
             self._corrector = CRAGCorrector()
 
         pipeline_start = time.perf_counter()

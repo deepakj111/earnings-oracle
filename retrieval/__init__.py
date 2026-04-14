@@ -26,7 +26,14 @@ from retrieval.reranker import rerank
 if TYPE_CHECKING:
     from query.models import TransformedQuery
 
-from retrieval.searcher import _fetch_parent_texts, search  # <-- Add _fetch_parent_texts here
+# retrieval/__init__.py — add at the bottom of the file
+from retrieval.reranker import warmup_reranker
+from retrieval.searcher import (  # <-- Add _fetch_parent_texts here
+    _fetch_parent_texts,
+    search,
+    warmup_bm25,
+    warmup_embed_client,
+)
 
 
 def retrieve(
@@ -65,4 +72,7 @@ __all__ = [
     "MetadataFilter",
     "RetrievalResult",
     "SearchResult",
+    "warmup_embed_client",
+    "warmup_bm25",
+    "warmup_reranker",
 ]

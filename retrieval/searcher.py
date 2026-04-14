@@ -395,3 +395,13 @@ def search(
     # candidates = _fetch_parent_texts(qdrant_client, candidates)
 
     return candidates
+
+
+def warmup_embed_client() -> None:
+    """Pre-load the fastembed model into memory. Safe to call multiple times."""
+    _get_embed_client()
+
+
+def warmup_bm25() -> None:
+    """Pre-load the BM25 index from disk into memory. Safe to call multiple times."""
+    _load_bm25()

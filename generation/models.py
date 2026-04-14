@@ -121,17 +121,6 @@ class GenerationResult:
                 result.append(label)
         return result
 
-    @property
-    def cost_estimate_usd(self) -> float:
-        """
-        Rough cost estimate in USD based on gpt-4o-mini pricing.
-        Update multipliers if switching models.
-        Input: $0.15/1M tokens, Output: $0.60/1M tokens.
-        """
-        input_cost = (self.prompt_tokens / 1_000_000) * 0.15
-        output_cost = (self.completion_tokens / 1_000_000) * 0.60
-        return round(input_cost + output_cost, 6)
-
     # ── Formatting ────────────────────────────────────────────────────────────
 
     def format_answer_with_citations(self) -> str:
@@ -164,7 +153,6 @@ class GenerationResult:
                 "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens,
                 "total_tokens": self.total_tokens,
-                "cost_estimate_usd": self.cost_estimate_usd,
             },
             "context": {
                 "chunks_used": self.context_chunks_used,

@@ -1,0 +1,44 @@
+# prometheus.yml
+# Prometheus scrape configuration for the Financial RAG stack.
+#
+# Scrapes:
+#   financial_rag_api   — custom LLMOps metrics from /metrics endpoint
+#   prometheus_self     — Prometheus internal metrics
+#
+# Hot-reload (without restart):
+#   curl -X POST http://localhost:9090/-/reload
+
+global:
+  scrape_interval: 15s          # how often to pull metrics
+  evaluation_interval: 15s      # how often to evaluate alerting rules
+  scrape_timeout: 10s
+
+# ── Alerting ──────────────────────────────────────────────────────────────────
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
+
+# ── Rule files ────────────────────────────────────────────────────────────────
+# rule_files:
+#   - "alerts/*.yml"
+
+# ── Scrape configs ────────────────────────────────────────────────────────────
+scrape_configs:
+
+  # Financial RAG API — custom application metrics
+  - job_name: financial_rag_api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api:8000          # Docker service name; use localhost:8000 for local dev
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: "financial_rag_api"
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090

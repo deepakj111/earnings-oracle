@@ -2,17 +2,21 @@
 """
 Query routes — POST /query and POST /query/stream.
 
+
 Both routes delegate to the same FinancialRAGPipeline but differ in how
 they return results:
+
 
   POST /query        — runs the full pipeline synchronously (in a thread) and
                        returns a fully structured AskResponse JSON body with
                        citations, token usage, grounding flag, and diagnostics.
 
+
   POST /query/stream — runs L2 (query transformation) + L3 (retrieval) in a
                        thread, then streams L4 (generation) tokens as
                        Server-Sent Events.  No structured citation data is
                        returned — use /query when you need metadata.
+
 
 Threading model:
   FastAPI runs on an async event loop (uvicorn + asyncio).  The RAG pipeline
@@ -20,21 +24,33 @@ Threading model:
   blocking calls).  We offload every pipeline call to a ThreadPoolExecutor so
   the event loop stays free to handle other requests concurrently.
 
+
   _THREAD_POOL is module-level with max_workers=4 — tune based on:
     - OpenAI rate limits (tokens-per-minute / requests-per-minute)
     - Available CPU cores for FlashRank / fastembed
     - Expected concurrent users
+
 
 SSE message format (POST /query/stream):
   data: {"token": "<text delta>"}\n\n   — one per LLM token
   data: {"error": "<message>"}\n\n      — if generation fails mid-stream
   data: [DONE]\n\n                      — always the final message
 
+
+Metrics instrumentation (NEW):
+  record_generation_result() is called after every successful ask() call.
+  record_retrieval_result() is not called here because retrieval stats
+  are embedded in GenerationResult (context_chunks_used, context_tokens_used).
+  Streaming calls do NOT produce a GenerationResult, so LLM metrics are
+  not recorded for stream requests (HTTP-level metrics still fire via middleware).
+
+
 FIX 1 (Bug): asyncio.get_event_loop() was used in both ask() and ask_stream().
   In Python 3.10+ this raises DeprecationWarning inside an already-running loop.
   Replaced with asyncio.get_running_loop() which is always correct inside an
   async handler and raises RuntimeError (not silently degrades) if called
   outside an event loop.
+
 
 FIX 2 (Bug): Producer future in _consume() was silently discarded.
   loop.run_in_executor() returns an asyncio.Future.  If _produce() raised
@@ -55,6 +71,7 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from api.dependencies import get_pipeline
+from api.metrics import record_generation_result  # ← NEW
 from api.models import AskRequest, AskResponse, CitationOut, ContextOut, UsageOut
 from generation.models import GenerationResult
 from rag_pipeline import FinancialRAGPipeline
@@ -62,12 +79,14 @@ from retrieval.models import MetadataFilter
 
 router = APIRouter()
 
+
 # ── Thread pool for blocking pipeline calls ────────────────────────────────────
 # Named threads make profiling and debugging easier (visible in py-spy / pystack).
 _THREAD_POOL = ThreadPoolExecutor(
     max_workers=4,
     thread_name_prefix="rag-worker",
 )
+
 
 # Typed dependency alias for cleaner route signatures
 _Pipeline = Annotated[FinancialRAGPipeline, Depends(get_pipeline)]
@@ -99,6 +118,7 @@ def _serialise(
     """
     Convert the internal GenerationResult dataclass into the public AskResponse.
 
+
     Verbose fields are included only when the caller requested them to keep
     the default response payload compact.
     """
@@ -127,7 +147,6 @@ def _serialise(
             prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens,
             total_tokens=result.total_tokens,
-            cost_estimate_usd=result.cost_estimate_usd,
         ),
         context=ContextOut(
             chunks_used=result.context_chunks_used,
@@ -215,6 +234,9 @@ async def ask(
         result = await loop.run_in_executor(_THREAD_POOL, _run)
         query_summary = retrieval_summary = None
 
+    # ← NEW: record LLM + generation metrics after successful pipeline run
+    record_generation_result(result)
+
     logger.info(
         f"[{rid}] answer ready | grounded={result.grounded} | "
         f"citations={len(result.citations)} | tokens={result.total_tokens} | "
@@ -279,6 +301,7 @@ async def ask_stream(
         """
         Synchronous producer running in a thread pool worker.
 
+
         Iterates over the blocking pipeline.ask_streaming() generator and
         pushes each token onto the asyncio queue via run_coroutine_threadsafe.
         Sends None as a sentinel to signal end-of-stream.
@@ -302,6 +325,7 @@ async def ask_stream(
     async def _consume():
         """
         Async consumer: reads tokens from the queue and yields SSE strings.
+
 
         FIX 2: The producer future is now stored.  If _produce() raises before
         placing the sentinel, the future's exception is logged and _consume()

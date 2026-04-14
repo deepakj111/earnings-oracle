@@ -1,0 +1,57 @@
+# .dockerignore
+# Exclude files that should not be sent to Docker build context.
+# Keeps build fast and prevents secrets from leaking into image layers.
+
+# ── Secrets & config ──────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Runtime data (large, not needed at build time) ───────────────────────────
+data/
+data/transcripts/
+data/bm25_index.pkl
+data/bm25_corpus.pkl
+data/pipeline_checkpoint.txt
+data/eval_reports/
+
+# ── Python artefacts ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Development tooling ───────────────────────────────────────────────────────
+.git/
+.gitignore
+.pre-commit-config.yaml
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+tests/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/

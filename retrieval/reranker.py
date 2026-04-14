@@ -82,3 +82,8 @@ def rerank(
             r.rerank_score = r.rrf_score
         candidates.sort(key=lambda r: r.rerank_score, reverse=True)
         return candidates[:top_k_final]
+
+
+def warmup_reranker() -> None:
+    """Pre-load the FlashRank cross-encoder into memory. Safe to call multiple times."""
+    _get_ranker()

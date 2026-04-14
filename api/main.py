@@ -1,36 +1,45 @@
+# api/main.py
 """
 Financial RAG API — application entry point.
+
 
 Run with uvicorn:
     # Development (auto-reload on code changes)
     poetry run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
+
     # Production (4 worker processes, production-grade server)
     poetry run uvicorn api.main:app --workers 4 --host 0.0.0.0 --port 8000
 
+
     # Or via the CLI shortcut defined in pyproject.toml:
     poetry run serve
+
 
 OpenAPI docs (auto-generated):
     http://localhost:8000/docs   — Swagger UI
     http://localhost:8000/redoc  — ReDoc
 
+
 Architecture:
   This module wires together:
     - Lifespan context manager  (startup / shutdown hooks)
-    - CORS + middleware stack    (RequestID → Timing → CORS)
+    - CORS + middleware stack    (Prometheus → RequestID → Timing → CORS)
     - Exception handler registry (typed error → HTTP status mapping)
-    - Router mounting            (/query, /health)
+    - Router mounting            (/query, /health, /metrics)
+
 
 Design decisions:
   1. Application factory pattern (create_app()) so the app can be
      instantiated in tests with different settings without running startup.
+
 
   2. Heavy models (BAAI/bge, BM25, FlashRank) are pre-loaded in the lifespan
      startup rather than lazily on first request.  This gives:
        - Predictable cold-start latency (pays it at process start, not first user)
        - Kubernetes readiness probe accuracy (/health/ready returns 200 only
          after models are loaded)
+
 
   3. CORS is configured permissively (allow_origins=["*"]) for development.
      Tighten this in production by setting RAG_CORS_ORIGINS env var.
@@ -47,8 +56,13 @@ from loguru import logger
 from qdrant_client import QdrantClient
 
 from api.errors import register_exception_handlers
+from api.metrics import PrometheusMiddleware  # ← NEW
 from api.middleware import RequestIDMiddleware, TimingMiddleware
-from api.routes import health, query
+from api.routes import (
+    health,
+    metrics_route,  # ← NEW
+    query,
+)
 from config import settings
 from rag_pipeline import FinancialRAGPipeline
 
@@ -61,9 +75,11 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan: pre-load all models at startup, clean up on shutdown.
 
+
     FastAPI guarantees this completes before the first request is served,
     which means the Kubernetes readiness probe correctly returns 503 during
     the model-loading phase.
+
 
     Startup sequence:
       1. Validate required environment variables (fail fast if misconfigured)
@@ -73,6 +89,7 @@ async def lifespan(app: FastAPI):
            BAAI/bge-large-en-v1.5    ~340 MB (embedding)
            BM25 index                 ~30-100 MB (keyword search)
            ms-marco-MiniLM-L-12-v2   ~66 MB (reranker, if enabled)
+
 
     Expected startup time:
       First run: 2–5 min (model download from HuggingFace Hub)
@@ -120,10 +137,11 @@ def create_app() -> FastAPI:
     """
     Application factory.
 
+
     Called once at module load time to produce the ASGI app.  Isolating
     construction here allows tests to call create_app() without triggering
     the lifespan startup (use TestClient with lifespan='off' in unit tests
-    or mock app.state in integration tests).
+     or mock app.state in integration tests).
     """
     app = FastAPI(
         title="Financial RAG API",
@@ -178,12 +196,17 @@ def create_app() -> FastAPI:
     # 3. Request ID — innermost, sets request.state.request_id first
     app.add_middleware(RequestIDMiddleware)
 
+    # 4. Prometheus — innermost of all, records metrics for every route
+    #    including /metrics itself so you get full observability coverage.
+    app.add_middleware(PrometheusMiddleware)  # ← NEW
+
     # ── Exception handlers ────────────────────────────────────────────────────
     register_exception_handlers(app)
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(query.router, prefix="/query", tags=["Query"])
     app.include_router(health.router, prefix="/health", tags=["Health"])
+    app.include_router(metrics_route.router)  # ← NEW: mounts GET /metrics
 
     return app
 

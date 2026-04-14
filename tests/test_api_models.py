@@ -230,7 +230,6 @@ class TestAskResponse:
                 prompt_tokens=1000,
                 completion_tokens=80,
                 total_tokens=1080,
-                cost_estimate_usd=0.000015,
             ),
             context=ContextOut(chunks_used=3, tokens_used=2048),
             latency_seconds=2.5,

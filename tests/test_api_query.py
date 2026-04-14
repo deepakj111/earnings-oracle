@@ -182,7 +182,6 @@ class TestAskEndpoint:
         data = client.post("/query/", json={"question": "Apple revenue?"}).json()
         usage = data["usage"]
         assert usage["total_tokens"] == 1280
-        assert "cost_estimate_usd" in usage
 
     def test_context_block_present(self, client: TestClient) -> None:
         data = client.post("/query/", json={"question": "Apple revenue?"}).json()

@@ -44,7 +44,10 @@ def setup_embedder() -> None:
 
 
 def _get_embedding(text: str) -> list[float]:
-    assert _embed_model is not None, "Call setup_embedder() before indexing"
+    if _embed_model is None:
+        raise RuntimeError(
+            "Embedding model is not loaded. Call setup_embedder() before calling _get_embedding()."
+        )
     vec = next(iter(_embed_model.embed([text])))
     arr = np.array(vec, dtype=np.float32)
     norm = np.linalg.norm(arr)

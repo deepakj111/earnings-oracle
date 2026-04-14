@@ -90,7 +90,7 @@ class TestGetEmbedding:
 
     def test_raises_if_client_not_initialized(self):
         with patch("ingestion.indexer._embed_model", None):
-            with pytest.raises(AssertionError, match="setup_embedder"):
+            with pytest.raises(RuntimeError, match="setup_embedder"):
                 _get_embedding("Revenue grew 6 percent.")
 
 

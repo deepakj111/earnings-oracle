@@ -358,15 +358,6 @@ class TestGeneratorGenerate:
         assert "unique_sources" in d
 
     @patch("generation.generator._call_llm")
-    def test_cost_estimate_is_non_negative(self, mock_call_llm):
-        mock_call_llm.return_value = ("Revenue [1].", 500, 100)
-        result = Generator().generate(
-            question="Revenue?",
-            retrieval_result=_make_retrieval_result(),
-        )
-        assert result.cost_estimate_usd >= 0.0
-
-    @patch("generation.generator._call_llm")
     def test_unique_sources_populated(self, mock_call_llm):
         mock_call_llm.return_value = ("Revenue [1][2].", 200, 40)
         r1 = _make_result("c1", ticker="AAPL", fiscal_period="Q4 2024", parent_id="p1")

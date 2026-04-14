@@ -66,20 +66,25 @@ def _save_bm25(bm25_texts: list[list[str]], bm25_corpus: list[dict]) -> None:
 
 def _load_existing_bm25() -> tuple[list[list[str]], list[dict]]:
     """
-    Load the existing BM25 corpus from disk so that re-runs accumulate
-    on top of previously indexed documents rather than replacing them.
-
-    bm25_texts is reconstructed by re-tokenising the stored text fields —
-    BM25Okapi requires the raw token lists, not the serialised index object.
+    Load the existing BM25 corpus from disk.
+    Gracefully handles corrupt/truncated pickle files by starting fresh.
     """
-    if BM25_CORPUS_PATH.exists():
+    if not BM25_CORPUS_PATH.exists():
+        logger.info("No existing BM25 corpus found — starting fresh.")
+        return [], []
+
+    try:
         with open(BM25_CORPUS_PATH, "rb") as f:  # nosec B403
             bm25_corpus: list[dict] = pickle.load(f)  # nosec B301
         bm25_texts = [entry["text"].lower().split() for entry in bm25_corpus]
         logger.info(f"Loaded existing BM25 corpus — {len(bm25_corpus)} chunks carried forward.")
         return bm25_texts, bm25_corpus
-    logger.info("No existing BM25 corpus found — starting fresh.")
-    return [], []
+    except (pickle.UnpicklingError, EOFError, Exception) as exc:
+        logger.warning(
+            f"BM25 corpus at {BM25_CORPUS_PATH} is corrupt or unreadable ({exc}). "
+            "Starting fresh — all files will be re-indexed this run."
+        )
+        return [], []
 
 
 def run_pipeline() -> None:
