@@ -251,6 +251,43 @@ class InfraConfig:
     fastembed_cache_path: str = field(default_factory=lambda: _env_str("FASTEMBED_CACHE_PATH", ""))
 
 
+# ── Layer 5: CRAG ──────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class CRAGConfig:
+    """
+    Configuration for Layer 5 — Corrective RAG (crag/corrector.py).
+
+    Thresholds control when CRAG triggers web-search fallback:
+      relevant_ratio >= high_threshold  →  CORRECT   (trust local retrieval)
+      relevant_ratio <= low_threshold   →  INCORRECT  (discard local, web only)
+      between the two                   →  AMBIGUOUS  (local + web combined)
+
+    grade_even_if_grounded:
+      False (default) — skip grading when generation layer reports grounded=True.
+      True            — always grade; useful for evaluation ablation studies.
+
+    enabled:
+      Set RAG_CRAG_ENABLED=false to bypass CRAG entirely (returns original answer).
+    """
+
+    enabled: bool = field(default_factory=lambda: _env_bool("RAG_CRAG_ENABLED", True))
+    high_relevance_threshold: float = field(
+        default_factory=lambda: _env_float("RAG_CRAG_HIGH_THRESHOLD", 0.6)
+    )
+    low_relevance_threshold: float = field(
+        default_factory=lambda: _env_float("RAG_CRAG_LOW_THRESHOLD", 0.2)
+    )
+    grade_even_if_grounded: bool = field(
+        default_factory=lambda: _env_bool("RAG_CRAG_GRADE_IF_GROUNDED", False)
+    )
+    grader_max_workers: int = field(default_factory=lambda: _env_int("RAG_CRAG_GRADER_WORKERS", 5))
+    web_search_max_results: int = field(
+        default_factory=lambda: _env_int("RAG_CRAG_WEB_MAX_RESULTS", 4)
+    )
+
+
 # ── Root Settings (single import point for all modules) ───────────────────────
 
 
@@ -273,6 +310,7 @@ class Settings:
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     reranker: RerankerConfig = field(default_factory=RerankerConfig)
     infra: InfraConfig = field(default_factory=InfraConfig)
+    crag: CRAGConfig = field(default_factory=CRAGConfig)
 
     def validate(self) -> None:
         if not self.infra.openai_api_key:
