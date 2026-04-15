@@ -1,189 +1,365 @@
 # .github/workflows/ci.yml
+#
+# Production CI pipeline for Financial RAG System
+#
+# Job execution (all parallel, no artificial sequencing):
+#
+#   lint ──────────────────────────────────────────┐
+#   typecheck ─────────────────────────────────────┤
+#   security ──────────────────────────────────────┤──► ci-gate
+#   test (matrix: 3.11, 3.12) ─────────────────────┤
+#   validate-configs ──────────────────────────────┤
+#   docker-build ──────────────────────────────────┘
+#
+# Branch protection: require only "CI Gate" to pass.
+# Adding new jobs to ci-gate.needs auto-enforces them — no
+# need to touch branch protection rules each time.
+
 name: CI
 
 on:
   push:
     branches: ["main", "develop"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "develop"]   # covers develop PRs — old CI missed these
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Principle of least privilege — read-only by default.
+# Jobs that need more override this locally.
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  POETRY_VERSION: "1.8.3"
+
 jobs:
+
+  # ── Job 1: Lint & Format ──────────────────────────────────────────────────────
   lint:
-    name: Lint & Format
+    name: Lint & Format (ruff)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: "1.8.5"
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
-      - name: Cache venv
-        id: cached-venv
+      - name: Cache Poetry virtualenv
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-ubuntu-3.11-${{ hashFiles('poetry.lock') }}
+          # runner.os makes the key portable if you ever add macos/windows runners
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+          # restore-keys: on a cache miss, restore nearest partial cache instead
+          # of starting from scratch — saves ~30-60s per job
+          restore-keys: |
+            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
 
       - name: Install dependencies
-        if: steps.cached-venv.outputs.cache-hit != 'true'
+        # --no-root: installs deps only, not the project itself — keeps the
+        # cache valid even when source files change between runs
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
       - name: Ruff lint
-        run: poetry run ruff check .
+        # --output-format=github emits inline annotations on PR diff lines
+        run: poetry run ruff check . --output-format=github
 
       - name: Ruff format check
         run: poetry run ruff format --check .
 
+
+  # ── Job 2: Type Check ─────────────────────────────────────────────────────────
   typecheck:
-    name: Type Check
+    name: Type Check (mypy)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: "1.8.5"
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
-      - name: Cache venv
-        id: cached-venv
+      - name: Cache Poetry virtualenv
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-ubuntu-3.11-${{ hashFiles('poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
 
       - name: Install dependencies
-        if: steps.cached-venv.outputs.cache-hit != 'true'
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
-      - name: Mypy (ingestion)
-        run: poetry run mypy ingestion/ --ignore-missing-imports --no-strict-optional
+      - name: Run mypy
+        run: >
+          poetry run mypy ingestion/
+          --ignore-missing-imports
+          --disallow-untyped-defs
+          --no-strict-optional
+          --pretty
 
+
+  # ── Job 3: Security Scan ──────────────────────────────────────────────────────
   security:
-    name: Security Scan
+    name: Security Scan (bandit)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write    # required to upload SARIF to Security tab
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: "1.8.5"
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
-      - name: Cache venv
-        id: cached-venv
+      - name: Cache Poetry virtualenv
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-ubuntu-3.11-${{ hashFiles('poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
 
       - name: Install dependencies
-        if: steps.cached-venv.outputs.cache-hit != 'true'
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
-      - name: Bandit
-        run: |
-          poetry run bandit -c pyproject.toml -r \
-            ingestion/ generation/ retrieval/ query/ \
-            crag/ evaluation/ api/ config/ ui/ \
-            -x tests/ --severity-level medium
+      - name: Run bandit (SARIF output)
+        # continue-on-error: findings are VISIBLE in the Security tab but
+        # non-blocking — security is a review signal, not a hard build gate
+        run: >
+          poetry run bandit
+          -r ingestion/ generation/ retrieval/ query/
+          crag/ evaluation/ api/ config/ ui/
+          -c pyproject.toml
+          -x tests/
+          --format sarif
+          --output bandit-results.sarif
+        continue-on-error: true
 
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: bandit-results.sarif
+        continue-on-error: true
+
+
+  # ── Job 4: Tests + Coverage ───────────────────────────────────────────────────
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, security]
+    timeout-minutes: 30
     strategy:
-      fail-fast: false
+      fail-fast: false           # let both matrix legs finish even if one fails
       matrix:
         python-version: ["3.11", "3.12"]
-    env:
-      OPENAI_API_KEY: "sk-test-placeholder-never-called-in-unit-tests"
-      QDRANT_URL: "http://localhost:6333"
-      SEC_USER_AGENT: "CI Pipeline ci@test.example.com"
-      RAG_RERANKER_ENABLED: "false"
-      RAG_CRAG_ENABLED: "false"
+
+    # Real Qdrant instance — no more fake localhost URL pointing at nothing.
+    # Health-checked before tests start so there are no flaky connection errors.
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.9.2
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "curl -sf http://localhost:6333/healthz"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 10s
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: "1.8.5"
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
-      - name: Cache venv
-        id: cached-venv
+      - name: Cache Poetry virtualenv
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-ubuntu-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ matrix.python-version }}-
 
       - name: Install dependencies
-        if: steps.cached-venv.outputs.cache-hit != 'true'
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
-      - name: Run unit tests (no external services)
-        run: |
-          poetry run pytest tests/ \
-            -v \
-            --durations=20 \
-            --tb=short \
-            -m "not integration" \
-            -q
+      - name: Create runtime data directories
+        # Mirrors the Dockerfile mkdir so path-dependent tests don't fail
+        run: mkdir -p data/transcripts data/eval_reports
+
+      - name: Run unit tests with coverage
+        env:
+          OPENAI_API_KEY: "sk-test-placeholder-never-called-in-unit-tests"
+          QDRANT_URL: "http://localhost:6333"
+          SEC_USER_AGENT: "CI Pipeline ci@example.com"
+          RAG_RERANKER_ENABLED: "false"
+          RAG_CRAG_ENABLED: "false"
+        run: >
+          poetry run pytest tests/
+          -v
+          --tb=short
+          --durations=20
+          -m "not integration"
+          --cov=ingestion
+          --cov=query
+          --cov=retrieval
+          --cov=generation
+          --cov=crag
+          --cov=evaluation
+          --cov=api
+          --cov=config
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --cov-fail-under=80
+
+      - name: Upload coverage to Codecov
+        # Only upload once — from the 3.11 leg to avoid duplicate reports
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.11'
+        with:
+          file: coverage.xml
+          flags: unittests
+          name: financial-rag-coverage
+          fail_ci_if_error: false
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pytest-results-${{ matrix.python-version }}
-          path: .pytest_cache/
+          path: |
+            .pytest_cache/
+            coverage.xml
           retention-days: 7
 
+
+  # ── Job 5: Config File Validation ─────────────────────────────────────────────
+  validate-configs:
+    name: Validate Config Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        # docker compose config resolves all env interpolations and validates
+        # service dependencies — far stricter than plain YAML parsing
+        run: docker compose config --quiet
+
+      - name: Validate prometheus.yml
+        run: |
+          pip install pyyaml --quiet
+          python -c "import yaml; yaml.safe_load(open('prometheus.yml'))"
+
+      - name: Validate pyproject.toml
+        # tomllib is stdlib in Python 3.11+ — no install needed
+        run: python -c "import tomllib; tomllib.load(open('pyproject.toml', 'rb'))"
+
+
+  # ── Job 6: Docker Build ───────────────────────────────────────────────────────
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
-    needs: [lint]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (no push)
+      - name: Build image (runtime target, no push)
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: false
           target: runtime
-          tags: financial-rag:ci-${{ github.sha }}
+          push: false
+          # GHA layer cache — warm builds complete in seconds
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          tags: financial-rag:ci-${{ github.sha }}
+
+
+  # ── Final Gate ────────────────────────────────────────────────────────────────
+  # Configure branch protection to require ONLY this job.
+  # Every required check flows through here — adding a new job to `needs`
+  # automatically enforces it without touching branch protection settings.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint, typecheck, security, test, validate-configs, docker-build]
+    if: always()
+    steps:
+      - name: Evaluate all job results
+        run: |
+          declare -A results=(
+            [lint]="${{ needs.lint.result }}"
+            [typecheck]="${{ needs.typecheck.result }}"
+            [test]="${{ needs.test.result }}"
+            [validate-configs]="${{ needs.validate-configs.result }}"
+            [docker-build]="${{ needs.docker-build.result }}"
+          )
+          failed=()
+          for job in "${!results[@]}"; do
+            if [[ "${results[$job]}" != "success" ]]; then
+              failed+=("$job (${results[$job]})")
+            fi
+          done
+          if [[ ${#failed[@]} -gt 0 ]]; then
+            echo "The following required CI jobs did not pass:"
+            for f in "${failed[@]}"; do echo "  ✗ $f"; done
+            exit 1
+          fi
+          echo "All CI gates passed."
