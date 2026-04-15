@@ -2,8 +2,8 @@
 
 > A production-grade Retrieval-Augmented Generation system for querying SEC 8-K earnings filings — built with hybrid retrieval, corrective RAG, and full LLMOps observability.
 
-[![CI](https://github.com/deepakj111/rag-project/actions/workflows/ci.yml/badge.svg)](https://github.com/deepakj111/rag-project/actions/workflows/ci.yml)
-[![CD](https://github.com/deepakj111/rag-project/actions/workflows/cd.yml/badge.svg)](https://github.com/deepakj111/rag-project/actions/workflows/cd.yml)
+[![CI](https://github.com/deepakj111/earnings-oracle/actions/workflows/ci.yml/badge.svg)](https://github.com/deepakj111/earnings-oracle/actions/workflows/ci.yml)
+[![CD](https://github.com/deepakj111/earnings-oracle/actions/workflows/cd.yml/badge.svg)](https://github.com/deepakj111/earnings-oracle/actions/workflows/cd.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -260,7 +260,7 @@ rag-project/
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/deepakj111/rag-project.git
+git clone https://github.com/deepakj111/earnings-oracle.git
 cd rag-project
 poetry install
 ```
