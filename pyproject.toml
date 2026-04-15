@@ -7,9 +7,6 @@ authors = ["Deepak J"]
 readme = "README.md"
 package-mode = false
 
-[tool.pytest.ini_options]
-pythonpath = ["."]
-
 [tool.poetry.dependencies]
 python          = ">=3.11,<3.13"
 requests        = "^2.32.0"
@@ -45,6 +42,7 @@ duckduckgo-search = {version = ">=6.0.0", optional = true}
 [tool.poetry.group.dev.dependencies]
 ruff                 = "^0.9.0"
 pytest               = "^8.3.0"
+pytest-cov = ">=5.0.0"
 pre-commit           = "^4.5.1"
 mypy                 = "^1.20.0"
 bandit               = "^1.9.4"
@@ -101,3 +99,30 @@ known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "e
 crag-tavily = ["tavily-python"]
 crag-ddg    = ["duckduckgo-search"]
 crag        = ["tavily-python", "duckduckgo-search"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = [
+    "--tb=short",
+    "--cov=ingestion",
+    "--cov=query",
+    "--cov=retrieval",
+    "--cov=generation",
+    "--cov=crag",
+    "--cov=evaluation",
+    "--cov=api",
+    "--cov=config",
+    "--cov-report=term-missing",
+]
+# Note: --cov-fail-under is intentionally left in the CI command only
+# so local runs don't fail when you're mid-development below 80%
+
+[tool.coverage.run]
+omit = ["tests/*", ".venv/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
