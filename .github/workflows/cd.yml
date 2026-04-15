@@ -1,4 +1,3 @@
-# .github/workflows/cd.yml
 #
 # CD pipeline — builds and pushes the Docker image to GHCR.
 #
@@ -16,12 +15,10 @@
 name: CD — Docker Build & Push
 
 on:
-  # Gate CD on CI — only runs after the CI workflow completes successfully on main
   workflow_run:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
-  # Also run directly on semver tags (v1.2.3) for release builds
   push:
     tags:
       - "v*.*.*"
@@ -37,26 +34,24 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # For workflow_run trigger: skip if CI failed
     if: >
       github.event_name == 'push' ||
       github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
-      packages: write   # required to push to ghcr.io
+      packages: write
 
     outputs:
-      # Pass the full image+tag reference to the smoke-test job
       image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4      # CHANGED: v3 → v4 (Node.js 24 support)
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4             # CHANGED: v3 → v4 (Node.js 24 support)
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -64,7 +59,7 @@ jobs:
 
       - name: Extract Docker metadata (tags + OCI labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6          # CHANGED: v5 → v6 (Node.js 24 support)
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -75,7 +70,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push runtime image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6        # CHANGED: v5 → v6 (Node.js 24 support)
         with:
           context: .
           target: runtime
@@ -102,15 +97,11 @@ jobs:
         ports:
           - 6333:6333
 
-        # NO health-cmd here — qdrant image has no curl installed (security design).
-        # Readiness is handled by the API wait step, which implicitly waits
-        # for its Qdrant dependency to be available.
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Log in to registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4             # CHANGED: v3 → v4 (Node.js 24 support)
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -122,7 +113,7 @@ jobs:
       - name: Wait for Qdrant service
         run: |
           echo "Waiting for Qdrant to accept connections..."
-          for i in {1..60}; do  # ← 60 iterations × 2s = 120s total
+          for i in {1..60}; do
             if curl -sf http://localhost:6333/healthz > /dev/null 2>&1; then
               echo "Qdrant ready after $((i * 2))s"
               exit 0
@@ -138,7 +129,7 @@ jobs:
         run: |
           docker run -d \
             --name rag_smoke \
-            -p 8000:8000 \
+            --network host \                     # ADDED: shares host network so localhost:6333 resolves to Qdrant
             -e QDRANT_URL=http://localhost:6333 \
             -e OPENAI_API_KEY=sk-smoke-placeholder \
             -e SEC_USER_AGENT="Smoke Test ci@example.com" \
@@ -146,6 +137,8 @@ jobs:
             -e RAG_RERANKER_ENABLED=false \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
             uvicorn api.main:app --host 0.0.0.0 --port 8000
+          # NOTE: -p 8000:8000 is removed — with --network host the port is
+          # exposed directly on the runner host, no mapping needed.
 
       - name: Wait for API to become ready
         run: |
