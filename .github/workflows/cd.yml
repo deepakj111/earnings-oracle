@@ -101,12 +101,10 @@ jobs:
         image: qdrant/qdrant:v1.9.2
         ports:
           - 6333:6333
-        options: >-
-          --health-cmd "curl -sf http://localhost:6333/healthz"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          --health-start-period 10s
+
+        # NO health-cmd here — qdrant image has no curl installed (security design).
+        # Readiness is handled by the API wait step, which implicitly waits
+        # for its Qdrant dependency to be available.
 
     steps:
       - uses: actions/checkout@v4
