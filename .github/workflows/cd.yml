@@ -119,6 +119,20 @@ jobs:
       - name: Pull published image
         run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
+      - name: Wait for Qdrant service
+        run: |
+          echo "Waiting for Qdrant to accept connections..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:6333/healthz > /dev/null 2>&1; then
+              echo "Qdrant ready after $((i * 2))s"
+              exit 0
+            fi
+            echo "  attempt $i/30 — retrying in 2s..."
+            sleep 2
+          done
+          echo "Qdrant failed to start within 60s"
+          exit 1
+
       - name: Start API container
         run: |
           docker run -d \
