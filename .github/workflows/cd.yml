@@ -1,0 +1,166 @@
+# .github/workflows/cd.yml
+#
+# CD pipeline — builds and pushes the Docker image to GHCR.
+#
+# Triggers:
+#   - workflow_run: only fires AFTER CI passes on main (not in parallel)
+#   - push tags v*.*.*: fires on version tags for release builds
+#
+# Published tags (via docker/metadata-action):
+#   On push to main:  :latest  :main  :sha-<short>
+#   On tag v1.2.3:    :1.2.3   :1.2   :latest  :sha-<short>
+#
+# Registry: ghcr.io/<owner>/financial-rag
+# Auth:     GITHUB_TOKEN (no extra secrets needed)
+
+name: CD — Docker Build & Push
+
+on:
+  # Gate CD on CI — only runs after the CI workflow completes successfully on main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  # Also run directly on semver tags (v1.2.3) for release builds
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/financial-rag
+
+jobs:
+
+  # ── Job 1: Build & Push ───────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # For workflow_run trigger: skip if CI failed
+    if: >
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write   # required to push to ghcr.io
+
+    outputs:
+      # Pass the full image+tag reference to the smoke-test job
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push runtime image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            GIT_SHA=${{ github.sha }}
+
+
+  # ── Job 2: Smoke Test ─────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-and-push
+
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.9.2
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "curl -sf http://localhost:6333/healthz"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 10s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull published image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Start API container
+        run: |
+          docker run -d \
+            --name rag_smoke \
+            -p 8000:8000 \
+            -e QDRANT_URL=http://localhost:6333 \
+            -e OPENAI_API_KEY=sk-smoke-placeholder \
+            -e SEC_USER_AGENT="Smoke Test ci@example.com" \
+            -e RAG_CRAG_ENABLED=false \
+            -e RAG_RERANKER_ENABLED=false \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+      - name: Wait for API to become ready
+        run: |
+          echo "Waiting for API to be ready..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8000/health/live > /dev/null 2>&1; then
+              echo "API is ready after $((i * 5))s"
+              exit 0
+            fi
+            echo "  attempt $i/30 — retrying in 5s..."
+            sleep 5
+          done
+          echo "API did not become ready within 150s — dumping container logs:"
+          docker logs rag_smoke
+          exit 1
+
+      - name: Assert /health response
+        run: |
+          RESP=$(curl -sf http://localhost:8000/health)
+          echo "Health response: $RESP"
+          echo "$RESP" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          status = d.get('status')
+          assert status in ('ok', 'degraded'), f'Unexpected status: {status!r} — full response: {d}'
+          print(f'Health check passed with status={status!r}')
+          "
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f rag_smoke 2>/dev/null || true
