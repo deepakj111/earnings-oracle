@@ -293,6 +293,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create stub .env for docker compose validation
+        # .env is gitignored (contains real secrets) so it never exists in CI.
+        # docker compose config hard-fails if env_file references a missing file.
+        # This stub satisfies all variable references without exposing real values.
+        run: |
+          cat > .env << 'EOF'
+          OPENAI_API_KEY=sk-stub-not-real
+          QDRANT_URL=http://localhost:6333
+          SEC_USER_AGENT=CI stub@example.com
+          GRAFANA_ADMIN_PASSWORD=stub-not-real
+          EOF
+
       - name: Validate docker-compose.yml
         # docker compose config resolves all env interpolations and validates
         # service dependencies — far stricter than plain YAML parsing
