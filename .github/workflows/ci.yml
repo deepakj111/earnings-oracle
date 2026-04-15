@@ -200,15 +200,28 @@ jobs:
         image: qdrant/qdrant:v1.9.2
         ports:
           - 6333:6333
-        options: >-
-          --health-cmd "curl -sf http://localhost:6333/healthz"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          --health-start-period 10s
+        # NO health-cmd here — qdrant image has no curl/wget installed (by design).
+        # Readiness is handled by the explicit wait step below, which runs curl
+        # on the GitHub runner (not inside the container) where curl does exist.
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Wait for Qdrant to be ready
+        # curl runs on the runner host, hitting the mapped port 6333.
+        # Polls every 2s for up to 60s before giving up.
+        run: |
+          echo "Waiting for Qdrant service to accept connections..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:6333/healthz > /dev/null 2>&1; then
+              echo "Qdrant is ready after $((i * 2))s"
+              exit 0
+            fi
+            echo "  attempt $i/30 — retrying in 2s..."
+            sleep 2
+          done
+          echo "Qdrant did not become ready within 60s"
+          exit 1
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
