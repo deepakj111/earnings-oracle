@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 from loguru import logger
 from openai import APIError, APITimeoutError, OpenAI, RateLimitError
@@ -290,21 +291,22 @@ class QueryTransformer:
             f"max_retries={MAX_RETRIES}"
         )
 
-    def transform(self, query: str) -> TransformedQuery:
+    def transform(
+        self,
+        question: str,
+        skip_hyde: bool = False,
+    ) -> TransformedQuery:
         """
-        Apply HyDE, Multi-Query, and Step-Back concurrently to a single query.
+        Transform a question into multiple query variants for hybrid retrieval.
 
         Args:
-            query: The raw user query string (non-empty).
-
-        Returns:
-            TransformedQuery with all three technique outputs populated.
-
-        Raises:
-            ValueError: If query is empty.
-            EnvironmentError: If OPENAI_API_KEY is missing.
+            question  : Raw user question
+            skip_hyde : If True, HyDE generation is skipped and original question
+                        is used as the hyde_document. Saves one LLM call for
+                        queries where a hypothetical document is unlikely to help
+                        (e.g. general financial questions, ambiguous queries).
         """
-        query = query.strip()
+        query = question.strip()
         if not query:
             raise ValueError("Query must not be empty.")
 
@@ -324,14 +326,23 @@ class QueryTransformer:
         multi_queries: list[str] = [query]  # fallback: only original
         stepback_query: str = query  # fallback: original query
 
-        tasks = {
-            "hyde": _run_hyde,
+        tasks: dict[str, Any] = {
             "multi": _run_multi_query,
             "stepback": _run_stepback,
         }
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        if not skip_hyde:
+            tasks["hyde"] = _run_hyde
+        else:
+            logger.debug(
+                "HyDE skipped by router (skip_hyde=True) — using original query as hyde_document"
+            )
+
+        n_workers = len(tasks)
+
+        with ThreadPoolExecutor(max_workers=max(n_workers, 1)) as executor:
             futures = {executor.submit(fn, query): name for name, fn in tasks.items()}
+
             for future in as_completed(futures):
                 name = futures[future]
                 try:

@@ -69,6 +69,7 @@ from config import settings as _settings
 from generation import Generator
 from generation.models import GenerationResult
 from query import QueryTransformer
+from query.router import QueryRouter
 from retrieval import retrieve, warmup_bm25, warmup_embed_client, warmup_reranker
 from retrieval.models import MetadataFilter, RetrievalResult
 
@@ -98,6 +99,7 @@ class FinancialRAGPipeline:
         self.qdrant_client = qdrant_client
         self._transformer = QueryTransformer(enable_cache=enable_query_cache)
         self._generator = Generator()
+        self._router = QueryRouter()
 
         logger.info("Pre-loading models into memory to prevent cold-start latency...")
         warmup_embed_client()
@@ -124,24 +126,8 @@ class FinancialRAGPipeline:
         self,
         question: str,
         metadata_filter: MetadataFilter | None = None,
+        enable_routing: bool = True,
     ) -> GenerationResult:
-        """
-        Ask a financial question and return a structured GenerationResult.
-
-        Args:
-            question       : natural language question about earnings / filings
-            metadata_filter: optional ticker/year/quarter scoping
-                             Example: MetadataFilter(ticker="AAPL", year=2024)
-
-        Returns:
-            GenerationResult with:
-              .answer                     — synthesised LLM response with [N] citations
-              .citations                  — list of Citation objects with source metadata
-              .format_answer_with_citations() — pretty-printed answer + source list
-              .to_dict() / .to_json()     — serialisable for API responses
-              .grounded                   — False signals insufficient context
-              .total_tokens               — for cost tracking
-        """
         pipeline_start = time.perf_counter()
         question = question.strip()
         if not question:
@@ -149,10 +135,38 @@ class FinancialRAGPipeline:
 
         logger.info(f"Pipeline.ask | {question!r:.80}")
 
+        if enable_routing:
+            routing = self._router.route(question)
+            logger.info(f"[Router] {routing.summary()}")
+
+            if routing.should_refuse:
+                from generation.models import GenerationResult
+
+                return GenerationResult(
+                    answer=(
+                        "I can only answer questions about SEC 8-K earnings filings "
+                        "for AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, and WMT. "
+                        "Please ask a financial question about one of these companies."
+                    ),
+                    citations=[],
+                    grounded=False,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    model=_settings.generation.model,
+                    context_tokens_used=0,
+                    chunks_used=0,
+                )
+        else:
+            routing = None
+
         # ── Layer 2: Query Transformation ────────────────────────────────────
         t2 = time.perf_counter()
-        transformed = self._transformer.transform(question)
+        transformed = self._transformer.transform(
+            question,
+            skip_hyde=(routing.skip_hyde if routing else False),
+        )
         t2_elapsed = time.perf_counter() - t2
+
         logger.info(
             f"[L2] {len(transformed.multi_queries)} query variants | "
             f"degraded={transformed.failed_techniques} | {t2_elapsed:.2f}s"
