@@ -49,7 +49,17 @@ repos:
     hooks:
       - id: bandit
         args: ["-c", "pyproject.toml"]
-        files: ^ingestion/
+
+  # ── 5. pip-audit — dependency security scanning ─────────────────────
+  - repo: local
+    hooks:
+      - id: pip-audit
+        name: pip-audit
+        entry: poetry run pip-audit
+        language: system
+        args: ["--ignore-vuln", "CVE-2026-25990", "--ignore-vuln", "CVE-2026-40192"]
+        pass_filenames: false
+        always_run: true
 
   # ── 5. TruffleHog — verified secret scanning ─────────────────────────
   - repo: https://github.com/trufflesecurity/trufflehog

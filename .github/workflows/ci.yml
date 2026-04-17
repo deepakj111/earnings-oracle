@@ -128,7 +128,7 @@ jobs:
 
   # ── Job 3: Security Scan ──────────────────────────────────────────────────────
   security:
-    name: Security Scan (bandit)
+    name: Security Scan (bandit & pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -162,13 +162,17 @@ jobs:
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
+      - name: Run pip-audit
+        # Checks the environment for dependencies with known vulnerabilities
+        run: poetry run pip-audit
+        continue-on-error: true
+
       - name: Run bandit (SARIF output)
         # continue-on-error: findings are VISIBLE in the Security tab but
         # non-blocking — security is a review signal, not a hard build gate
         run: >
           poetry run bandit
-          -r ingestion/ generation/ retrieval/ query/
-          crag/ evaluation/ api/ config/ ui/
+          -r .
           -c pyproject.toml
           -x tests/
           --format sarif
