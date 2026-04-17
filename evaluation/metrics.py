@@ -264,3 +264,54 @@ def score_all(
     }
     selected = metrics or list(_all.keys())
     return [_all[m]() for m in selected if m in _all]
+
+
+def compute_all_metrics(
+    question: str,
+    answer: str,
+    context_chunks: list[str],
+    ground_truth: str,
+    metrics: list[str] | None = None,
+) -> dict[str, float]:
+    """
+    Compute a dictionary of metric name → score for a single QA sample.
+
+    Convenience wrapper used by the retrieval experiment framework to
+    evaluate a single pipeline call without working with MetricScore objects.
+
+    Args:
+        question       : The original user question
+        answer         : The pipeline-generated answer
+        context_chunks : List of retrieved chunk texts used for the answer
+        ground_truth   : Expected factual answer (from golden dataset)
+        metrics        : Subset of metrics to compute; defaults to all four
+
+    Returns:
+        dict mapping metric name → float score in [0, 1]
+    """
+    selected = metrics or [
+        "faithfulness",
+        "answer_relevancy",
+        "context_precision",
+        "context_recall",
+    ]
+
+    dispatch: dict[str, MetricScore] = {
+        "faithfulness": lambda: score_faithfulness(question, answer, context_chunks),
+        "answer_relevancy": lambda: score_answer_relevancy(question, answer),
+        "context_precision": lambda: score_context_precision(question, context_chunks),
+        "context_recall": lambda: score_context_recall(question, context_chunks, ground_truth),
+    }
+
+    results: dict[str, float] = {}
+    for metric in selected:
+        if metric not in dispatch:
+            results[metric] = 0.0
+            continue
+        try:
+            results[metric] = dispatch[metric]().score
+        except Exception as exc:
+            logger.warning(f"compute_all_metrics | {metric} failed: {exc}")
+            results[metric] = 0.0
+
+    return results

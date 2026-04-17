@@ -56,6 +56,7 @@ pytest-asyncio       = ">=0.24.0"  # for async test functions
 serve      = "scripts.entrypoints:serve_dev"
 serve-prod = "scripts.entrypoints:serve_prod"
 ui         = "scripts.entrypoints:run_ui"
+experiment = "experiments.retrieval_experiment:_cli_main"
 
 [build-system]
 requires = ["poetry-core"]
@@ -113,6 +114,7 @@ addopts = [
     "--cov=api",
     "--cov=config",
     "--cov-report=term-missing",
+    "--cov=experiments",
 ]
 # Note: --cov-fail-under is intentionally left in the CI command only
 # so local runs don't fail when you're mid-development below 80%

@@ -302,12 +302,8 @@ class RetrievalExperiment:
         t_start = time.perf_counter()
 
         try:
-            import config.settings as settings_module
-            from config.settings import Settings
-
-            new_settings = Settings()
-            settings_module.settings = new_settings
-
+            # REMOVED: the frozen-dataclass hot-swap block that caused the crash
+            # os.environ is already patched above; the factory will read fresh env
             pipeline = self._factory()
             sample_scores: list[dict[str, Any]] = []
             errors = 0
@@ -372,10 +368,6 @@ class RetrievalExperiment:
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = original_v
-
-            import config.settings as settings_module
-
-            settings_module.settings = Settings()
 
 
 def _cli_main() -> None:
