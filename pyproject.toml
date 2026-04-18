@@ -79,8 +79,9 @@ select = [
     "N",   # pep8-naming conventions
 ]
 ignore = [
-    "E501",  # line too long — handled by ruff-format
-    "B008",  # do not perform function calls in default args
+    "E501",   # line too long — handled by ruff-format
+    "B008",   # do not perform function calls in default args
+    "UP017",  # datetime.UTC requires Python 3.12+; we target 3.11
 ]
 
 [tool.mypy]
@@ -103,7 +104,7 @@ skips        = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "evaluation", "api", "config", "ui", "observability"]
+known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "evaluation", "api", "config", "ui", "observability", "cache"]
 
 [tool.poetry.extras]
 crag-tavily = ["tavily-python"]
@@ -125,6 +126,7 @@ addopts = [
     "--cov-report=term-missing",
     "--cov=experiments",
     "--cov=observability",
+    "--cov=cache",
 ]
 # Note: --cov-fail-under is intentionally left in the CI command only
 # so local runs don't fail when you're mid-development below 80%

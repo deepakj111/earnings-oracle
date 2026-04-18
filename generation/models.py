@@ -169,5 +169,28 @@ class GenerationResult:
             d["trace_id"] = self.trace_id
         return d
 
+    @classmethod
+    def from_dict(cls, data: dict) -> GenerationResult:
+        """Reconstruct a GenerationResult from a serialized dict (e.g., from cache)."""
+        usage = data.get("usage", {})
+        context = data.get("context", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        return cls(
+            question=data.get("question", ""),
+            answer=data.get("answer", ""),
+            citations=[Citation(**c) for c in data.get("citations", [])],
+            model=data.get("model", ""),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=usage.get("total_tokens", prompt_tokens + completion_tokens),
+            context_chunks_used=context.get("chunks_used", 0),
+            context_tokens_used=context.get("tokens_used", 0),
+            latency_seconds=data.get("latency_seconds", 0.0),
+            grounded=data.get("grounded", True),
+            retrieval_failed=data.get("retrieval_failed", False),
+            trace_id=data.get("trace_id"),
+        )
+
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)

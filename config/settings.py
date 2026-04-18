@@ -349,6 +349,29 @@ class ObservabilityConfig:
     )
 
 
+# ── Semantic Cache ─────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class CacheConfig:
+    """
+    Configuration for the Embedding-Based Semantic Cache.
+
+    enabled: set RAG_CACHE_ENABLED=false to bypass the cache.
+    collection_name: Qdrant collection used to store the cache.
+    similarity_threshold: cosine similarity cutoff (0.0 to 1.0).
+      E.g., 0.95 means questions must be extremely semantically similar to trigger a hit.
+    """
+
+    enabled: bool = field(default_factory=lambda: _env_bool("RAG_CACHE_ENABLED", True))
+    collection_name: str = field(
+        default_factory=lambda: _env_str("RAG_CACHE_COLLECTION", "semantic_cache")
+    )
+    similarity_threshold: float = field(
+        default_factory=lambda: _env_float("RAG_CACHE_SIMILARITY_THRESHOLD", 0.95)
+    )
+
+
 # ── Root Settings (single import point for all modules) ───────────────────────
 
 
@@ -374,6 +397,7 @@ class Settings:
     crag: CRAGConfig = field(default_factory=CRAGConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
 
     def validate(self) -> None:
         if not self.infra.openai_api_key:

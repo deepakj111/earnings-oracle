@@ -65,6 +65,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from qdrant_client import QdrantClient
 
+from cache.semantic_cache import SemanticCache
 from config import settings as _settings
 from generation import Generator
 from generation.models import GenerationResult
@@ -100,6 +101,7 @@ class FinancialRAGPipeline:
         self._transformer = QueryTransformer(enable_cache=enable_query_cache)
         self._generator = Generator()
         self._router = QueryRouter()
+        self._cache = SemanticCache(qdrant_client)
 
         # ── Observability: structured per-request tracing ──────────────────
         obs_cfg = _settings.observability
@@ -147,6 +149,19 @@ class FinancialRAGPipeline:
 
         # ── Start trace ───────────────────────────────────────────────────────
         trace = self._tracer.start_trace(question=question)
+
+        # ── Check semantic cache first ───────────────────────────────────────
+        cached_result, cache_span = self._cache.get(question)
+        self._tracer.record_semantic_cache(trace, cache_span)
+
+        if cached_result:
+            # Cache hit avoids all other layers
+            trace.status = self._tracer.end_trace(
+                trace,
+                total_latency=time.perf_counter() - pipeline_start,
+            ).status
+            cached_result.trace_id = trace.trace_id
+            return cached_result
 
         if enable_routing:
             routing = self._router.route(question)
@@ -256,6 +271,9 @@ class FinancialRAGPipeline:
             completion_tokens=result.completion_tokens,
             latency_seconds=t4_elapsed,
         )
+
+        # Update semantic cache asynchronously
+        self._cache.set(question, result)
 
         # ── Finalize trace ─────────────────────────────────────────────────────
         total = time.perf_counter() - pipeline_start

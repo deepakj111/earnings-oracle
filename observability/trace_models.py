@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -83,7 +83,7 @@ class LLMCallSpan:
     status: SpanStatus = SpanStatus.OK
     error_message: str = ""
     cost: CostEstimate | None = None
-    timestamp: str = field(default_factory=lambda: datetime.now(datetime.UTC).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property
     def total_tokens(self) -> int:
@@ -260,6 +260,30 @@ class CRAGSpan:
 
 
 @dataclass
+class SemanticCacheSpan:
+    """
+    Trace span for Embedding-Based Semantic Cache.
+
+    Records cache lookup latency, hit status, and the highest similarity score.
+    """
+
+    latency_seconds: float = 0.0
+    cache_hit: bool = False
+    similarity_score: float = 0.0
+    threshold_used: float = 0.0
+    status: SpanStatus = SpanStatus.OK
+
+    def to_dict(self) -> dict:
+        return {
+            "latency_seconds": round(self.latency_seconds, 4),
+            "cache_hit": self.cache_hit,
+            "similarity_score": round(self.similarity_score, 6),
+            "threshold_used": self.threshold_used,
+            "status": self.status.value,
+        }
+
+
+@dataclass
 class PipelineTrace:
     """
     Root trace for one end-to-end RAG pipeline request.
@@ -270,10 +294,11 @@ class PipelineTrace:
 
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     question: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.now(datetime.UTC).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     total_latency_seconds: float = 0.0
 
     # Layer spans
+    semantic_cache: SemanticCacheSpan | None = None
     query_transform: QueryTransformSpan | None = None
     retrieval: RetrievalSpan | None = None
     generation: GenerationSpan | None = None
@@ -306,6 +331,8 @@ class PipelineTrace:
     def latency_breakdown(self) -> dict[str, float]:
         """Per-layer latency in seconds."""
         breakdown: dict[str, float] = {}
+        if self.semantic_cache:
+            breakdown["semantic_cache"] = self.semantic_cache.latency_seconds
         if self.query_transform:
             breakdown["query_transform"] = self.query_transform.latency_seconds
         if self.retrieval:
@@ -372,6 +399,7 @@ class PipelineTrace:
             "error_message": self.error_message,
             "latency_breakdown": {k: round(v, 4) for k, v in self.latency_breakdown.items()},
             "cost_breakdown": {k: round(v, 6) for k, v in self.cost_breakdown.items()},
+            "semantic_cache": self.semantic_cache.to_dict() if self.semantic_cache else None,
             "query_transform": (self.query_transform.to_dict() if self.query_transform else None),
             "retrieval": self.retrieval.to_dict() if self.retrieval else None,
             "generation": self.generation.to_dict() if self.generation else None,
