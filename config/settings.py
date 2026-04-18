@@ -312,6 +312,43 @@ class EvaluationConfig:
     )
 
 
+# ── Observability / Tracing ────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ObservabilityConfig:
+    """
+    Configuration for observability/tracer.py (structured LLM tracing).
+
+    tracing_enabled: set RAG_TRACING_ENABLED=false to disable all tracing.
+      When disabled, tracer methods are no-ops with zero overhead.
+
+    trace_output_dir: directory for persisted JSON trace files.
+      Each trace is a single JSON file named trace_{timestamp}_{id}.json.
+
+    persist_traces: set RAG_TRACING_PERSIST=false to skip writing traces to disk.
+      Traces are still recorded in-memory for the request lifecycle.
+
+    cost_alert_per_request_usd: log a warning if a single pipeline request
+      exceeds this dollar amount. Default $0.10 is generous for nano-tier models.
+
+    cost_alert_per_session_usd: log a warning (once) if cumulative session cost
+      exceeds this dollar amount. Prevents runaway costs in evaluation harnesses.
+    """
+
+    tracing_enabled: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_ENABLED", True))
+    trace_output_dir: str = field(
+        default_factory=lambda: _env_str("RAG_TRACING_OUTPUT_DIR", "data/traces")
+    )
+    persist_traces: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_PERSIST", True))
+    cost_alert_per_request_usd: float = field(
+        default_factory=lambda: _env_float("RAG_COST_ALERT_PER_REQUEST", 0.10)
+    )
+    cost_alert_per_session_usd: float = field(
+        default_factory=lambda: _env_float("RAG_COST_ALERT_PER_SESSION", 5.00)
+    )
+
+
 # ── Root Settings (single import point for all modules) ───────────────────────
 
 
@@ -336,6 +373,7 @@ class Settings:
     infra: InfraConfig = field(default_factory=InfraConfig)
     crag: CRAGConfig = field(default_factory=CRAGConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
 
     def validate(self) -> None:
         if not self.infra.openai_api_key:

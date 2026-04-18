@@ -92,6 +92,7 @@ class GenerationResult:
     latency_seconds: float
     grounded: bool
     retrieval_failed: bool
+    trace_id: str | None = None  # set by tracer for request correlation
 
     # ── Derived properties ────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ class GenerationResult:
         return "\n".join(lines)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "question": self.question,
             "answer": self.answer,
             "citations": [c.to_dict() for c in self.citations],
@@ -164,6 +165,9 @@ class GenerationResult:
             "unique_tickers": self.unique_tickers,
             "unique_sources": self.unique_sources,
         }
+        if self.trace_id:
+            d["trace_id"] = self.trace_id
+        return d
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)

@@ -68,6 +68,7 @@ from qdrant_client import QdrantClient
 from config import settings as _settings
 from generation import Generator
 from generation.models import GenerationResult
+from observability.tracer import RAGTracer
 from query import QueryTransformer
 from query.router import QueryRouter
 from retrieval import retrieve, warmup_bm25, warmup_embed_client, warmup_reranker
@@ -90,7 +91,6 @@ class FinancialRAGPipeline:
     are lazy-loaded on first use and cached as module-level singletons.
     """
 
-    # Modify the __init__ method:
     def __init__(
         self,
         qdrant_client: QdrantClient,
@@ -101,6 +101,16 @@ class FinancialRAGPipeline:
         self._generator = Generator()
         self._router = QueryRouter()
 
+        # ── Observability: structured per-request tracing ──────────────────
+        obs_cfg = _settings.observability
+        self._tracer = RAGTracer(
+            enabled=obs_cfg.tracing_enabled,
+            output_dir=obs_cfg.trace_output_dir,
+            persist_traces=obs_cfg.persist_traces,
+            cost_alert_per_request_usd=obs_cfg.cost_alert_per_request_usd,
+            cost_alert_per_session_usd=obs_cfg.cost_alert_per_session_usd,
+        )
+
         logger.info("Pre-loading models into memory to prevent cold-start latency...")
         warmup_embed_client()
         warmup_bm25()
@@ -110,14 +120,14 @@ class FinancialRAGPipeline:
                 warmup_reranker()  # Loads FlashRank cross-encoder
             except ImportError:
                 pass
-        # ---------------------------------------------
 
         logger.info(
             "FinancialRAGPipeline ready | "
             f"qdrant={_settings.infra.qdrant_url} | "
             f"transform_model={_settings.query_transform.model} | "
             f"generation_model={_settings.generation.model} | "
-            f"reranker={'enabled' if _settings.reranker.enabled else 'disabled'}"
+            f"reranker={'enabled' if _settings.reranker.enabled else 'disabled'} | "
+            f"tracing={'enabled' if obs_cfg.tracing_enabled else 'disabled'}"
         )
 
     # ── Primary interface ─────────────────────────────────────────────────────
@@ -134,6 +144,9 @@ class FinancialRAGPipeline:
             raise ValueError("question must not be empty.")
 
         logger.info(f"Pipeline.ask | {question!r:.80}")
+
+        # ── Start trace ───────────────────────────────────────────────────────
+        trace = self._tracer.start_trace(question=question)
 
         if enable_routing:
             routing = self._router.route(question)
@@ -172,6 +185,19 @@ class FinancialRAGPipeline:
             f"degraded={transformed.failed_techniques} | {t2_elapsed:.2f}s"
         )
 
+        # Record L2 span
+        self._tracer.record_query_transform(
+            trace,
+            self._tracer.build_query_transform_span(
+                latency=t2_elapsed,
+                cache_hit=False,  # cache hit is internal to transformer
+                multi_query_count=len(transformed.multi_queries),
+                hyde_generated=(transformed.hyde_document != question),
+                stepback_generated=(transformed.stepback_query != question),
+                failed_techniques=list(transformed.failed_techniques),
+            ),
+        )
+
         # ── Layer 3: Hybrid Retrieval ─────────────────────────────────────────
         t3 = time.perf_counter()
         retrieval_result: RetrievalResult = retrieve(
@@ -186,6 +212,19 @@ class FinancialRAGPipeline:
             f"reranked={retrieval_result.reranked} | {t3_elapsed:.2f}s"
         )
 
+        # Record L3 span
+        self._tracer.record_retrieval(
+            trace,
+            self._tracer.build_retrieval_span(
+                latency=t3_elapsed,
+                total_candidates=retrieval_result.total_candidates,
+                final_count=len(retrieval_result.results),
+                reranked=retrieval_result.reranked,
+                reranker_model=(_settings.reranker.model if _settings.reranker.enabled else ""),
+                results=retrieval_result.results,
+            ),
+        )
+
         # ── Layer 4: Generation ────────────────────────────────────────────────
         t4 = time.perf_counter()
         result: GenerationResult = self._generator.generate(
@@ -194,10 +233,41 @@ class FinancialRAGPipeline:
         )
         t4_elapsed = time.perf_counter() - t4
 
+        # Record L4 span
+        gen_span = self._tracer.build_generation_span(
+            latency=t4_elapsed,
+            model=result.model,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            context_chunks=result.context_chunks_used,
+            context_tokens=result.context_tokens_used,
+            citation_count=len(result.citations),
+            grounded=result.grounded,
+            retrieval_failed=result.retrieval_failed,
+        )
+        self._tracer.record_generation(trace, gen_span)
+
+        # Record the LLM call for generation
+        self._tracer.record_llm_call(
+            trace,
+            caller="generation",
+            model=result.model,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            latency_seconds=t4_elapsed,
+        )
+
+        # ── Finalize trace ─────────────────────────────────────────────────────
         total = time.perf_counter() - pipeline_start
+        self._tracer.end_trace(trace, total_latency=total)
+
+        # Attach trace_id for request correlation
+        result.trace_id = trace.trace_id
+
         logger.info(
             f"Pipeline complete | grounded={result.grounded} | "
             f"citations={len(result.citations)} | tokens={result.total_tokens} | "
+            f"cost=${trace.total_cost_usd:.4f} | trace={trace.trace_id[:8]} | "
             f"total={total:.2f}s (L2={t2_elapsed:.2f}s L3={t3_elapsed:.2f}s L4={t4_elapsed:.2f}s)"
         )
 
