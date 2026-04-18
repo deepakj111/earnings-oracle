@@ -96,7 +96,7 @@ def _load_bm25() -> tuple[object, list[dict]]:
 def _embed(text: str) -> list[float]:
     """Embed a single text string using fastembed. Returns a flat float list."""
     client = _get_embed_client()
-    vectors = list(client.embed([text]))
+    vectors = list(client.embed([text]))  # type: ignore[attr-defined]
     return vectors[0].tolist()
 
 
@@ -173,7 +173,7 @@ def _bm25_search(
 ) -> list[dict]:
     bm25, corpus = _load_bm25()
     tokens = query_text.lower().split()
-    scores = bm25.get_scores(tokens)
+    scores = bm25.get_scores(tokens)  # type: ignore[attr-defined]
 
     scored = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
 
@@ -377,7 +377,7 @@ def search(
         return []
 
     # ── 3. RRF fusion ──────────────────────────────────────────────────────────
-    fused = _rrf_fuse(rrf_input, all_payloads, k=cfg.rrf_k_constant)
+    fused = _rrf_fuse(rrf_input, all_payloads, k=cfg.rrf_k_constant)  # type: ignore[arg-type]
     logger.info(
         f"RRF fusion: {len(all_payloads)} unique chunks → "
         f"top {min(top_k_pre, len(fused))} passed to reranker"

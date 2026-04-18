@@ -60,8 +60,8 @@ def rerank(
 
     try:
         ranker, rerank_request_cls = _get_ranker()  # moved inside try
-        request = rerank_request_cls(query=query, passages=passages)
-        reranked = ranker.rerank(request)
+        request = rerank_request_cls(query=query, passages=passages)  # type: ignore[operator]
+        reranked = ranker.rerank(request)  # type: ignore[attr-defined]
 
         id_to_score: dict[int, float] = {item["id"]: float(item["score"]) for item in reranked}
         for i, result in enumerate(candidates):

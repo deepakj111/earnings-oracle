@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from loguru import logger
 from qdrant_client import QdrantClient
 
 from retrieval.models import MetadataFilter, RetrievalResult, SearchResult
@@ -54,7 +55,21 @@ def retrieve(
         candidates=candidates,
     )
 
-    # 3c — Late Parent Fetch (Only fetching the final 5 parent chunks for the LLM)
+    # 3c — Knowledge Graph context injection (GraphRAG)
+    try:
+        from knowledge_graph.graph_retriever import graph_retrieve as _graph_retrieve
+
+        graph_chunks, _graph_span = _graph_retrieve(
+            question=query.original,
+            existing_results=top_children,
+            qdrant_client=qdrant_client,
+        )
+        if graph_chunks:
+            top_children = top_children + graph_chunks
+    except Exception as exc:
+        logger.debug(f"Graph retrieval skipped (fail-open): {exc}")  # nosec B110
+
+    # 3d — Late Parent Fetch (Only fetching the final 5 parent chunks for the LLM)
     final_parents = _fetch_parent_texts(qdrant_client, top_children)
 
     return RetrievalResult(

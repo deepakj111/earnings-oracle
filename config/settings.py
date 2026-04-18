@@ -372,6 +372,32 @@ class CacheConfig:
     )
 
 
+# ── Knowledge Graph ────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class KnowledgeGraphConfig:
+    """
+    Configuration for GraphRAG knowledge graph extraction and retrieval.
+
+    extraction_enabled: run LLM entity extraction during ingestion.
+    retrieval_enabled: inject graph context during retrieval.
+    extraction_model: LLM model for entity extraction (cheapest tier).
+    max_graph_chunks: max additional chunks injected from graph traversal.
+    """
+
+    extraction_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_KG_EXTRACTION_ENABLED", True)
+    )
+    retrieval_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_KG_RETRIEVAL_ENABLED", True)
+    )
+    extraction_model: str = field(
+        default_factory=lambda: _env_str("RAG_KG_EXTRACTION_MODEL", "gpt-4.1-nano")
+    )
+    max_graph_chunks: int = field(default_factory=lambda: _env_int("RAG_KG_MAX_GRAPH_CHUNKS", 3))
+
+
 # ── Root Settings (single import point for all modules) ───────────────────────
 
 
@@ -398,6 +424,7 @@ class Settings:
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
+    knowledge_graph: KnowledgeGraphConfig = field(default_factory=KnowledgeGraphConfig)
 
     def validate(self) -> None:
         if not self.infra.openai_api_key:

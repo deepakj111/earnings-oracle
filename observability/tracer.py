@@ -48,6 +48,7 @@ from observability.cost_tracker import CostTracker, estimate_cost
 from observability.trace_models import (
     CRAGSpan,
     GenerationSpan,
+    GraphRetrievalSpan,
     LLMCallSpan,
     PipelineTrace,
     QueryTransformSpan,
@@ -195,6 +196,18 @@ class RAGTracer:
             f"latency={span.latency_seconds:.3f}s | "
             f"candidates={span.total_unique_candidates} → "
             f"final={span.final_chunk_count}"
+        )
+
+    def record_graph_retrieval(self, trace: PipelineTrace, span: GraphRetrievalSpan) -> None:
+        """Attach the Graph Retrieval span to a trace."""
+        if not self.enabled:
+            return
+        trace.graph_retrieval = span
+        logger.debug(
+            f"[Trace {trace.trace_id[:8]}] GraphRAG recorded | "
+            f"latency={span.latency_seconds:.3f}s | "
+            f"entities={span.entities_matched} | "
+            f"chunks_injected={span.chunks_injected}"
         )
 
     def record_generation(self, trace: PipelineTrace, span: GenerationSpan) -> None:

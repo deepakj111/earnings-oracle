@@ -284,6 +284,32 @@ class SemanticCacheSpan:
 
 
 @dataclass
+class GraphRetrievalSpan:
+    """
+    Trace span for Knowledge Graph Fused Retrieval.
+
+    Records entity matching, relationship traversal, and chunk injection.
+    """
+
+    latency_seconds: float = 0.0
+    entities_matched: int = 0
+    matched_entity_names: list[str] = field(default_factory=list)
+    relationships_traversed: int = 0
+    chunks_injected: int = 0
+    status: SpanStatus = SpanStatus.OK
+
+    def to_dict(self) -> dict:
+        return {
+            "latency_seconds": round(self.latency_seconds, 4),
+            "entities_matched": self.entities_matched,
+            "matched_entity_names": self.matched_entity_names,
+            "relationships_traversed": self.relationships_traversed,
+            "chunks_injected": self.chunks_injected,
+            "status": self.status.value,
+        }
+
+
+@dataclass
 class PipelineTrace:
     """
     Root trace for one end-to-end RAG pipeline request.
@@ -301,6 +327,7 @@ class PipelineTrace:
     semantic_cache: SemanticCacheSpan | None = None
     query_transform: QueryTransformSpan | None = None
     retrieval: RetrievalSpan | None = None
+    graph_retrieval: GraphRetrievalSpan | None = None
     generation: GenerationSpan | None = None
     crag: CRAGSpan | None = None
 
@@ -337,6 +364,8 @@ class PipelineTrace:
             breakdown["query_transform"] = self.query_transform.latency_seconds
         if self.retrieval:
             breakdown["retrieval"] = self.retrieval.latency_seconds
+        if self.graph_retrieval:
+            breakdown["graph_retrieval"] = self.graph_retrieval.latency_seconds
         if self.generation:
             breakdown["generation"] = self.generation.latency_seconds
         if self.crag:
@@ -402,6 +431,7 @@ class PipelineTrace:
             "semantic_cache": self.semantic_cache.to_dict() if self.semantic_cache else None,
             "query_transform": (self.query_transform.to_dict() if self.query_transform else None),
             "retrieval": self.retrieval.to_dict() if self.retrieval else None,
+            "graph_retrieval": (self.graph_retrieval.to_dict() if self.graph_retrieval else None),
             "generation": self.generation.to_dict() if self.generation else None,
             "crag": self.crag.to_dict() if self.crag else None,
             "llm_calls": [c.to_dict() for c in self.llm_calls],

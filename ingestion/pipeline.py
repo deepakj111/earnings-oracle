@@ -102,6 +102,15 @@ def run_pipeline() -> None:
     bm25_texts, bm25_corpus = _load_existing_bm25()
     # -----------------------------------------------------
 
+    # ── Knowledge Graph setup ──────────────────────────────────────────────
+    kg_enabled = _settings.knowledge_graph.extraction_enabled
+    if kg_enabled:
+        from knowledge_graph.entity_store import EntityStore
+        from knowledge_graph.extractor import extract_entities_from_chunks
+
+        kg_store = EntityStore()
+        kg_graph = kg_store.load()
+
     indexed_count: int = 0
     skipped_count: int = len(already_done)
 
@@ -118,11 +127,31 @@ def run_pipeline() -> None:
 
         bm25_texts, bm25_corpus = index_document(chunks, metadata, qdrant, bm25_texts, bm25_corpus)
 
+        # ── Knowledge Graph extraction ─────────────────────────────────
+        if kg_enabled:
+            parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
+            try:
+                entities, relationships = extract_entities_from_chunks(
+                    parent_chunks, metadata.ticker, metadata.fiscal_period
+                )
+                for entity in entities:
+                    kg_graph.add_entity(entity)
+                for rel in relationships:
+                    kg_graph.add_relationship(rel)
+            except Exception as exc:
+                logger.warning(f"KG extraction failed for {file_path.name}: {exc}")
+
         _mark_done(file_path.name)
         indexed_count += 1
         logger.info(f"{file_path.name} | {metadata.fiscal_period} | {child_count} child chunks")
 
     _save_bm25(bm25_texts, bm25_corpus)
+
+    # Persist knowledge graph
+    if kg_enabled:
+        kg_store.save(kg_graph)
+        logger.info(f"Knowledge graph: {kg_graph.summary()}")
+
     logger.info(f"Pipeline complete: {indexed_count} indexed this run, {skipped_count} skipped")
 
 
