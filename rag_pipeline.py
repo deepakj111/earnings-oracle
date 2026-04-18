@@ -161,6 +161,7 @@ class FinancialRAGPipeline:
                 total_latency=time.perf_counter() - pipeline_start,
             ).status
             cached_result.trace_id = trace.trace_id
+            cached_result.was_cached = True
             return cached_result
 
         if enable_routing:

@@ -166,6 +166,9 @@ class AskResponse(BaseModel):
     retrieval_failed: bool = Field(
         ..., description="True if zero documents were retrieved from the index."
     )
+    was_cached: bool = Field(
+        False, description="True if the response was served from the Semantic Cache."
+    )
     model: str = Field(..., description="OpenAI model used for answer generation.")
     usage: UsageOut
     context: ContextOut

@@ -12,15 +12,17 @@
 
 ## Overview
 
-The Financial RAG System answers precise financial questions over SEC 8-K earnings press releases using a **five-layer pipeline**:
+The Financial RAG System answers precise financial questions over SEC 8-K earnings press releases using a **seven-layer pipeline**:
 
 | Layer | Component | Purpose |
 |-------|-----------|---------|
-| L1 | **Ingestion** | SEC EDGAR scraping → HTML parsing → parent/child chunking → embedding → indexing |
+| L0 | **Semantic Cache** | Instant retrieval for repeated queries via Qdrant embedding distances |
+| L1 | **Ingestion & Extraction** | SEC Scrape → HTML parse → Parent/Child chunking → **GraphRAG Entity Extraction** |
 | L2 | **Query Transformation** | HyDE + Multi-Query + Step-Back prompting (concurrent) |
-| L3 | **Hybrid Retrieval** | BM25 + Qdrant dense search → RRF fusion → FlashRank cross-encoder reranking |
-| L4 | **Answer Generation** | LLM synthesis with grounded `[N]` inline citations + lost-in-the-middle mitigation |
-| L5 | **CRAG** | Corrective RAG loop: relevance grading → web-search fallback on poor retrieval |
+| L3 | **Vector Retrieval** | BM25 sparse + Qdrant dense search → RRF fusion |
+| L4 | **Graph Fused Retrieval** | Knowledge Graph traversal (`data/knowledge_graph.json`) context injection |
+| L5 | **Answer Generation** | FlashRank reranking → LLM synthesis with grounded `[N]` inline citations |
+| L6 | **CRAG** | Corrective RAG loop: relevance grading → web-search fallback on poor retrieval |
 
 Served via **FastAPI** with Server-Sent Events streaming, **Prometheus** metrics, and a **Streamlit** chat UI.
 
@@ -32,22 +34,26 @@ Served via **FastAPI** with Server-Sent Events streaming, **Prometheus** metrics
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                           FINANCIAL RAG PIPELINE                              │
 │                                                                               │
+│                      ┌─────────────────────────────────┐                      │
+│                      │ L0 SEMANTIC CACHE (Qdrant)      │                      │
+│                      └────────────────┬────────────────┘                      │
+│                                       │ (Cache Miss)                          │
+│                                       ▼                                       │
 │  ┌─────────────┐   ┌──────────────────┐   ┌──────────────┐   ┌───────────┐  │
-│  │  L1 INGEST  │   │  L2 QUERY XFORM  │   │ L3 RETRIEVAL │   │  L4 GEN   │  │
-│  │             │   │                  │   │              │   │           │  │
+│  │L1 INGEST/EXT│   │  L2 QUERY XFORM  │   │  L3 VECTOR   │   │  L5 GEN   │  │
+│  │             │   │                  │   │   RETRIEVAL  │   │           │  │
 │  │ SEC EDGAR   │   │ HyDE             │   │ BM25 sparse  │   │ OpenAI    │  │
 │  │ 8-K scrape  │   │ Multi-Query (3x) │   │ + Qdrant     │   │ gpt-4.1-  │  │
 │  │ HTML parse  │──▶│ Step-Back        │──▶│ dense → RRF  │──▶│ nano      │  │
-│  │ Parent/child│   │ (concurrent      │   │ → FlashRank  │   │           │  │
-│  │ chunks      │   │  ThreadPool)     │   │ reranker     │   │ Citations │  │
-│  │ fastembed   │   │                  │   │ + parent     │   │ Grounding │  │
-│  │ Qdrant+BM25 │   └──────────────────┘   │ fetch        │   │ check     │  │
-│  └─────────────┘                          └──────────────┘   └─────┬─────┘  │
-│                                                                     │        │
-│  ┌──────────────────────────────────────────────────────────────────▼──────┐ │
-│  │                         L5 CRAG (Corrective RAG)                        │ │
-│  │  Grade chunks → CORRECT / AMBIGUOUS / INCORRECT → Web fallback + regen  │ │
-│  └─────────────────────────────────────────────────────────────────────────┘ │
+│  │ Parent/child│   │                  │   │              │   │           │  │
+│  │ fastembed   │   │     ┌────────────┴───┴─────┐        │   │ Citations │  │
+│  │ Graph Extr. │   │     │ L4 GRAPH RETRIEVAL   │        │   │ Grounding │  │
+│  └─────────────┘   └─────┤ KG context injection ├────────┘   └─────┬─────┘  │
+│                          └──────────────────────┘                  │        │
+│  ┌─────────────────────────────────────────────────────────────────▼───────┐│
+│  │                         L6 CRAG (Corrective RAG)                        ││
+│  │  Grade chunks → CORRECT / AMBIGUOUS / INCORRECT → Web fallback + regen  ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────┐   ┌──────────────────┐   ┌───────────────────────────────────┐
@@ -103,7 +109,8 @@ LLM attention:    HIGH  ↑         HIGH   (U-shaped attention pattern)
 | Web Framework | FastAPI | ≥0.115 | REST API + SSE streaming |
 | ASGI Server | uvicorn + uvloop + httptools | ≥0.34 | Production-grade async server |
 | Embedding | fastembed + BAAI/bge-large-en-v1.5 | ^0.4.0 | 1024-dim ONNX embeddings (local, free) |
-| Vector DB | Qdrant | ^1.17 (client) | Dense ANN vector search |
+| Vector DB | Qdrant | ^1.17 (client) | Dense ANN vector search + **Semantic Caching** |
+| Graph DB | JSON | — | Lightweight **GraphRAG Entity/Relationship store** |
 | Keyword Search | rank-bm25 | ^0.2.2 | Sparse BM25 index |
 | Reranker | FlashRank (ms-marco-MiniLM-L-12-v2) | ^0.2.9 | Local cross-encoder reranking |
 | LLM | OpenAI gpt-4.1-nano | ≥2.0.0 (SDK) | Query transform + generation + evaluation |
@@ -154,6 +161,14 @@ rag-project/
 │   ├── metadata_extractor.py     #    Ticker, date, quarter, fiscal period detection
 │   ├── indexer.py                #    fastembed + Qdrant upsert + BM25 corpus build
 │   └── pipeline.py               #    End-to-end orchestrator with checkpointing
+│
+├── cache/                        # ✅ L0 — Semantic Caching
+│   └── semantic_cache.py         #    Qdrant-backed zero-latency embedding text cache
+│
+├── knowledge_graph/              # ✅ L4 — GraphRAG
+│   ├── models.py                 #    Entity, Relationship, KnowledgeGraph dataclasses
+│   ├── extractor.py              #    LLM-based context extractor (`gpt-4.1-nano`)
+│   └── graph_retriever.py        #    Traverse nodes -> context injection
 │
 ├── query/                        # ✅ L2 — Query Transformation
 │   ├── models.py                 #    TransformedQuery dataclass
@@ -558,11 +573,13 @@ Measured on CPU-only (typical):
 
 | Layer | Operation | Latency |
 |-------|-----------|---------|
+| L0 | **Semantic Cache hit (bypasses all other layers)** | **< 50 ms** |
 | L2 | Query transformation (3 concurrent LLM calls) | 0.8–1.2 s |
-| L3 | Hybrid retrieval + RRF + FlashRank reranking | 0.3–0.8 s |
+| L3 | Hybrid vector retrieval + RRF + FlashRank reranking | 0.3–0.8 s |
 | L3 | Parent fetch (batch Qdrant scroll) | ~50 ms |
-| L4 | Answer generation (single LLM call) | 0.8–2.0 s |
-| **Total** | **End-to-end** | **~2–4 s** |
+| L4 | GraphRAG node traversal & context injection | 50–150 ms |
+| L5 | Answer generation (single LLM call) | 0.8–2.0 s |
+| **Total** | **End-to-end (Cache Miss)** | **~2–4 s** |
 
 ---
 
@@ -575,10 +592,12 @@ Measured on CPU-only (typical):
 - [x] Metadata extractor (ticker, company, quarter, fiscal period)
 - [x] fastembed indexer (BAAI/bge-large-en-v1.5 + Qdrant + BM25) with payload indices
 - [x] End-to-end ingestion pipeline with checkpointing
+- [x] Layer 0: Semantic Caching (Qdrant payload backed embedding cache)
 - [x] Layer 2: Query transformation (HyDE + Multi-Query + Step-Back, concurrent)
 - [x] Layer 3: Hybrid retrieval (BM25 + Qdrant + RRF + FlashRank + parent fetch)
-- [x] Layer 4: Answer generation (valley ordering, citation extraction, grounding check)
-- [x] Layer 5: Corrective RAG (relevance grading + Tavily/DuckDuckGo web fallback)
+- [x] Layer 4: Knowledge Graph Fused Retrieval (GraphRAG context injection)
+- [x] Layer 5: Answer generation (valley ordering, citation extraction, grounding check)
+- [x] Layer 6: Corrective RAG (relevance grading + Tavily/DuckDuckGo web fallback)
 - [x] FastAPI REST + SSE streaming endpoints
 - [x] Prometheus custom metrics + Grafana integration
 - [x] Streamlit chat UI (streaming + structured modes, citation cards, health panel)
