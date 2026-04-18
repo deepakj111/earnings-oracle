@@ -135,7 +135,7 @@ def _build_qdrant_filter(mf: MetadataFilter | None) -> qmodels.Filter | None:
             )
         )
 
-    return qmodels.Filter(must=conditions) if conditions else None
+    return qmodels.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
 
 # ── Qdrant dense search ────────────────────────────────────────────────────────

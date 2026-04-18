@@ -172,7 +172,7 @@ def _call_llm(
             if attempt == MAX_RETRIES:
                 raise
             logger.warning(
-                f"[{label}] Server error {exc.status_code} (attempt {attempt}/{MAX_RETRIES}). "
+                f"[{label}] Server error {status} (attempt {attempt}/{MAX_RETRIES}). "
                 f"Retrying in {delay:.1f}s..."
             )
             time.sleep(delay)
