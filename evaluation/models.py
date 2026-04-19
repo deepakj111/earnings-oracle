@@ -115,6 +115,7 @@ class EvalReport:
     metric_averages: dict[str, float]
     sample_results: list[EvalSampleResult]
     total_latency_seconds: float
+    metric_confidence_intervals: dict[str, tuple[float, float]] = field(default_factory=dict)
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     pipeline_version: str = "0.1.0"
 
@@ -134,6 +135,10 @@ class EvalReport:
             "pass_rate": round(self.pass_rate, 4),
             "total_latency_seconds": round(self.total_latency_seconds, 2),
             "metric_averages": {k: round(v, 4) for k, v in self.metric_averages.items()},
+            "metric_confidence_intervals": {
+                k: (round(v[0], 4), round(v[1], 4))
+                for k, v in self.metric_confidence_intervals.items()
+            },
             "sample_results": [r.to_dict() for r in self.sample_results],
         }
 
@@ -197,5 +202,10 @@ class EvalReport:
         ]
         for metric, avg in self.metric_averages.items():
             bar = "█" * int(avg * 20) + "░" * (20 - int(avg * 20))
-            lines.append(f"  {metric:<25} {bar}  {avg:.3f}")
+            if metric in self.metric_confidence_intervals:
+                low, high = self.metric_confidence_intervals[metric]
+                ci_str = f"[95% CI: {low:.3f} - {high:.3f}]"
+                lines.append(f"  {metric:<25} {bar}  {avg:.3f}  {ci_str}")
+            else:
+                lines.append(f"  {metric:<25} {bar}  {avg:.3f}")
         return "\n".join(lines)

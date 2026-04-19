@@ -35,6 +35,7 @@ from config import settings as _settings
 from evaluation.dataset import GOLDEN_DATASET
 from evaluation.metrics import score_all
 from evaluation.models import EvalReport, EvalSample, EvalSampleResult, MetricScore
+from evaluation.statistics import compute_bootstrap_ci
 from retrieval.models import MetadataFilter
 
 _eval_cfg = _settings.evaluation
@@ -191,11 +192,18 @@ class EvaluationHarness:
         # Compute aggregate metric averages (exclude failed samples)
         successful = [r for r in sample_results if not r.pipeline_failed]
         metric_averages: dict[str, float] = {}
+        metric_confidence_intervals: dict[str, tuple[float, float]] = {}
         for metric in selected_metrics:
             scores = [
                 r.metric_scores[metric].score for r in successful if metric in r.metric_scores
             ]
-            metric_averages[metric] = sum(scores) / len(scores) if scores else 0.0
+            if scores:
+                metric_averages[metric] = sum(scores) / len(scores)
+                # Compute 95% Bootstrap CI dynamically
+                metric_confidence_intervals[metric] = compute_bootstrap_ci(scores)
+            else:
+                metric_averages[metric] = 0.0
+                metric_confidence_intervals[metric] = (0.0, 0.0)
 
         total_latency = time.perf_counter() - t_total
         n_failed = sum(1 for r in sample_results if r.pipeline_failed)
@@ -205,6 +213,7 @@ class EvaluationHarness:
             n_samples=len(samples),
             n_failed=n_failed,
             metric_averages=metric_averages,
+            metric_confidence_intervals=metric_confidence_intervals,
             sample_results=sample_results,
             total_latency_seconds=total_latency,
         )
