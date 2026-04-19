@@ -583,15 +583,15 @@ Measured on CPU-only (typical):
 
 ---
 
-## Roadmap
+## Features (v1.0.0)
 
-### Completed ✅
+- [x] High-throughput Async ingestion pipeline (concurrent LLM eval + vector batching)
+- [x] Scientific Evaluation Harness (Bootstrapped 95% CIs + Paired Significance Testing)
 - [x] SEC EDGAR 8-K downloader (10 companies, 2023–present)
 - [x] HTML parser with noise removal (script/style/nav stripping)
 - [x] Parent/child chunker (token-aware, sentence-boundary-safe, table protection)
 - [x] Metadata extractor (ticker, company, quarter, fiscal period)
 - [x] fastembed indexer (BAAI/bge-large-en-v1.5 + Qdrant + BM25) with payload indices
-- [x] End-to-end ingestion pipeline with checkpointing
 - [x] Layer 0: Semantic Caching (Qdrant payload backed embedding cache)
 - [x] Layer 2: Query transformation (HyDE + Multi-Query + Step-Back, concurrent)
 - [x] Layer 3: Hybrid retrieval (BM25 + Qdrant + RRF + FlashRank + parent fetch)
@@ -604,16 +604,6 @@ Measured on CPU-only (typical):
 - [x] Multi-stage Docker build + docker-compose full stack
 - [x] 6-job parallel CI + CD pipeline (GHCR push + smoke test)
 - [x] 151+ test suite (≥80% coverage gate)
-- [x] LLMOps evaluation harness (4 metrics, golden dataset, JSON + CSV reports)
-
-### Planned 🔜
-- [ ] Ragas integration for standardised RAG evaluation
-- [ ] OpenTelemetry distributed tracing
-- [ ] Async ingestion pipeline (concurrent embedding + upsert)
-- [ ] Additional data sources (10-K, earnings call transcripts)
-- [ ] Multi-hop reasoning for complex financial questions
-- [ ] Kubernetes manifests + Helm chart
-- [ ] A/B testing framework for retrieval strategy comparison
 
 ---
 
