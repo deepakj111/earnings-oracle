@@ -10,7 +10,9 @@ Tests cover:
   - Entity deduplication across chunks
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from knowledge_graph.extractor import (
     _regex_extract,
@@ -63,8 +65,9 @@ class TestRegexExtraction:
 class TestLLMExtraction:
     """Verify LLM-powered extraction with mocked OpenAI responses."""
 
-    @patch("knowledge_graph.extractor._call_llm_extract")
-    def test_extracts_entities_from_llm(self, mock_llm: MagicMock) -> None:
+    @patch("knowledge_graph.extractor._call_llm_extract", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_extracts_entities_from_llm(self, mock_llm: AsyncMock) -> None:
         mock_llm.return_value = {
             "entities": [
                 {"name": "Tim Cook", "entity_type": "PERSON", "properties": {"role": "CEO"}},
@@ -88,7 +91,7 @@ class TestLLMExtraction:
             mock_settings.knowledge_graph.extraction_enabled = True
             mock_settings.knowledge_graph.extraction_model = "gpt-4.1-nano"
 
-            entities, rels = extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
+            entities, rels = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
 
         # Should have LLM entities + regex entities
         llm_entities = [e for e in entities if e.name in ("tim cook", "iphone 16")]
@@ -97,8 +100,9 @@ class TestLLMExtraction:
         # Should have LLM relationships
         assert any(r.relation == "LEADS" for r in rels)
 
-    @patch("knowledge_graph.extractor._call_llm_extract")
-    def test_handles_empty_llm_response(self, mock_llm: MagicMock) -> None:
+    @patch("knowledge_graph.extractor._call_llm_extract", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_handles_empty_llm_response(self, mock_llm: AsyncMock) -> None:
         mock_llm.return_value = {}
 
         chunk = MagicMock()
@@ -109,14 +113,15 @@ class TestLLMExtraction:
             mock_settings.knowledge_graph.extraction_enabled = True
             mock_settings.knowledge_graph.extraction_model = "gpt-4.1-nano"
 
-            entities, rels = extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
+            entities, rels = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
 
         # Only regex entities (if any)
         assert isinstance(entities, list)
         assert isinstance(rels, list)
 
-    @patch("knowledge_graph.extractor._call_llm_extract")
-    def test_handles_malformed_entities(self, mock_llm: MagicMock) -> None:
+    @patch("knowledge_graph.extractor._call_llm_extract", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_handles_malformed_entities(self, mock_llm: AsyncMock) -> None:
         """Malformed entities should be skipped, not crash the pipeline."""
         mock_llm.return_value = {
             "entities": [
@@ -134,12 +139,13 @@ class TestLLMExtraction:
             mock_settings.knowledge_graph.extraction_enabled = True
             mock_settings.knowledge_graph.extraction_model = "gpt-4.1-nano"
 
-            entities, _ = extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
+            entities, _ = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
 
         llm_entities = [e for e in entities if e.name == "valid entity"]
         assert len(llm_entities) == 1
 
-    def test_disabled_extraction_uses_regex_only(self) -> None:
+    @pytest.mark.asyncio
+    async def test_disabled_extraction_uses_regex_only(self) -> None:
         """When LLM extraction is disabled, only regex runs."""
         chunk = MagicMock()
         chunk.chunk_id = "test_001"
@@ -148,17 +154,18 @@ class TestLLMExtraction:
         with patch("knowledge_graph.extractor.settings") as mock_settings:
             mock_settings.knowledge_graph.extraction_enabled = False
 
-            entities, rels = extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
+            entities, rels = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
 
         # Should still extract MSFT via regex
         assert any(e.name == "msft" for e in entities)
 
-    def test_empty_chunks_list(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_chunks_list(self) -> None:
         """No chunks → no entities."""
         with patch("knowledge_graph.extractor.settings") as mock_settings:
             mock_settings.knowledge_graph.extraction_enabled = False
 
-            entities, rels = extract_entities_from_chunks([], "AAPL", "Q4 2024")
+            entities, rels = await extract_entities_from_chunks([], "AAPL", "Q4 2024")
 
         assert entities == []
         assert rels == []

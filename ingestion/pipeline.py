@@ -1,9 +1,11 @@
+import asyncio
 import pickle  # nosec B403
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
+from qdrant_client import QdrantClient
 from rank_bm25 import BM25Okapi
-from tqdm import tqdm
 
 from config import settings as _settings
 from ingestion.chunker import create_parent_child_chunks
@@ -87,7 +89,49 @@ def _load_existing_bm25() -> tuple[list[list[str]], list[dict]]:
         return [], []
 
 
-def run_pipeline() -> None:
+async def _process_document(
+    file_path: Path,
+    qdrant: QdrantClient,
+    semaphore: asyncio.Semaphore,
+    kg_enabled: bool,
+    kg_graph: Any,
+) -> tuple[int, list[list[str]], list[dict]]:
+    """Process a single document concurrently."""
+    async with semaphore:
+        doc = parse_html(file_path)
+        if doc is None:
+            logger.debug(f"Skipped (not earnings content): {file_path.name}")
+            return 0, [], []
+
+        metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text)
+        chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
+        child_count = sum(1 for c in chunks if c.chunk_type == "child")
+
+        new_bm25_texts, new_bm25_corpus = await index_document(chunks, metadata, qdrant)
+
+        # ── Knowledge Graph extraction ─────────────────────────────────
+        if kg_enabled:
+            from knowledge_graph.extractor import extract_entities_from_chunks
+
+            parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
+            try:
+                entities, relationships = await extract_entities_from_chunks(
+                    parent_chunks, metadata.ticker, metadata.fiscal_period
+                )
+                for entity in entities:
+                    kg_graph.add_entity(entity)
+                for rel in relationships:
+                    kg_graph.add_relationship(rel)
+            except Exception as exc:
+                logger.warning(f"KG extraction failed for {file_path.name}: {exc}")
+
+        await asyncio.to_thread(_mark_done, file_path.name)
+        logger.info(f"{file_path.name} | {metadata.fiscal_period} | {child_count} child chunks")
+
+        return child_count, new_bm25_texts, new_bm25_corpus
+
+
+async def run_pipeline_async() -> None:
     setup_embedder()
     qdrant = init_qdrant(_settings.infra.qdrant_url)
 
@@ -104,9 +148,9 @@ def run_pipeline() -> None:
 
     # ── Knowledge Graph setup ──────────────────────────────────────────────
     kg_enabled = _settings.knowledge_graph.extraction_enabled
+    kg_store, kg_graph = None, None
     if kg_enabled:
         from knowledge_graph.entity_store import EntityStore
-        from knowledge_graph.extractor import extract_entities_from_chunks
 
         kg_store = EntityStore()
         kg_graph = kg_store.load()
@@ -114,45 +158,34 @@ def run_pipeline() -> None:
     indexed_count: int = 0
     skipped_count: int = len(already_done)
 
-    for file_path in tqdm(pending, desc="Ingesting"):
-        doc = parse_html(file_path)
-        if doc is None:
-            skipped_count += 1
-            logger.debug(f"Skipped (not earnings content): {file_path.name}")
-            continue
+    semaphore = asyncio.Semaphore(5)
 
-        metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text)
-        chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
-        child_count = sum(1 for c in chunks if c.chunk_type == "child")
+    tasks = [_process_document(f, qdrant, semaphore, kg_enabled, kg_graph) for f in pending]
 
-        bm25_texts, bm25_corpus = index_document(chunks, metadata, qdrant, bm25_texts, bm25_corpus)
+    if tasks:
+        logger.info(f"Launching {len(tasks)} document ingestion tasks concurrently...")
+        results = await asyncio.gather(*tasks)
 
-        # ── Knowledge Graph extraction ─────────────────────────────────
-        if kg_enabled:
-            parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
-            try:
-                entities, relationships = extract_entities_from_chunks(
-                    parent_chunks, metadata.ticker, metadata.fiscal_period
-                )
-                for entity in entities:
-                    kg_graph.add_entity(entity)
-                for rel in relationships:
-                    kg_graph.add_relationship(rel)
-            except Exception as exc:
-                logger.warning(f"KG extraction failed for {file_path.name}: {exc}")
-
-        _mark_done(file_path.name)
-        indexed_count += 1
-        logger.info(f"{file_path.name} | {metadata.fiscal_period} | {child_count} child chunks")
+        for child_count, new_bm25_texts, new_bm25_corpus in results:
+            if child_count == 0 and not new_bm25_texts:
+                skipped_count += 1
+            else:
+                indexed_count += 1
+                bm25_texts.extend(new_bm25_texts)
+                bm25_corpus.extend(new_bm25_corpus)
 
     _save_bm25(bm25_texts, bm25_corpus)
 
     # Persist knowledge graph
-    if kg_enabled:
+    if kg_enabled and kg_store and kg_graph:
         kg_store.save(kg_graph)
         logger.info(f"Knowledge graph: {kg_graph.summary()}")
 
     logger.info(f"Pipeline complete: {indexed_count} indexed this run, {skipped_count} skipped")
+
+
+def run_pipeline() -> None:
+    asyncio.run(run_pipeline_async())
 
 
 if __name__ == "__main__":

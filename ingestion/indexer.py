@@ -10,6 +10,7 @@ always describe the same chunk. The retrieval layer uses bm25_corpus to resolve
 BM25 result indices back to chunk IDs and document metadata.
 """
 
+import asyncio
 import uuid
 
 import numpy as np
@@ -43,17 +44,20 @@ def setup_embedder() -> None:
     logger.info("Embedding model ready.")
 
 
-def _get_embedding(text: str) -> list[float]:
+def _get_embeddings(texts: list[str]) -> list[list[float]]:
     if _embed_model is None:
         raise RuntimeError(
-            "Embedding model is not loaded. Call setup_embedder() before calling _get_embedding()."
+            "Embedding model is not loaded. Call setup_embedder() before calling _get_embeddings()."
         )
-    vec = next(iter(_embed_model.embed([text])))
-    arr = np.array(vec, dtype=np.float32)
-    norm = np.linalg.norm(arr)
-    if norm > 0:
-        arr = arr / norm
-    return arr.tolist()
+    vectors = list(_embed_model.embed(texts))
+    result = []
+    for vec in vectors:
+        arr = np.array(vec, dtype=np.float32)
+        norm = np.linalg.norm(arr)
+        if norm > 0:
+            arr = arr / norm
+        result.append(arr.tolist())
+    return result
 
 
 def _ensure_payload_indices(client: QdrantClient) -> None:
@@ -107,64 +111,63 @@ def init_qdrant(url: str) -> QdrantClient:
     return client
 
 
-def index_document(
+async def index_document(
     chunks: list[Chunk],
     metadata: DocumentMetadata,
     qdrant: QdrantClient,
-    bm25_texts: list[list[str]],
-    bm25_corpus: list[dict],
 ) -> tuple[list[list[str]], list[dict]]:
     child_chunks = [c for c in chunks if c.chunk_type == "child"]
     points: list[PointStruct] = []
+    new_bm25_texts: list[list[str]] = []
+    new_bm25_corpus: list[dict] = []
 
-    for chunk in child_chunks:
-        embedding = _get_embedding(chunk.text)
+    if not child_chunks:
+        return new_bm25_texts, new_bm25_corpus
 
+    texts = [chunk.text for chunk in child_chunks]
+
+    # Run heavy embedding CPU work in a thread pool
+    embeddings = await asyncio.to_thread(_get_embeddings, texts)
+
+    for chunk, embedding in zip(child_chunks, embeddings, strict=False):
         # --- FIXED: deterministic ID based on chunk_id ---
         # uuid5 hashes chunk_id → same chunk always gets the same Qdrant point ID.
         # upsert is then idempotent even if the checkpoint is bypassed.
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk.chunk_id))
         # --------------------------------------------------
 
+        payload = {
+            "chunk_id": chunk.chunk_id,
+            "parent_id": chunk.parent_id,
+            "text": chunk.text,
+            "ticker": metadata.ticker,
+            "company": metadata.company,
+            "date": metadata.date,
+            "year": metadata.year,
+            "quarter": metadata.quarter,
+            "fiscal_period": metadata.fiscal_period,
+            "section_title": chunk.section_title,
+        }
+
         points.append(
             PointStruct(
                 id=point_id,
                 vector=embedding,
-                payload={
-                    "chunk_id": chunk.chunk_id,
-                    "parent_id": chunk.parent_id,
-                    "text": chunk.text,
-                    "ticker": metadata.ticker,
-                    "company": metadata.company,
-                    "date": metadata.date,
-                    "year": metadata.year,
-                    "quarter": metadata.quarter,
-                    "fiscal_period": metadata.fiscal_period,
-                    "section_title": chunk.section_title,
-                },
+                payload=payload,
             )
         )
 
-        bm25_texts.append(chunk.text.lower().split())
-        bm25_corpus.append(
-            {
-                "chunk_id": chunk.chunk_id,
-                "parent_id": chunk.parent_id,
-                "text": chunk.text,
-                "ticker": metadata.ticker,
-                "company": metadata.company,
-                "date": metadata.date,
-                "year": metadata.year,
-                "quarter": metadata.quarter,
-                "fiscal_period": metadata.fiscal_period,
-                "section_title": chunk.section_title,
-            }
-        )
+        new_bm25_texts.append(chunk.text.lower().split())
+        new_bm25_corpus.append(payload)
 
-    for i in range(0, len(points), UPSERT_BATCH_SIZE):
-        qdrant.upsert(
-            collection_name=COLLECTION_NAME,
-            points=points[i : i + UPSERT_BATCH_SIZE],
-        )
+    def _sync_upsert() -> None:
+        for i in range(0, len(points), UPSERT_BATCH_SIZE):
+            qdrant.upsert(
+                collection_name=COLLECTION_NAME,
+                points=points[i : i + UPSERT_BATCH_SIZE],
+            )
 
-    return bm25_texts, bm25_corpus
+    # Run blocking IO Qdrant insert in a thread
+    await asyncio.to_thread(_sync_upsert)
+
+    return new_bm25_texts, new_bm25_corpus

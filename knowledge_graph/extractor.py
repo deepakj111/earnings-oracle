@@ -15,6 +15,7 @@ Design decisions:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 
@@ -88,21 +89,21 @@ Text:
 """
 
 
-def _call_llm_extract(
+async def _call_llm_extract(
     text: str,
     ticker: str,
     fiscal_period: str,
 ) -> dict:
     """
-    Call the LLM to extract entities and relationships from text.
+    Call the LLM to extract entities and relationships from text asynchronously.
 
     Returns parsed JSON dict or empty dict on failure.
     """
     try:
-        import openai
+        from openai import AsyncOpenAI
 
-        client = openai.OpenAI(api_key=settings.infra.openai_api_key)
-        response = client.chat.completions.create(
+        client = AsyncOpenAI(api_key=settings.infra.openai_api_key)
+        response = await client.chat.completions.create(
             model=settings.knowledge_graph.extraction_model,
             messages=[
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
@@ -171,15 +172,15 @@ def _regex_extract(
     return entities, relationships
 
 
-def extract_entities_from_chunks(
+async def extract_entities_from_chunks(
     parent_chunks: list,
     ticker: str,
     fiscal_period: str,
 ) -> tuple[list[Entity], list[Relationship]]:
     """
-    Extract entities and relationships from a list of parent chunks.
+    Extract entities and relationships from a list of parent chunks asynchronously.
 
-    Combines LLM extraction (if enabled) with regex-based fallback.
+    Combines concurrent LLM extraction (if enabled) with regex-based fallback.
 
     Args:
         parent_chunks: List of Chunk objects (parent type only)
@@ -193,14 +194,16 @@ def extract_entities_from_chunks(
     all_relationships: list[Relationship] = []
     llm_enabled = settings.knowledge_graph.extraction_enabled
 
-    for chunk in parent_chunks:
-        chunk_id = chunk.chunk_id
-        text = chunk.text
+    # ── LLM extraction (Concurrent) ─────────────────────────────────────────────
+    if llm_enabled:
+        tasks = []
+        for chunk in parent_chunks:
+            tasks.append(_call_llm_extract(chunk.text, ticker, fiscal_period))
 
-        # ── LLM extraction ─────────────────────────────────────────────
-        if llm_enabled:
-            raw = _call_llm_extract(text, ticker, fiscal_period)
+        raw_responses = await asyncio.gather(*tasks) if tasks else []
 
+        for chunk, raw in zip(parent_chunks, raw_responses, strict=False):
+            chunk_id = chunk.chunk_id
             for e_data in raw.get("entities", []):
                 try:
                     entity = Entity(
@@ -232,8 +235,11 @@ def extract_entities_from_chunks(
                 except Exception as exc:
                     logger.debug(f"Skipping malformed relationship: {exc}")
 
-        # ── Regex fallback (always runs) ───────────────────────────────
-        regex_entities, regex_rels = _regex_extract(text, ticker, fiscal_period, chunk_id)
+    # ── Regex fallback (always runs sequentially, CPU bounds) ───────────────────
+    for chunk in parent_chunks:
+        regex_entities, regex_rels = _regex_extract(
+            chunk.text, ticker, fiscal_period, chunk.chunk_id
+        )
         all_entities.extend(regex_entities)
         all_relationships.extend(regex_rels)
 

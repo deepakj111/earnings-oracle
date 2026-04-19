@@ -1,6 +1,6 @@
 import pickle
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rank_bm25 import BM25Okapi
@@ -56,9 +56,10 @@ class TestRunPipeline:
             patch("ingestion.pipeline.init_qdrant", return_value=mock_qdrant),
             patch(
                 "ingestion.pipeline.index_document",
-                side_effect=lambda chunks, metadata, qdrant, bm25_texts, bm25_corpus: (
-                    bm25_texts + [["token"]],
-                    bm25_corpus + [{"chunk_id": "x", "text": "x"}],
+                new_callable=AsyncMock,
+                return_value=(
+                    [["token"]],
+                    [{"chunk_id": "x", "text": "x"}],
                 ),
             ),
         ):
