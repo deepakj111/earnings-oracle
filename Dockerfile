@@ -30,7 +30,7 @@ ENV POETRY_VERSION=1.8.3
 RUN curl -sSL https://install.python-poetry.org | python3 - \
     && ln -s /root/.local/bin/poetry /usr/local/bin/poetry
 
-WORKDIR /build
+WORKDIR /app
 
 COPY pyproject.toml poetry.lock* ./
 
@@ -52,7 +52,7 @@ RUN useradd --create-home --shell /bin/bash appuser
 WORKDIR /app
 
 # Copy the pre-built venv from builder
-COPY --from=builder /build/.venv /app/.venv
+COPY --from=builder /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
