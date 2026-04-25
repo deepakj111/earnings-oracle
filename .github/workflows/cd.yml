@@ -134,8 +134,8 @@ jobs:
         run: |
           docker run -d \
             --name rag_smoke \
-            -p 8000:8000 \
-            -e QDRANT_URL=http://qdrant:6333 \
+            --network host \
+            -e QDRANT_URL=http://localhost:6333 \
             -e OPENAI_API_KEY=sk-smoke-placeholder \
             -e SEC_USER_AGENT="Smoke Test ci@example.com" \
             -e RAG_CRAG_ENABLED=false \

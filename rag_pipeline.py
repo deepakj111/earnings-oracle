@@ -116,7 +116,8 @@ class FinancialRAGPipeline:
 
         logger.info("Pre-loading models into memory to prevent cold-start latency...")
         warmup_embed_client()
-        warmup_bm25()
+        with contextlib.suppress(FileNotFoundError):
+            warmup_bm25()
 
         if _settings.reranker.enabled:
             with contextlib.suppress(ImportError):
