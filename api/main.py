@@ -48,6 +48,7 @@ Design decisions:
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -71,7 +72,7 @@ _PROCESS_START: float = time.time()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Application lifespan: pre-load all models at startup, clean up on shutdown.
 

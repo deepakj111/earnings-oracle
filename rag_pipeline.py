@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
+import contextlib
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -118,10 +119,8 @@ class FinancialRAGPipeline:
         warmup_bm25()
 
         if _settings.reranker.enabled:
-            try:
+            with contextlib.suppress(ImportError):
                 warmup_reranker()  # Loads FlashRank cross-encoder
-            except ImportError:
-                pass
 
         logger.info(
             "FinancialRAGPipeline ready | "

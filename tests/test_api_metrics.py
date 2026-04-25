@@ -11,6 +11,7 @@ Design:
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -178,7 +179,7 @@ def _make_mock_result() -> MagicMock:
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
     """
     TestClient with the full pipeline mocked at the api.main level.
 

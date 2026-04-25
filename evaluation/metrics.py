@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 
 from loguru import logger
 from openai import OpenAI
@@ -256,7 +257,7 @@ def score_all(
     Returns:
         list[MetricScore] in the requested order.
     """
-    _all = {
+    _all: dict[str, Callable[[], MetricScore]] = {
         "faithfulness": lambda: score_faithfulness(question, answer, context_chunks),
         "answer_relevancy": lambda: score_answer_relevancy(question, answer),
         "context_precision": lambda: score_context_precision(question, context_chunks),
@@ -296,7 +297,7 @@ def compute_all_metrics(
         "context_recall",
     ]
 
-    dispatch: dict[str, MetricScore] = {
+    dispatch: dict[str, Callable[[], MetricScore]] = {
         "faithfulness": lambda: score_faithfulness(question, answer, context_chunks),
         "answer_relevancy": lambda: score_answer_relevancy(question, answer),
         "context_precision": lambda: score_context_precision(question, context_chunks),

@@ -22,6 +22,7 @@ fresh FastAPI instance captures the test lifespan.
 from __future__ import annotations
 
 import time
+from collections.abc import Generator
 from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, patch
 
@@ -170,7 +171,7 @@ def mock_qdrant() -> MagicMock:
 
 
 @pytest.fixture
-def client(mock_pipeline: MagicMock, mock_qdrant: MagicMock) -> TestClient:  # type: ignore[type-arg]
+def client(mock_pipeline: MagicMock, mock_qdrant: MagicMock) -> Generator[TestClient, None, None]:  # type: ignore[type-arg]
     """
     Return a synchronous TestClient whose app has:
       • A lightweight test lifespan (no model downloads, no settings.validate())
@@ -198,7 +199,7 @@ def client(mock_pipeline: MagicMock, mock_qdrant: MagicMock) -> TestClient:  # t
 
 
 @pytest.fixture
-def client_no_pipeline(mock_qdrant: MagicMock) -> TestClient:  # type: ignore[type-arg]
+def client_no_pipeline(mock_qdrant: MagicMock) -> Generator[TestClient, None, None]:  # type: ignore[type-arg]
     """
     TestClient where app.state.pipeline is intentionally NOT set.
     Used to test 503 readiness probe behaviour during cold-start.

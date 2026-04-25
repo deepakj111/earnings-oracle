@@ -391,9 +391,6 @@ def search(
             continue
         candidates.append(SearchResult.from_payload(payload, rrf_score, source))
 
-    # ── 4. Parent fetch ────────────────────────────────────────────────────────
-    # candidates = _fetch_parent_texts(qdrant_client, candidates)
-
     return candidates
 
 
