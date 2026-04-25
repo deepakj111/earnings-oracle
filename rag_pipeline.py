@@ -58,9 +58,9 @@ Thread-safety:
 
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Iterator
-import contextlib
 from typing import TYPE_CHECKING
 
 from loguru import logger
