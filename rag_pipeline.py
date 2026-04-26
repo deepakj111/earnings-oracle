@@ -77,6 +77,7 @@ from retrieval import retrieve, warmup_bm25, warmup_embed_client, warmup_reranke
 from retrieval.models import MetadataFilter, RetrievalResult
 
 if TYPE_CHECKING:
+    from crag.corrector import CRAGCorrector
     from crag.models import CRAGResult
 
 
@@ -103,6 +104,7 @@ class FinancialRAGPipeline:
         self._generator = Generator()
         self._router = QueryRouter()
         self._cache = SemanticCache(qdrant_client)
+        self._corrector: CRAGCorrector | None = None  # lazy-init in ask_with_crag()
 
         # ── Observability: structured per-request tracing ──────────────────
         obs_cfg = _settings.observability

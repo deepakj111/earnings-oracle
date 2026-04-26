@@ -69,6 +69,8 @@ class ExperimentConfig:
     rrf_k_constant: int | None = None
     reranker_enabled: bool | None = None
     hyde_enabled: bool | None = None
+    graphrag_enabled: bool | None = None
+    use_crag: bool | None = None
 
     def to_env_patch(self) -> dict[str, str]:
         """Convert config fields to environment variable overrides."""
@@ -83,6 +85,8 @@ class ExperimentConfig:
             patch["RAG_RETRIEVAL_RRF_K"] = str(self.rrf_k_constant)
         if self.reranker_enabled is not None:
             patch["RAG_RERANKER_ENABLED"] = str(self.reranker_enabled).lower()
+        if self.graphrag_enabled is not None:
+            patch["RAG_KG_RETRIEVAL_ENABLED"] = str(self.graphrag_enabled).lower()
         return patch
 
     def diff_vs(self, other: ExperimentConfig) -> dict[str, tuple[Any, Any]]:
@@ -95,6 +99,8 @@ class ExperimentConfig:
             "rrf_k_constant",
             "reranker_enabled",
             "hyde_enabled",
+            "graphrag_enabled",
+            "use_crag",
         ):
             a, b = getattr(self, f_name), getattr(other, f_name)
             if a != b:
@@ -310,28 +316,33 @@ class RetrievalExperiment:
 
             for sample in dataset:
                 try:
-                    result = pipeline.ask(sample.question)
+                    if config.use_crag:
+                        crag_res = pipeline.ask_with_crag(sample.question)
+                        result = crag_res.final_result
+                    else:
+                        result = pipeline.ask(sample.question)
+
                     scores = compute_all_metrics(
                         question=sample.question,
                         answer=result.answer,
-                        context_chunks=[c.text for c in result.citations],
+                        context_chunks=[c.excerpt for c in result.citations],
                         ground_truth=sample.ground_truth,
                         metrics=metrics,
                     )
                     sample_scores.append(
                         {
-                            "sample_id": sample.id,
+                            "sample_id": sample.sample_id,
                             "question": sample.question,
                             "scores": scores,
                             "pipeline_failed": False,
                         }
                     )
                 except Exception as exc:
-                    logger.warning(f"  Sample {sample.id} failed: {exc}")
+                    logger.warning(f"  Sample {sample.sample_id} failed: {exc}")
                     errors += 1
                     sample_scores.append(
                         {
-                            "sample_id": sample.id,
+                            "sample_id": sample.sample_id,
                             "question": sample.question,
                             "scores": {m: 0.0 for m in metrics},
                             "pipeline_failed": True,
@@ -363,6 +374,10 @@ class RetrievalExperiment:
             )
 
         finally:
+            # Releasing the lock so subsequent local Qdrant clients can bind
+            if hasattr(pipeline, "qdrant_client"):
+                pipeline.qdrant_client.close()
+
             for k, original_v in original_env.items():
                 if original_v is None:
                     os.environ.pop(k, None)
