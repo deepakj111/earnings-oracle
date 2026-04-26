@@ -70,73 +70,73 @@ def tmp_htm(tmp_path):
 
 
 class TestParseHtml:
-    def test_returns_parsed_document(self, tmp_htm):
+    def test_returns_parsed_document(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert isinstance(result, ParsedDocument)
 
-    def test_ticker_extracted_from_filename(self, tmp_htm):
+    def test_ticker_extracted_from_filename(self, tmp_htm) -> None:
         path = tmp_htm("NVDA_2024-07-15_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert result.ticker == "NVDA"
 
-    def test_date_extracted_from_filename(self, tmp_htm):
+    def test_date_extracted_from_filename(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert result.date == "2024-10-31"
 
-    def test_script_tags_stripped(self, tmp_htm):
+    def test_script_tags_stripped(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert "var x = 1" not in result.raw_text
 
-    def test_style_tags_stripped(self, tmp_htm):
+    def test_style_tags_stripped(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert "color: red" not in result.raw_text
 
-    def test_nav_stripped(self, tmp_htm):
+    def test_nav_stripped(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert "Skip navigation" not in result.raw_text
 
-    def test_raw_text_non_empty(self, tmp_htm):
+    def test_raw_text_non_empty(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert len(result.raw_text.strip()) > 0
 
-    def test_sections_is_list(self, tmp_htm):
+    def test_sections_is_list(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MULTI_SECTION_HTML)
         result = parse_html(path)
         assert isinstance(result.sections, list)
 
-    def test_sections_all_meet_word_floor(self, tmp_htm):
+    def test_sections_all_meet_word_floor(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MULTI_SECTION_HTML)
         result = parse_html(path)
         for section in result.sections:
             assert len(section.split()) >= 15, f"Section below 15-word floor: {section[:60]!r}"
 
-    def test_short_file_returns_none(self, tmp_htm):
+    def test_short_file_returns_none(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", SHORT_HTML)
         result = parse_html(path)
         assert result is None
 
-    def test_file_path_stored(self, tmp_htm):
+    def test_file_path_stored(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert result.file_path == str(path)
 
-    def test_no_triple_newlines_in_raw_text(self, tmp_htm):
+    def test_no_triple_newlines_in_raw_text(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MULTI_SECTION_HTML)
         result = parse_html(path)
         assert "\n\n\n" not in result.raw_text
 
-    def test_unknown_date_when_stem_has_no_date(self, tmp_htm):
+    def test_unknown_date_when_stem_has_no_date(self, tmp_htm) -> None:
         path = tmp_htm("AAPL", MINIMAL_HTML)
         result = parse_html(path)
         assert result.date == "unknown"
 
-    def test_encoding_errors_do_not_crash(self, tmp_path):
+    def test_encoding_errors_do_not_crash(self, tmp_path) -> None:
         path = tmp_path / "AAPL_2024-10-31_0001234567.htm"
         # Write with latin-1 encoding — parser uses errors='ignore'
         path.write_bytes((MINIMAL_HTML + "\nCaf\xe9 revenue grew strongly.").encode("latin-1"))

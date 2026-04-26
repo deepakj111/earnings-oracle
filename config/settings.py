@@ -308,7 +308,10 @@ class EvaluationConfig:
     model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-4.1-nano"))
     max_workers: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_WORKERS", 2))
     output_dir: str = field(
-        default_factory=lambda: _env_str("RAG_EVAL_OUTPUT_DIR", "data/eval_reports")
+        default_factory=lambda: _env_str(
+            "RAG_EVAL_OUTPUT_DIR",
+            os.path.join(os.path.dirname(__file__), "..", "data", "eval_reports"),
+        )
     )
 
 
@@ -338,7 +341,10 @@ class ObservabilityConfig:
 
     tracing_enabled: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_ENABLED", True))
     trace_output_dir: str = field(
-        default_factory=lambda: _env_str("RAG_TRACING_OUTPUT_DIR", "data/traces")
+        default_factory=lambda: _env_str(
+            "RAG_TRACING_OUTPUT_DIR",
+            os.path.join(os.path.dirname(__file__), "..", "data", "traces"),
+        )
     )
     persist_traces: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_PERSIST", True))
     cost_alert_per_request_usd: float = field(

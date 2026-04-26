@@ -25,10 +25,12 @@ Usage (programmatic):
 
 from __future__ import annotations
 
+import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import numpy as np
 from loguru import logger
 
 from config import settings as _settings
@@ -82,7 +84,11 @@ class EvaluationHarness:
             )
 
         # Run pipeline
+        # Disable cache to prevent data leakage during evaluation
         try:
+            old_cache_enabled = _settings.cache.enabled
+            # Monkeypatch the cache temporarily for this thread
+            object.__setattr__(_settings.cache, "enabled", False)
             result, _q_summary, _r_summary = self._pipeline.ask_verbose(  # type: ignore[union-attr]
                 question=sample.question,
                 metadata_filter=meta_filter,
@@ -97,6 +103,8 @@ class EvaluationHarness:
                 pipeline_failed=True,
                 error_message=str(exc),
             )
+        finally:
+            object.__setattr__(_settings.cache, "enabled", old_cache_enabled)
 
         # Extract context chunks for metric scoring
         context_chunks = [(c.excerpt or "") for c in result.citations]
@@ -149,6 +157,10 @@ class EvaluationHarness:
         Returns:
             EvalReport with per-sample results and aggregate metric averages.
         """
+        # Ensure reproducibility
+        random.seed(42)
+        np.random.seed(42)
+
         samples = GOLDEN_DATASET if dataset is None else dataset
         selected_metrics = metrics or _ALL_METRICS
 

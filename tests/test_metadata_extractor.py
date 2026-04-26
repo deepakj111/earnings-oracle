@@ -31,34 +31,34 @@ PLAIN_PROSE = "Revenue was strong. No quarter mentioned explicitly here."
 
 
 class TestDetectQuarter:
-    def test_first_quarter_text(self):
+    def test_first_quarter_text(self) -> None:
         assert _detect_quarter(EARNINGS_Q1, 1) == "Q1"
 
-    def test_second_quarter_text(self):
+    def test_second_quarter_text(self) -> None:
         assert _detect_quarter(EARNINGS_Q2, 4) == "Q2"
 
-    def test_q3_abbreviation(self):
+    def test_q3_abbreviation(self) -> None:
         assert _detect_quarter(EARNINGS_Q3, 7) == "Q3"
 
-    def test_fourth_quarter_text(self):
+    def test_fourth_quarter_text(self) -> None:
         assert _detect_quarter(EARNINGS_Q4, 10) == "Q4"
 
-    def test_fallback_to_month_january(self):
+    def test_fallback_to_month_january(self) -> None:
         assert _detect_quarter(PLAIN_PROSE, 1) == "Q1"
 
-    def test_fallback_to_month_april(self):
+    def test_fallback_to_month_april(self) -> None:
         assert _detect_quarter(PLAIN_PROSE, 4) == "Q2"
 
-    def test_fallback_to_month_august(self):
+    def test_fallback_to_month_august(self) -> None:
         assert _detect_quarter(PLAIN_PROSE, 8) == "Q3"
 
-    def test_fallback_to_month_november(self):
+    def test_fallback_to_month_november(self) -> None:
         assert _detect_quarter(PLAIN_PROSE, 11) == "Q4"
 
-    def test_case_insensitive(self):
+    def test_case_insensitive(self) -> None:
         assert _detect_quarter("FIRST QUARTER results were strong.", 1) == "Q1"
 
-    def test_only_first_3000_chars_scanned(self):
+    def test_only_first_3000_chars_scanned(self) -> None:
         # Quarter mention buried past 3000 chars should NOT be detected
         far_text = ("x " * 2000) + "first quarter results"
         result = _detect_quarter(far_text, 6)
@@ -66,43 +66,43 @@ class TestDetectQuarter:
 
 
 class TestExtractMetadata:
-    def test_returns_document_metadata(self):
+    def test_returns_document_metadata(self) -> None:
         result = extract_metadata(TICKER, DATE, EARNINGS_Q4)
         assert isinstance(result, DocumentMetadata)
 
-    def test_ticker_preserved(self):
+    def test_ticker_preserved(self) -> None:
         result = extract_metadata(TICKER, DATE, EARNINGS_Q4)
         assert result.ticker == TICKER
 
-    def test_date_preserved(self):
+    def test_date_preserved(self) -> None:
         result = extract_metadata(TICKER, DATE, EARNINGS_Q4)
         assert result.date == DATE
 
-    def test_year_parsed_from_date(self):
+    def test_year_parsed_from_date(self) -> None:
         result = extract_metadata(TICKER, DATE, EARNINGS_Q4)
         assert result.year == 2024
 
-    def test_quarter_detected_from_prose(self):
+    def test_quarter_detected_from_prose(self) -> None:
         result = extract_metadata(TICKER, DATE, EARNINGS_Q1)
         assert result.quarter == "Q1"
 
-    def test_fiscal_period_format(self):
+    def test_fiscal_period_format(self) -> None:
         result = extract_metadata(TICKER, "2024-10-31", EARNINGS_Q4)
         assert result.fiscal_period == f"{result.quarter} 2024"
 
-    def test_known_ticker_maps_to_company(self):
+    def test_known_ticker_maps_to_company(self) -> None:
         result = extract_metadata("NVDA", DATE, PLAIN_PROSE)
         assert result.company == "NVIDIA"
 
-    def test_unknown_ticker_uses_ticker_as_company(self):
+    def test_unknown_ticker_uses_ticker_as_company(self) -> None:
         result = extract_metadata("XYZ", DATE, PLAIN_PROSE)
         assert result.company == "XYZ"
 
-    def test_all_10_tickers_in_company_map(self):
+    def test_all_10_tickers_in_company_map(self) -> None:
         expected = {"AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", "WMT"}
         assert expected.issubset(set(COMPANY_MAP.keys()))
 
-    def test_malformed_date_does_not_crash(self):
+    def test_malformed_date_does_not_crash(self) -> None:
         result = extract_metadata(TICKER, "2024", PLAIN_PROSE)
         assert result.year == 2024
 
@@ -116,6 +116,6 @@ class TestExtractMetadata:
             ("WMT", "Walmart"),
         ],
     )
-    def test_company_map_spot_check(self, ticker, company):
+    def test_company_map_spot_check(self, ticker, company) -> None:
         result = extract_metadata(ticker, DATE, PLAIN_PROSE)
         assert result.company == company

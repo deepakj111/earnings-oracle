@@ -34,21 +34,21 @@ class MetadataFilterIn(BaseModel):
     """
 
     ticker: str | None = Field(
-        None,
+        default=None,
         description=(
             "Company ticker. Supported: AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, WMT"
         ),
         examples=["AAPL"],
     )
     year: int | None = Field(
-        None,
+        default=None,
         ge=2020,
         le=2030,
         description="Fiscal year (2020–2030).",
         examples=[2024],
     )
     quarter: str | None = Field(
-        None,
+        default=None,
         description="Fiscal quarter — Q1, Q2, Q3, or Q4.",
         examples=["Q4"],
     )
@@ -87,14 +87,14 @@ class AskRequest(BaseModel):
         examples=["What was Apple's total revenue in Q4 2024?"],
     )
     filter: MetadataFilterIn | None = Field(
-        None,
+        default=None,
         description=(
             "Optional scoping filter. Restricts retrieval to matching filings. "
             "Omit to search across all ingested companies and periods."
         ),
     )
     verbose: bool = Field(
-        False,
+        default=False,
         description=(
             "When true, the response includes query_summary (query transformation details) "
             "and retrieval_summary (ranked chunk diagnostics). Adds negligible overhead."
@@ -185,11 +185,11 @@ class AskResponse(BaseModel):
     )
     # Verbose diagnostics — None unless AskRequest.verbose=True
     query_summary: str | None = Field(
-        None,
+        default=None,
         description="Query transformation details: HyDE doc, multi-queries, step-back query.",
     )
     retrieval_summary: str | None = Field(
-        None,
+        default=None,
         description="Retrieval diagnostics: candidate counts, rerank scores, sources.",
     )
 
@@ -199,7 +199,9 @@ class AskResponse(BaseModel):
 
 class ComponentStatus(BaseModel):
     status: str = Field(..., description="'ok' | 'error'")
-    detail: str | None = Field(None, description="Human-readable status detail or error message.")
+    detail: str | None = Field(
+        default=None, description="Human-readable status detail or error message."
+    )
 
 
 class HealthResponse(BaseModel):

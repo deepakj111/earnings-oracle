@@ -31,7 +31,7 @@ def _make_result(chunk_id: str, rrf_score: float, text: str = "dummy text") -> S
 
 
 class TestRerankDisabled:
-    def test_returns_rrf_sorted_when_disabled(self):
+    def test_returns_rrf_sorted_when_disabled(self) -> None:
         candidates = [
             _make_result("a", rrf_score=0.01),
             _make_result("b", rrf_score=0.05),
@@ -45,7 +45,7 @@ class TestRerankDisabled:
         scores = [r.rerank_score for r in results]
         assert scores == sorted(scores, reverse=True)
 
-    def test_truncates_to_top_k_when_disabled(self):
+    def test_truncates_to_top_k_when_disabled(self) -> None:
         candidates = [_make_result(f"chunk_{i}", rrf_score=float(i)) for i in range(10)]
         with patch("retrieval.reranker.settings") as mock_settings:
             mock_settings.reranker.enabled = False
@@ -53,7 +53,7 @@ class TestRerankDisabled:
             results = rerank("test", candidates)
         assert len(results) == 3
 
-    def test_rerank_score_set_to_rrf_when_disabled(self):
+    def test_rerank_score_set_to_rrf_when_disabled(self) -> None:
         c = _make_result("x", rrf_score=0.042)
         with patch("retrieval.reranker.settings") as mock_settings:
             mock_settings.reranker.enabled = False
@@ -69,7 +69,7 @@ class TestRerankEnabled:
         mock_rerank_request_cls = MagicMock()
         return ranker, mock_rerank_request_cls
 
-    def test_returns_top_k_final_results(self):
+    def test_returns_top_k_final_results(self) -> None:
         candidates = [_make_result(f"c{i}", rrf_score=0.01) for i in range(10)]
         mock_ranker, mock_rrc = self._mock_ranker([float(i) for i in range(10)])
         with (
@@ -81,7 +81,7 @@ class TestRerankEnabled:
             results = rerank("test", candidates)
         assert len(results) == 3
 
-    def test_results_sorted_by_rerank_score_descending(self):
+    def test_results_sorted_by_rerank_score_descending(self) -> None:
         candidates = [_make_result(f"c{i}", rrf_score=0.01) for i in range(4)]
         scores = [0.3, 0.9, 0.1, 0.7]
         mock_ranker, mock_rrc = self._mock_ranker(scores)
@@ -95,7 +95,7 @@ class TestRerankEnabled:
         result_scores = [r.rerank_score for r in results]
         assert result_scores == sorted(result_scores, reverse=True)
 
-    def test_rerank_score_populated_from_flashrank(self):
+    def test_rerank_score_populated_from_flashrank(self) -> None:
         candidates = [_make_result("only_one", rrf_score=0.02)]
         mock_ranker, mock_rrc = self._mock_ranker([0.88])
         with (
@@ -107,7 +107,7 @@ class TestRerankEnabled:
             results = rerank("q", candidates)
         assert results[0].rerank_score == pytest.approx(0.88)
 
-    def test_flashrank_failure_falls_back_to_rrf_order(self):
+    def test_flashrank_failure_falls_back_to_rrf_order(self) -> None:
         candidates = [
             _make_result("a", rrf_score=0.05),
             _make_result("b", rrf_score=0.02),

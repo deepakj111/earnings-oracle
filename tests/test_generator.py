@@ -110,27 +110,27 @@ class TestExtractCitations:
     def _make_results(self, n: int) -> list[SearchResult]:
         return [_make_result(chunk_id=f"c{i}", rerank_score=1.0 - i * 0.1) for i in range(n)]
 
-    def test_single_citation(self):
+    def test_single_citation(self) -> None:
         results = self._make_results(3)
         citations = _extract_citations("Revenue was $100B [1].", results)
         assert len(citations) == 1
         assert citations[0].index == 1
         assert citations[0].chunk_id == "c0"
 
-    def test_multiple_distinct_citations(self):
+    def test_multiple_distinct_citations(self) -> None:
         results = self._make_results(3)
         citations = _extract_citations("Revenue [1]. EPS [2]. Guidance [3].", results)
         assert len(citations) == 3
         assert [c.index for c in citations] == [1, 2, 3]
 
-    def test_duplicate_citation_deduplicated(self):
+    def test_duplicate_citation_deduplicated(self) -> None:
         """Same citation number appearing twice → only one Citation object."""
         results = self._make_results(3)
         citations = _extract_citations("Revenue [1] was good [1].", results)
         assert len(citations) == 1
         assert citations[0].index == 1
 
-    def test_multi_citation_claim(self):
+    def test_multi_citation_claim(self) -> None:
         """[1][2] on a single claim → two separate Citation objects."""
         results = self._make_results(3)
         citations = _extract_citations("Revenue [1][2] shows strength.", results)
@@ -138,12 +138,12 @@ class TestExtractCitations:
         indices = {c.index for c in citations}
         assert indices == {1, 2}
 
-    def test_no_citations_returns_empty(self):
+    def test_no_citations_returns_empty(self) -> None:
         results = self._make_results(3)
         citations = _extract_citations("Revenue was strong.", results)
         assert citations == []
 
-    def test_out_of_range_citation_skipped(self, caplog):
+    def test_out_of_range_citation_skipped(self, caplog) -> None:
         """[99] with only 2 results → skipped with a warning, no crash."""
         import logging
 
@@ -153,7 +153,7 @@ class TestExtractCitations:
         assert citations == []
         assert "99" in caplog.text or "Hallucinated" in caplog.text
 
-    def test_citation_metadata_populated(self):
+    def test_citation_metadata_populated(self) -> None:
         r = _make_result(
             chunk_id="aapl_c1",
             ticker="AAPL",
@@ -172,24 +172,24 @@ class TestExtractCitations:
         assert c.rerank_score == pytest.approx(0.95)
         assert "Apple Services" in c.excerpt
 
-    def test_excerpt_truncated_to_250_chars(self):
+    def test_excerpt_truncated_to_250_chars(self) -> None:
         long_text = "x" * 500
         r = _make_result(parent_text=long_text)
         citations = _extract_citations("[1]", [r])
         assert len(citations[0].excerpt) <= 250
 
-    def test_citations_sorted_by_index(self):
+    def test_citations_sorted_by_index(self) -> None:
         """Citations must be returned in ascending index order."""
         results = self._make_results(5)
         citations = _extract_citations("[3] then [1] then [5].", results)
         indices = [c.index for c in citations]
         assert indices == sorted(indices)
 
-    def test_empty_answer_returns_empty(self):
+    def test_empty_answer_returns_empty(self) -> None:
         results = self._make_results(3)
         assert _extract_citations("", results) == []
 
-    def test_empty_results_with_citation_returns_empty(self, caplog):
+    def test_empty_results_with_citation_returns_empty(self, caplog) -> None:
         import logging
 
         with caplog.at_level(logging.WARNING):
@@ -201,31 +201,31 @@ class TestExtractCitations:
 
 
 class TestIsGrounded:
-    def test_normal_answer_is_grounded(self):
+    def test_normal_answer_is_grounded(self) -> None:
         answer = "Apple reported $100B in revenue for Q4 2024 [1]."
         assert _is_grounded(answer) is True
 
-    def test_empty_answer_is_grounded(self):
+    def test_empty_answer_is_grounded(self) -> None:
         # Empty doesn't trigger ungrounded phrases — caller handles empty separately
         assert _is_grounded("") is True
 
     @pytest.mark.parametrize("phrase", UNGROUNDED_PHRASES)
-    def test_each_ungrounded_phrase_detected(self, phrase: str):
+    def test_each_ungrounded_phrase_detected(self, phrase: str) -> None:
         answer = f"The {phrase} to answer this question."
         assert _is_grounded(answer) is False
 
-    def test_case_insensitive_detection(self):
+    def test_case_insensitive_detection(self) -> None:
         answer = "The PROVIDED DOCUMENTS DO NOT CONTAIN SUFFICIENT INFORMATION."
         assert _is_grounded(answer) is False
 
-    def test_phrase_embedded_in_sentence_detected(self):
+    def test_phrase_embedded_in_sentence_detected(self) -> None:
         answer = (
             "While I can provide some context, the documents do not contain "
             "sufficient information about the specific metric you asked for."
         )
         assert _is_grounded(answer) is False
 
-    def test_partial_phrase_not_detected(self):
+    def test_partial_phrase_not_detected(self) -> None:
         """'cannot' alone shouldn't trigger 'cannot determine'."""
         answer = "I cannot confirm the exact figures without more context."
         # 'cannot determine' is not present — should be grounded
@@ -237,7 +237,7 @@ class TestIsGrounded:
 
 class TestGeneratorGenerate:
     @patch("generation.generator._get_client")
-    def test_empty_retrieval_returns_no_context_answer(self, mock_get_client):
+    def test_empty_retrieval_returns_no_context_answer(self, mock_get_client) -> None:
         """Empty RetrievalResult must return the no-context fallback immediately."""
         generator = Generator()
         result = generator.generate(
@@ -254,7 +254,7 @@ class TestGeneratorGenerate:
         mock_get_client.assert_not_called()
 
     @patch("generation.generator._call_llm")
-    def test_generate_returns_generation_result(self, mock_call_llm):
+    def test_generate_returns_generation_result(self, mock_call_llm) -> None:
         """Happy path: mocked LLM returns an answer with citations."""
         mock_call_llm.return_value = (
             "Apple reported revenue of $94.9B [1], up 6% YoY [1].",
@@ -278,7 +278,7 @@ class TestGeneratorGenerate:
         assert "Apple" in result.answer
 
     @patch("generation.generator._call_llm")
-    def test_citations_extracted_from_answer(self, mock_call_llm):
+    def test_citations_extracted_from_answer(self, mock_call_llm) -> None:
         mock_call_llm.return_value = (
             "Revenue was $94.9B [1]. Services was $26.3B [1].",
             200,
@@ -294,7 +294,7 @@ class TestGeneratorGenerate:
         assert result.citations[0].chunk_id == "aapl_c1"
 
     @patch("generation.generator._call_llm")
-    def test_ungrounded_answer_sets_grounded_false(self, mock_call_llm):
+    def test_ungrounded_answer_sets_grounded_false(self, mock_call_llm) -> None:
         mock_call_llm.return_value = (
             "The provided documents do not contain sufficient information to answer this question.",
             150,
@@ -308,7 +308,7 @@ class TestGeneratorGenerate:
         assert result.citations == []
 
     @patch("generation.generator._call_llm")
-    def test_context_chunks_used_populated(self, mock_call_llm):
+    def test_context_chunks_used_populated(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1].", 100, 20)
         results = [_make_result(chunk_id=f"c{i}") for i in range(5)]
         result = Generator().generate(
@@ -318,7 +318,7 @@ class TestGeneratorGenerate:
         assert 1 <= result.context_chunks_used <= 5
 
     @patch("generation.generator._call_llm")
-    def test_context_tokens_used_populated(self, mock_call_llm):
+    def test_context_tokens_used_populated(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1].", 100, 20)
         result = Generator().generate(
             question="Revenue?",
@@ -327,7 +327,7 @@ class TestGeneratorGenerate:
         assert result.context_tokens_used > 0
 
     @patch("generation.generator._call_llm")
-    def test_format_answer_with_citations_output(self, mock_call_llm):
+    def test_format_answer_with_citations_output(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue was $100B [1].", 100, 20)
         r = _make_result(ticker="AAPL", fiscal_period="Q4 2024", section_title="Revenue")
         result = Generator().generate(
@@ -340,7 +340,7 @@ class TestGeneratorGenerate:
         assert "[1]" in formatted
 
     @patch("generation.generator._call_llm")
-    def test_to_dict_structure(self, mock_call_llm):
+    def test_to_dict_structure(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1].", 100, 20)
         result = Generator().generate(
             question="Revenue?",
@@ -358,7 +358,7 @@ class TestGeneratorGenerate:
         assert "unique_sources" in d
 
     @patch("generation.generator._call_llm")
-    def test_unique_sources_populated(self, mock_call_llm):
+    def test_unique_sources_populated(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1][2].", 200, 40)
         r1 = _make_result("c1", ticker="AAPL", fiscal_period="Q4 2024", parent_id="p1")
         r2 = _make_result("c2", ticker="NVDA", fiscal_period="Q3 2024", parent_id="p2")
@@ -375,7 +375,7 @@ class TestGeneratorGenerate:
 
 
 class TestGeneratorStreaming:
-    def test_empty_retrieval_yields_no_context_message(self):
+    def test_empty_retrieval_yields_no_context_message(self) -> None:
         generator = Generator()
         tokens = list(
             generator.generate_streaming(
@@ -387,7 +387,7 @@ class TestGeneratorStreaming:
         assert "No relevant documents" in full_text
 
     @patch("generation.generator._get_client")
-    def test_streaming_yields_tokens(self, mock_get_client):
+    def test_streaming_yields_tokens(self, mock_get_client) -> None:
         """Mock the streaming API and verify tokens are yielded correctly."""
 
         # Build fake streaming chunks

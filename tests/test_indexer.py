@@ -66,7 +66,7 @@ def _mock_embed_model(vec: list[float] | None = None) -> MagicMock:
 
 
 class TestGetEmbedding:
-    def test_returns_list_of_floats(self):
+    def test_returns_list_of_floats(self) -> None:
         mock_model = _mock_embed_model()
         with patch("ingestion.indexer._embed_model", mock_model):
             result = _get_embeddings(["Revenue grew 6 percent."])
@@ -75,13 +75,13 @@ class TestGetEmbedding:
         assert isinstance(result[0], list)
         assert all(isinstance(v, float) for v in result[0])
 
-    def test_returns_correct_dimension(self):
+    def test_returns_correct_dimension(self) -> None:
         mock_model = _mock_embed_model()
         with patch("ingestion.indexer._embed_model", mock_model):
             result = _get_embeddings(["Revenue grew 6 percent."])
         assert len(result[0]) == VECTOR_DIM
 
-    def test_output_is_unit_normalized(self):
+    def test_output_is_unit_normalized(self) -> None:
         raw = np.array([3.0, 4.0] + [0.0] * (VECTOR_DIM - 2), dtype=np.float32)
         mock_model = MagicMock()
         mock_model.embed.side_effect = lambda texts: iter([raw for _ in texts])
@@ -90,7 +90,7 @@ class TestGetEmbedding:
         norm = np.linalg.norm(np.array(result[0], dtype=np.float32))
         assert abs(norm - 1.0) < 1e-5
 
-    def test_raises_if_client_not_initialized(self):
+    def test_raises_if_client_not_initialized(self) -> None:
         with patch("ingestion.indexer._embed_model", None):
             with pytest.raises(RuntimeError, match="setup_embedder"):
                 _get_embeddings(["Revenue grew 6 percent."])
@@ -122,39 +122,39 @@ class TestIndexDocument:
 
     # ── Return type ───────────────────────────────────────────────────────────
 
-    async def test_returns_tuple_of_two_lists(self):
+    async def test_returns_tuple_of_two_lists(self) -> None:
         chunks = [_make_chunk("child", 0, "parent_0")]
         bm25_texts, bm25_corpus, _, _ = await self._run(chunks)
         assert isinstance(bm25_texts, list)
         assert isinstance(bm25_corpus, list)
 
-    async def test_bm25_texts_and_corpus_always_same_length(self):
+    async def test_bm25_texts_and_corpus_always_same_length(self) -> None:
         children = [_make_chunk("child", i, "parent_0") for i in range(7)]
         bm25_texts, bm25_corpus, _, _ = await self._run(children)
         assert len(bm25_texts) == len(bm25_corpus)
 
     # ── Embedding ─────────────────────────────────────────────────────────────
 
-    async def test_only_children_are_embedded(self):
+    async def test_only_children_are_embedded(self) -> None:
         parent = _make_chunk("parent", 0)
         child = _make_chunk("child", 1, parent.chunk_id)
         table = _make_chunk("table", 2)
         _, _, _, mock_model = await self._run([parent, child, table])
         assert mock_model.embed.call_count == 1
 
-    async def test_no_children_produces_no_embed_calls(self):
+    async def test_no_children_produces_no_embed_calls(self) -> None:
         parent = _make_chunk("parent", 0)
         _, _, _, mock_model = await self._run([parent])
         mock_model.embed.assert_not_called()
 
     # ── BM25 texts ────────────────────────────────────────────────────────────
 
-    async def test_bm25_texts_grows_by_child_count(self):
+    async def test_bm25_texts_grows_by_child_count(self) -> None:
         children = [_make_chunk("child", i, "parent_0") for i in range(5)]
         bm25_texts, _, _, _ = await self._run(children)
         assert len(bm25_texts) == 5
 
-    async def test_bm25_texts_are_lowercase_token_lists(self):
+    async def test_bm25_texts_are_lowercase_token_lists(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         bm25_texts, _, _, _ = await self._run([child])
         assert isinstance(bm25_texts[0], list)
@@ -162,12 +162,12 @@ class TestIndexDocument:
 
     # ── BM25 corpus ───────────────────────────────────────────────────────────
 
-    async def test_bm25_corpus_grows_by_child_count(self):
+    async def test_bm25_corpus_grows_by_child_count(self) -> None:
         children = [_make_chunk("child", i, "parent_0") for i in range(5)]
         _, bm25_corpus, _, _ = await self._run(children)
         assert len(bm25_corpus) == 5
 
-    async def test_bm25_corpus_entry_has_required_fields(self):
+    async def test_bm25_corpus_entry_has_required_fields(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         _, bm25_corpus, _, _ = await self._run([child])
         entry = bm25_corpus[0]
@@ -185,7 +185,7 @@ class TestIndexDocument:
         }
         assert required.issubset(entry.keys())
 
-    async def test_bm25_corpus_entry_values_match_metadata(self):
+    async def test_bm25_corpus_entry_values_match_metadata(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         meta = _make_metadata()
         _, bm25_corpus, _, _ = await self._run([child], metadata=meta)
@@ -196,22 +196,22 @@ class TestIndexDocument:
         assert entry["quarter"] == "Q1"
         assert entry["fiscal_period"] == "Q1 2024"
 
-    async def test_bm25_corpus_entry_chunk_id_matches_chunk(self):
+    async def test_bm25_corpus_entry_chunk_id_matches_chunk(self) -> None:
         child = _make_chunk("child", 3, "parent_0")
         _, bm25_corpus, _, _ = await self._run([child])
         assert bm25_corpus[0]["chunk_id"] == "AAPL_2024-01-01_abc_3"
 
-    async def test_bm25_corpus_entry_parent_id_matches_chunk(self):
+    async def test_bm25_corpus_entry_parent_id_matches_chunk(self) -> None:
         child = _make_chunk("child", 0, "AAPL_2024-01-01_abc_parent")
         _, bm25_corpus, _, _ = await self._run([child])
         assert bm25_corpus[0]["parent_id"] == "AAPL_2024-01-01_abc_parent"
 
-    async def test_bm25_corpus_entry_section_title_stored(self):
+    async def test_bm25_corpus_entry_section_title_stored(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         _, bm25_corpus, _, _ = await self._run([child])
         assert bm25_corpus[0]["section_title"] == "Financial Highlights"
 
-    async def test_bm25_texts_and_corpus_index_alignment(self):
+    async def test_bm25_texts_and_corpus_index_alignment(self) -> None:
         # The i-th token list in bm25_texts must correspond to bm25_corpus[i].
         # Verify by checking that the text field in corpus tokenises to the same
         # tokens as bm25_texts[i].
@@ -223,18 +223,18 @@ class TestIndexDocument:
 
     # ── Qdrant upsert ─────────────────────────────────────────────────────────
 
-    async def test_qdrant_upsert_called(self):
+    async def test_qdrant_upsert_called(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         _, _, mock_qdrant, _ = await self._run([child])
         mock_qdrant.upsert.assert_called_once()
 
-    async def test_upsert_uses_correct_collection(self):
+    async def test_upsert_uses_correct_collection(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         _, _, mock_qdrant, _ = await self._run([child])
         call_kwargs = mock_qdrant.upsert.call_args.kwargs
         assert call_kwargs["collection_name"] == COLLECTION_NAME
 
-    async def test_point_payload_has_required_fields(self):
+    async def test_point_payload_has_required_fields(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         _, _, mock_qdrant, _ = await self._run([child])
         point = mock_qdrant.upsert.call_args.kwargs["points"][0]
@@ -252,7 +252,7 @@ class TestIndexDocument:
         }
         assert required.issubset(point.payload.keys())
 
-    async def test_point_payload_ticker_matches_metadata(self):
+    async def test_point_payload_ticker_matches_metadata(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         meta = _make_metadata()
         _, _, mock_qdrant, _ = await self._run([child], metadata=meta)
@@ -260,19 +260,19 @@ class TestIndexDocument:
         assert point.payload["ticker"] == "AAPL"
         assert point.payload["company"] == "Apple"
 
-    async def test_point_payload_section_title_stored(self):
+    async def test_point_payload_section_title_stored(self) -> None:
         child = _make_chunk("child", 0, "parent_0")
         _, _, mock_qdrant, _ = await self._run([child])
         point = mock_qdrant.upsert.call_args.kwargs["points"][0]
         assert point.payload["section_title"] == "Financial Highlights"
 
-    async def test_batching_for_large_input(self):
+    async def test_batching_for_large_input(self) -> None:
         n_children = UPSERT_BATCH_SIZE * 3 + 1
         children = [_make_chunk("child", i, "parent_0") for i in range(n_children)]
         _, _, mock_qdrant, _ = await self._run(children)
         assert mock_qdrant.upsert.call_count == 4  # ceil(151 / 50) = 4
 
-    async def test_no_children_produces_no_upsert(self):
+    async def test_no_children_produces_no_upsert(self) -> None:
         parent = _make_chunk("parent", 0)
         _, _, mock_qdrant, _ = await self._run([parent])
         mock_qdrant.upsert.assert_not_called()

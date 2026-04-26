@@ -21,6 +21,7 @@ Exported symbols used by the rest of the codebase:
 from __future__ import annotations
 
 import time
+import typing
 from typing import TYPE_CHECKING
 
 from prometheus_client import CollectorRegistry, Counter, Histogram
@@ -171,7 +172,7 @@ class PrometheusMiddleware:
         status_code = 500
         start = time.perf_counter()
 
-        async def send_with_status(message: dict) -> None:
+        async def send_with_status(message: typing.MutableMapping[str, typing.Any]) -> None:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
@@ -231,7 +232,7 @@ def record_pipeline_latency(layer: str, seconds: float) -> None:
     rag_pipeline_latency_seconds.labels(layer=layer).observe(seconds)
 
 
-def record_crag_result(result: object) -> None:
+def record_crag_result(result: typing.Any) -> None:
     """Push CRAG action counter from a CRAGResult."""
     action = result.action.value if hasattr(result.action, "value") else str(result.action)
     rag_crag_actions_total.labels(action=action).inc()

@@ -2,7 +2,7 @@ from evaluation.models import EvalReport, EvalSample, EvalSampleResult, MetricSc
 from evaluation.statistics import compare_models, compute_bootstrap_ci
 
 
-def test_compute_bootstrap_ci():
+def test_compute_bootstrap_ci() -> None:
     # Setup deterministic scores
     scores = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
@@ -16,7 +16,7 @@ def test_compute_bootstrap_ci():
     assert lower < upper
 
 
-def test_compute_bootstrap_ci_edge_cases():
+def test_compute_bootstrap_ci_edge_cases() -> None:
     assert compute_bootstrap_ci([]) == (0.0, 0.0)
     assert compute_bootstrap_ci([0.5]) == (0.5, 0.5)
 
@@ -48,7 +48,7 @@ def _build_mock_report(scores_dict):
     )
 
 
-def test_compare_models_significant_difference():
+def test_compare_models_significant_difference() -> None:
     # Report A has generally lower scores than Report B
     report_a = _build_mock_report(
         {
@@ -78,7 +78,7 @@ def test_compare_models_significant_difference():
     assert results["faithfulness"]["wilcoxon_p_value"] <= 0.0625
 
 
-def test_compare_models_identical():
+def test_compare_models_identical() -> None:
     report_a = _build_mock_report(
         {
             "1": {"relevancy": 0.8},

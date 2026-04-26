@@ -93,22 +93,22 @@ class TestGet8kFilings:
         ):
             return get_8k_filings("0000320193", "AAPL", start, end)
 
-    def test_returns_only_8k_forms(self):
+    def test_returns_only_8k_forms(self) -> None:
         results = self._run()
         assert all(r.get("ticker") == "AAPL" for r in results)
 
-    def test_filters_out_10q(self):
+    def test_filters_out_10q(self) -> None:
         results = self._run()
         # 10-Q at index 1 must not appear
         assert len(results) == 1
 
-    def test_filters_by_date_range(self):
+    def test_filters_by_date_range(self) -> None:
         results = self._run(start="2023-01-01", end="2025-12-31")
         # 2022-12-01 and 2025-06-01 both outside range
         assert len(results) == 1
         assert results[0]["date"] == "2024-10-31"
 
-    def test_result_contains_required_keys(self):
+    def test_result_contains_required_keys(self) -> None:
         results = self._run()
         for r in results:
             assert "ticker" in r
@@ -116,11 +116,11 @@ class TestGet8kFilings:
             assert "date" in r
             assert "accession" in r
 
-    def test_ticker_attached_to_result(self):
+    def test_ticker_attached_to_result(self) -> None:
         results = self._run()
         assert results[0]["ticker"] == "AAPL"
 
-    def test_empty_range_returns_empty(self):
+    def test_empty_range_returns_empty(self) -> None:
         results = self._run(start="2020-01-01", end="2020-12-31")
         assert results == []
 
@@ -136,26 +136,26 @@ class TestGetFilingDocuments:
         ):
             return get_filing_documents("0000320193", "0001234567-24-000001")
 
-    def test_returns_list(self):
+    def test_returns_list(self) -> None:
         result = self._run()
         assert isinstance(result, list)
 
-    def test_parses_exhibit_type(self):
+    def test_parses_exhibit_type(self) -> None:
         result = self._run()
         types = [d["type"] for d in result]
         assert "EX-99.1" in types
 
-    def test_parses_8k_form_type(self):
+    def test_parses_8k_form_type(self) -> None:
         result = self._run()
         types = [d["type"] for d in result]
         assert "8-K" in types
 
-    def test_parses_document_name(self):
+    def test_parses_document_name(self) -> None:
         result = self._run()
         names = [d["name"] for d in result]
         assert "ex99_1.htm" in names
 
-    def test_failed_index_returns_empty(self):
+    def test_failed_index_returns_empty(self) -> None:
         result = self._run(status=404)
         assert result == []
 
@@ -164,35 +164,35 @@ class TestGetFilingDocuments:
 
 
 class TestPickBestDocument:
-    def test_prefers_ex99_1_over_8k(self):
+    def test_prefers_ex99_1_over_8k(self) -> None:
         docs = [
             {"name": "form8k.htm", "type": "8-K", "description": "form 8-k"},
             {"name": "ex99_1.htm", "type": "EX-99.1", "description": "press release"},
         ]
         assert pick_best_document(docs) == "ex99_1.htm"
 
-    def test_fallback_to_8k_body(self):
+    def test_fallback_to_8k_body(self) -> None:
         docs = [
             {"name": "form8k.htm", "type": "8-K", "description": "form 8-k"},
         ]
         assert pick_best_document(docs) == "form8k.htm"
 
-    def test_returns_none_when_no_document(self):
+    def test_returns_none_when_no_document(self) -> None:
         docs = [
             {"name": "cover.htm", "type": "COVER", "description": "cover page"},
         ]
         assert pick_best_document(docs) is None
 
-    def test_empty_list_returns_none(self):
+    def test_empty_list_returns_none(self) -> None:
         assert pick_best_document([]) is None
 
-    def test_ex99_2_also_accepted(self):
+    def test_ex99_2_also_accepted(self) -> None:
         docs = [
             {"name": "ex99_2.htm", "type": "EX-99.2", "description": "tables"},
         ]
         assert pick_best_document(docs) == "ex99_2.htm"
 
-    def test_description_keyword_match(self):
+    def test_description_keyword_match(self) -> None:
         docs = [
             {"name": "results.htm", "type": "OTHER", "description": "earnings press release"},
         ]
@@ -206,7 +206,7 @@ class TestDownloadDocument:
     def _filing_meta(self):
         return {"ticker": "AAPL", "date": "2024-10-31"}
 
-    def test_returns_path_on_success(self, tmp_path):
+    def test_returns_path_on_success(self, tmp_path) -> None:
         with patch(
             "ingestion.download_filings.requests.get",
             return_value=_mock_response(text="<html>content</html>"),
@@ -221,7 +221,7 @@ class TestDownloadDocument:
         assert result is not None
         assert result.endswith(".htm")
 
-    def test_file_written_to_disk(self, tmp_path):
+    def test_file_written_to_disk(self, tmp_path) -> None:
         with patch(
             "ingestion.download_filings.requests.get",
             return_value=_mock_response(text="<html>earnings</html>"),
@@ -236,7 +236,7 @@ class TestDownloadDocument:
         files = list(tmp_path.glob("*.htm"))
         assert len(files) == 1
 
-    def test_returns_none_on_http_error(self, tmp_path):
+    def test_returns_none_on_http_error(self, tmp_path) -> None:
         with patch(
             "ingestion.download_filings.requests.get", return_value=_mock_response(status_code=403)
         ):
@@ -249,7 +249,7 @@ class TestDownloadDocument:
             )
         assert result is None
 
-    def test_filename_contains_ticker_and_date(self, tmp_path):
+    def test_filename_contains_ticker_and_date(self, tmp_path) -> None:
         with patch(
             "ingestion.download_filings.requests.get",
             return_value=_mock_response(text="<html>content</html>"),

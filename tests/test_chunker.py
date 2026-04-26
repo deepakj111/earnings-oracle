@@ -66,18 +66,18 @@ def _long_prose(n_words: int = 600) -> str:
 
 
 class TestTokenCount:
-    def test_empty_string_returns_zero(self):
+    def test_empty_string_returns_zero(self) -> None:
         assert _token_count("") == 0
 
-    def test_single_word(self):
+    def test_single_word(self) -> None:
         assert _token_count("hello") >= 1
 
-    def test_longer_text_returns_more_tokens(self):
+    def test_longer_text_returns_more_tokens(self) -> None:
         short = _token_count("hello world")
         long = _token_count("hello world " * 50)
         assert long > short
 
-    def test_financial_notation_handled(self):
+    def test_financial_notation_handled(self) -> None:
         # Tickers, dollar signs, percentages — should not raise
         result = _token_count("AAPL revenue $94.9B (+6% YoY) beat $93.1B estimate")
         assert result > 0
@@ -87,28 +87,28 @@ class TestTokenCount:
 
 
 class TestIsTableBlock:
-    def test_markdown_table_detected(self):
+    def test_markdown_table_detected(self) -> None:
         lines = MARKDOWN_TABLE.splitlines()
         assert _is_table_block(lines) is True
 
-    def test_prose_not_detected_as_table(self):
+    def test_prose_not_detected_as_table(self) -> None:
         lines = EARNINGS_PROSE.splitlines()
         assert _is_table_block(lines) is False
 
-    def test_empty_list_returns_false(self):
+    def test_empty_list_returns_false(self) -> None:
         assert _is_table_block([]) is False
 
-    def test_single_pipe_line_below_threshold(self):
+    def test_single_pipe_line_below_threshold(self) -> None:
         # One pipe line is NOT a table — avoids false positives in prose
         lines = ["| some data |"]
         assert _is_table_block(lines) is False
 
-    def test_exactly_threshold_lines_required(self):
+    def test_exactly_threshold_lines_required(self) -> None:
         # TABLE_LINE_THRESHOLD lines minimum — just below should fail
         lines = ["| col1 | col2 |"] * (TABLE_LINE_THRESHOLD - 1)
         assert _is_table_block(lines) is False
 
-    def test_mixed_block_below_40pct_not_table(self):
+    def test_mixed_block_below_40pct_not_table(self) -> None:
         # 1 pipe line out of 5 total = 20% — below 40% threshold
         lines = [
             "Revenue grew 6 percent this quarter.",
@@ -119,7 +119,7 @@ class TestIsTableBlock:
         ]
         assert _is_table_block(lines) is False
 
-    def test_blank_lines_ignored_in_ratio(self):
+    def test_blank_lines_ignored_in_ratio(self) -> None:
         lines = ["", "  ", "| col1 |", "| col2 |", "| col3 |", ""]
         assert _is_table_block(lines) is True
 
@@ -128,34 +128,34 @@ class TestIsTableBlock:
 
 
 class TestMakeChunkId:
-    def test_deterministic_same_inputs(self):
+    def test_deterministic_same_inputs(self) -> None:
         id1 = _make_chunk_id(TICKER, DATE, 0)
         id2 = _make_chunk_id(TICKER, DATE, 0)
         assert id1 == id2
 
-    def test_different_index_gives_different_id(self):
+    def test_different_index_gives_different_id(self) -> None:
         assert _make_chunk_id(TICKER, DATE, 0) != _make_chunk_id(TICKER, DATE, 1)
 
-    def test_different_ticker_gives_different_id(self):
+    def test_different_ticker_gives_different_id(self) -> None:
         assert _make_chunk_id("AAPL", DATE, 0) != _make_chunk_id("NVDA", DATE, 0)
 
-    def test_different_date_gives_different_id(self):
+    def test_different_date_gives_different_id(self) -> None:
         assert _make_chunk_id(TICKER, "2024-01-01", 0) != _make_chunk_id(TICKER, "2025-01-01", 0)
 
-    def test_suffix_appended(self):
+    def test_suffix_appended(self) -> None:
         chunk_id = _make_chunk_id(TICKER, DATE, 0, "tbl")
         assert chunk_id.endswith("_tbl")
 
-    def test_no_suffix_no_trailing_underscore(self):
+    def test_no_suffix_no_trailing_underscore(self) -> None:
         chunk_id = _make_chunk_id(TICKER, DATE, 0)
         assert not chunk_id.endswith("_")
 
-    def test_id_contains_ticker_and_date(self):
+    def test_id_contains_ticker_and_date(self) -> None:
         chunk_id = _make_chunk_id(TICKER, DATE, 0)
         assert TICKER in chunk_id
         assert DATE in chunk_id
 
-    def test_uuid5_namespace_isolation(self):
+    def test_uuid5_namespace_isolation(self) -> None:
         # Different companies on same date should never collide
         ids = {_make_chunk_id(t, DATE, 0) for t in ["AAPL", "NVDA", "MSFT", "AMZN", "META"]}
         assert len(ids) == 5
@@ -165,31 +165,31 @@ class TestMakeChunkId:
 
 
 class TestContextualPrefix:
-    def test_contains_ticker(self):
+    def test_contains_ticker(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "Revenue")
         assert TICKER in prefix
 
-    def test_contains_date(self):
+    def test_contains_date(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "Revenue")
         assert DATE in prefix
 
-    def test_contains_doc_type(self):
+    def test_contains_doc_type(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "Revenue")
         assert DOCTYPE in prefix
 
-    def test_contains_section_title(self):
+    def test_contains_section_title(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "Revenue")
         assert "Revenue" in prefix
 
-    def test_table_sentinel_not_included_in_prefix(self):
+    def test_table_sentinel_not_included_in_prefix(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "__TABLE__")
         assert "__TABLE__" not in prefix
 
-    def test_empty_section_title_omitted(self):
+    def test_empty_section_title_omitted(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "")
         assert "Section:" not in prefix
 
-    def test_ends_with_real_newline(self):
+    def test_ends_with_real_newline(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "Revenue")
         # Must end with a real newline, NOT the literal string "\\n"
         assert prefix.endswith("\n\n"), (
@@ -197,7 +197,7 @@ class TestContextualPrefix:
             "not escaped backslash-n literals"
         )
 
-    def test_no_literal_backslash_n(self):
+    def test_no_literal_backslash_n(self) -> None:
         prefix = _contextual_prefix(TICKER, DATE, DOCTYPE, "Outlook")
         assert "\\n" not in prefix, (
             "Prefix contains literal '\\\\n' string — newline escape bug not fixed"
@@ -208,20 +208,20 @@ class TestContextualPrefix:
 
 
 class TestSplitIntoSemanticSections:
-    def test_returns_list_of_tuples(self):
+    def test_returns_list_of_tuples(self) -> None:
         result = _split_into_semantic_sections([EARNINGS_PROSE])
         assert isinstance(result, list)
         assert all(isinstance(item, tuple) and len(item) == 2 for item in result)
 
-    def test_empty_input_returns_empty(self):
+    def test_empty_input_returns_empty(self) -> None:
         assert _split_into_semantic_sections([]) == []
 
-    def test_below_word_floor_filtered_out(self):
+    def test_below_word_floor_filtered_out(self) -> None:
         # Under 10 words — should be dropped
         result = _split_into_semantic_sections(["too short"])
         assert result == []
 
-    def test_section_header_triggers_split(self):
+    def test_section_header_triggers_split(self) -> None:
         text = EARNINGS_PROSE + "\nOutlook\n" + OUTLOOK_PROSE
         result = _split_into_semantic_sections([text])
         titles = [t for t, _ in result]
@@ -229,19 +229,19 @@ class TestSplitIntoSemanticSections:
             "Expected 'Outlook' header to trigger a split but no section found with that title"
         )
 
-    def test_markdown_header_triggers_split(self):
+    def test_markdown_header_triggers_split(self) -> None:
         text = EARNINGS_PROSE + "\n## Segment Results\n" + OUTLOOK_PROSE
         result = _split_into_semantic_sections([text])
         titles = [t for t, _ in result]
         assert any("Segment Results" in t for t in titles)
 
-    def test_table_emits_table_sentinel(self):
+    def test_table_emits_table_sentinel(self) -> None:
         sections = [EARNINGS_PROSE + "\n" + MARKDOWN_TABLE]
         result = _split_into_semantic_sections(sections)
         sentinels = [t for t, _ in result if t == "__TABLE__"]
         assert len(sentinels) >= 1, "Markdown table should produce a __TABLE__ sentinel"
 
-    def test_real_newlines_used_not_escaped(self):
+    def test_real_newlines_used_not_escaped(self) -> None:
         # Regression: splitting on "\\n" (literal) = no split at all
         # If the bug exists, a multi-line section comes back as one block
         text = EARNINGS_PROSE + "\nOutlook\n" + OUTLOOK_PROSE
@@ -252,7 +252,7 @@ class TestSplitIntoSemanticSections:
             "Likely caused by splitting on literal '\\\\n' instead of real newline."
         )
 
-    def test_prose_without_headers_stays_intact(self):
+    def test_prose_without_headers_stays_intact(self) -> None:
         result = _split_into_semantic_sections([EARNINGS_PROSE])
         assert len(result) == 1
         _, text = result[0]
@@ -268,28 +268,28 @@ class TestCreateParentChildChunks:
             sections = [EARNINGS_PROSE]
         return create_parent_child_chunks(ticker, date, sections, doc_type)
 
-    def test_returns_list_of_chunks(self):
+    def test_returns_list_of_chunks(self) -> None:
         chunks = self._run()
         assert isinstance(chunks, list)
         assert all(isinstance(c, Chunk) for c in chunks)
 
-    def test_empty_sections_returns_empty(self):
+    def test_empty_sections_returns_empty(self) -> None:
         assert create_parent_child_chunks(TICKER, DATE, [], DOCTYPE) == []
 
-    def test_all_below_word_floor_returns_empty(self):
+    def test_all_below_word_floor_returns_empty(self) -> None:
         assert create_parent_child_chunks(TICKER, DATE, ["too short"], DOCTYPE) == []
 
-    def test_parent_chunks_present(self):
+    def test_parent_chunks_present(self) -> None:
         chunks = self._run()
         parents = [c for c in chunks if c.chunk_type == "parent"]
         assert len(parents) >= 1
 
-    def test_child_chunks_present(self):
+    def test_child_chunks_present(self) -> None:
         chunks = self._run()
         children = [c for c in chunks if c.chunk_type == "child"]
         assert len(children) >= 1
 
-    def test_every_child_has_valid_parent_id(self):
+    def test_every_child_has_valid_parent_id(self) -> None:
         chunks = self._run([_long_prose(300)])
         parent_ids = {c.chunk_id for c in chunks if c.chunk_type == "parent"}
         for child in [c for c in chunks if c.chunk_type == "child"]:
@@ -298,12 +298,12 @@ class TestCreateParentChildChunks:
                 "which does not match any parent chunk_id"
             )
 
-    def test_parent_parent_id_is_none(self):
+    def test_parent_parent_id_is_none(self) -> None:
         chunks = self._run()
         for parent in [c for c in chunks if c.chunk_type == "parent"]:
             assert parent.parent_id is None
 
-    def test_ordering_parent_before_its_children(self):
+    def test_ordering_parent_before_its_children(self) -> None:
         chunks = self._run([_long_prose(300)])
         seen_parents: set[str] = set()
         for chunk in chunks:
@@ -314,45 +314,45 @@ class TestCreateParentChildChunks:
                     f"Child {chunk.chunk_id} appeared before its parent in the list"
                 )
 
-    def test_chunk_ids_are_unique(self):
+    def test_chunk_ids_are_unique(self) -> None:
         chunks = self._run([_long_prose(300)])
         ids = [c.chunk_id for c in chunks]
         assert len(ids) == len(set(ids)), "Duplicate chunk IDs found"
 
-    def test_all_chunks_have_ticker(self):
+    def test_all_chunks_have_ticker(self) -> None:
         chunks = self._run()
         for c in chunks:
             assert c.ticker == TICKER
 
-    def test_all_chunks_have_date(self):
+    def test_all_chunks_have_date(self) -> None:
         chunks = self._run()
         for c in chunks:
             assert c.date == DATE
 
-    def test_all_chunks_have_doc_type(self):
+    def test_all_chunks_have_doc_type(self) -> None:
         chunks = self._run()
         for c in chunks:
             assert c.doc_type == DOCTYPE
 
-    def test_all_chunks_have_non_empty_text(self):
+    def test_all_chunks_have_non_empty_text(self) -> None:
         chunks = self._run([_long_prose(300)])
         for c in chunks:
             assert c.text.strip(), f"Chunk {c.chunk_id} has empty text"
 
-    def test_parent_text_contains_contextual_prefix(self):
+    def test_parent_text_contains_contextual_prefix(self) -> None:
         chunks = self._run()
         for parent in [c for c in chunks if c.chunk_type == "parent"]:
             assert TICKER in parent.text
             assert DATE in parent.text
 
-    def test_parent_text_uses_real_newlines(self):
+    def test_parent_text_uses_real_newlines(self) -> None:
         chunks = self._run([EARNINGS_PROSE + "\nOutlook\n" + OUTLOOK_PROSE])
         for parent in [c for c in chunks if c.chunk_type == "parent"]:
             assert "\\n" not in parent.text, (
                 f"Parent {parent.chunk_id} contains literal '\\\\n' — newline bug not fixed"
             )
 
-    def test_metadata_keys_present_on_parent(self):
+    def test_metadata_keys_present_on_parent(self) -> None:
         chunks = self._run()
         required_keys = {
             "ticker",
@@ -367,14 +367,14 @@ class TestCreateParentChildChunks:
             missing = required_keys - parent.metadata.keys()
             assert not missing, f"Parent {parent.chunk_id} missing metadata keys: {missing}"
 
-    def test_metadata_keys_present_on_child(self):
+    def test_metadata_keys_present_on_child(self) -> None:
         chunks = self._run()
         required_keys = {"ticker", "date", "doc_type", "parent_id", "child_index", "is_table"}
         for child in [c for c in chunks if c.chunk_type == "child"]:
             missing = required_keys - child.metadata.keys()
             assert not missing, f"Child {child.chunk_id} missing metadata keys: {missing}"
 
-    def test_child_index_sequential_per_parent(self):
+    def test_child_index_sequential_per_parent(self) -> None:
         chunks = self._run([_long_prose(300)])
         from collections import defaultdict
 
@@ -387,7 +387,7 @@ class TestCreateParentChildChunks:
                 f"Child indices for parent {parent_id} are not sequential: {indices}"
             )
 
-    def test_chunk_ids_deterministic_across_runs(self):
+    def test_chunk_ids_deterministic_across_runs(self) -> None:
         chunks1 = self._run([EARNINGS_PROSE])
         chunks2 = self._run([EARNINGS_PROSE])
         ids1 = [c.chunk_id for c in chunks1]
@@ -403,23 +403,23 @@ class TestTableProtection:
         sections = [EARNINGS_PROSE, MARKDOWN_TABLE, OUTLOOK_PROSE]
         return create_parent_child_chunks(TICKER, DATE, sections, DOCTYPE)
 
-    def test_table_chunk_type_present(self):
+    def test_table_chunk_type_present(self) -> None:
         chunks = self._run_with_table()
         table_chunks = [c for c in chunks if c.chunk_type == "table"]
         assert len(table_chunks) >= 1
 
-    def test_table_chunk_is_table_in_metadata(self):
+    def test_table_chunk_is_table_in_metadata(self) -> None:
         chunks = self._run_with_table()
         for c in [c for c in chunks if c.chunk_type == "table"]:
             assert c.metadata.get("is_table") is True
 
-    def test_table_never_merged_into_text_parent(self):
+    def test_table_never_merged_into_text_parent(self) -> None:
         chunks = self._run_with_table()
         for parent in [c for c in chunks if c.chunk_type == "parent"]:
             # Text parents must not contain table sentinel
             assert "__TABLE__" not in parent.text
 
-    def test_table_child_has_same_text_as_parent(self):
+    def test_table_child_has_same_text_as_parent(self) -> None:
         chunks = self._run_with_table()
         table_parents = {c.chunk_id: c for c in chunks if c.chunk_type == "table"}
         table_children = [
@@ -432,7 +432,7 @@ class TestTableProtection:
                 "Table child text should be identical to table parent text"
             )
 
-    def test_table_produces_exactly_one_child(self):
+    def test_table_produces_exactly_one_child(self) -> None:
         chunks = self._run_with_table()
         table_parents = [c for c in chunks if c.chunk_type == "table"]
         for tp in table_parents:
@@ -441,12 +441,12 @@ class TestTableProtection:
                 f"Table parent {tp.chunk_id} should produce exactly 1 child, got {len(children)}"
             )
 
-    def test_table_section_title_is_financial_table(self):
+    def test_table_section_title_is_financial_table(self) -> None:
         chunks = self._run_with_table()
         for c in [c for c in chunks if c.chunk_type == "table"]:
             assert c.section_title == "Financial Table"
 
-    def test_surrounding_prose_not_contaminated_by_table(self):
+    def test_surrounding_prose_not_contaminated_by_table(self) -> None:
         chunks = self._run_with_table()
         text_parents = [c for c in chunks if c.chunk_type == "parent"]
         for tp in text_parents:
@@ -457,14 +457,14 @@ class TestTableProtection:
 
 
 class TestOverlapBehaviour:
-    def test_multiple_parents_generated_for_long_input(self):
+    def test_multiple_parents_generated_for_long_input(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [_long_prose(1200)], DOCTYPE)
         parents = [c for c in chunks if c.chunk_type == "parent"]
         assert len(parents) >= 2, (
             f"Expected multiple parents for 1200-word input, got {len(parents)}"
         )
 
-    def test_later_parents_may_have_overlap_flag(self):
+    def test_later_parents_may_have_overlap_flag(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [_long_prose(1200)], DOCTYPE)
         parents = [c for c in chunks if c.chunk_type == "parent"]
         overlap_flags = [p.metadata.get("has_overlap", False) for p in parents]
@@ -473,7 +473,7 @@ class TestOverlapBehaviour:
             "No parent after the first has has_overlap=True — overlap logic may be broken"
         )
 
-    def test_children_have_word_overlap_with_siblings(self):
+    def test_children_have_word_overlap_with_siblings(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [_long_prose(300)], DOCTYPE)
         children = [c for c in chunks if c.chunk_type == "child" and not c.metadata.get("is_table")]
         if len(children) < 2:
@@ -489,11 +489,11 @@ class TestOverlapBehaviour:
 
 
 class TestEdgeCases:
-    def test_single_section_minimum_viable(self):
+    def test_single_section_minimum_viable(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [EARNINGS_PROSE], DOCTYPE)
         assert len(chunks) >= 2  # at least 1 parent + 1 child
 
-    def test_multiple_companies_produce_distinct_ids(self):
+    def test_multiple_companies_produce_distinct_ids(self) -> None:
         tickers = ["AAPL", "NVDA", "MSFT"]
         all_ids: set[str] = set()
         for t in tickers:
@@ -506,21 +506,21 @@ class TestEdgeCases:
         )
         assert len(all_ids) == total
 
-    def test_all_doc_types_accepted(self):
+    def test_all_doc_types_accepted(self) -> None:
         for dt in ["10-K", "10-Q", "earnings_release", "transcript", "8-K"]:
             chunks = create_parent_child_chunks(TICKER, DATE, [EARNINGS_PROSE], dt)
             assert len(chunks) >= 1, f"doc_type={dt!r} produced no chunks"
 
-    def test_section_with_only_whitespace_skipped(self):
+    def test_section_with_only_whitespace_skipped(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, ["   \n\n   \t  "], DOCTYPE)
         assert chunks == []
 
-    def test_very_long_single_section_splits_into_multiple_parents(self):
+    def test_very_long_single_section_splits_into_multiple_parents(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [_long_prose(2000)], DOCTYPE)
         parents = [c for c in chunks if c.chunk_type == "parent"]
         assert len(parents) >= 3
 
-    def test_table_only_input(self):
+    def test_table_only_input(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [MARKDOWN_TABLE], DOCTYPE)
         # Should produce at least a table chunk + its child
         table_chunks = [c for c in chunks if c.chunk_type == "table"]

@@ -39,9 +39,11 @@ MANIFEST
 *.sqlite
 *.sqlite3
 
-# Qdrant / Data
+# Qdrant / Data / ML Caches
 /data/*
 !/data/.gitkeep
+
+mypy_report.txt
 
 # Unit test / coverage reports
 htmlcov/

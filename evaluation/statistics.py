@@ -75,7 +75,7 @@ def compare_models(report_a: EvalReport, report_b: EvalReport) -> dict[str, dict
     if not common_samples:
         return {}
 
-    all_metrics = set()
+    all_metrics: set[str] = set()
     for s_id in common_samples:
         all_metrics.update(scores_a[s_id].keys())
         all_metrics.update(scores_b[s_id].keys())
