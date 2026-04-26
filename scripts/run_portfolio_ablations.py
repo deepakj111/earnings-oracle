@@ -27,9 +27,9 @@ def main():
 
     # Test on a small representative batch so it runs fast and cheap
     # (Update n_samples if you want to run the full dataset)
-    N_SAMPLES = 10
+    n_samples = 10
 
-    print(f"=== Running Portfolio RAG Ablation (n={N_SAMPLES} samples) ===")
+    print(f"=== Running Portfolio RAG Ablation (n={n_samples} samples) ===")
 
     # -------------------------------------------------------------
     # Arm 1: Naive RAG (Dense only)
@@ -82,7 +82,7 @@ def main():
     for cfg in configs:
         print(f"\n--- Running: {cfg.label} ---")
         from evaluation.dataset import GOLDEN_DATASET
-        dataset = GOLDEN_DATASET[:N_SAMPLES]
+        dataset = GOLDEN_DATASET[:n_samples]
 
         arm_res = exp._run_arm(cfg, dataset=dataset, metrics=exp._METRICS)
         results_map[cfg.label] = arm_res
