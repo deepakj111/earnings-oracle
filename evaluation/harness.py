@@ -29,6 +29,7 @@ import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from loguru import logger
@@ -39,6 +40,9 @@ from evaluation.metrics import score_all
 from evaluation.models import EvalReport, EvalSample, EvalSampleResult, MetricScore
 from evaluation.statistics import compute_bootstrap_ci
 from retrieval.models import MetadataFilter
+
+if TYPE_CHECKING:
+    from rag_pipeline import FinancialRAGPipeline
 
 _eval_cfg = _settings.evaluation
 
@@ -59,8 +63,8 @@ class EvaluationHarness:
                   can capture both the answer and the retrieval context.
     """
 
-    def __init__(self, pipeline: object) -> None:
-        self._pipeline = pipeline  # typed as object to avoid circular import
+    def __init__(self, pipeline: FinancialRAGPipeline) -> None:
+        self._pipeline = pipeline
         logger.info(
             f"EvaluationHarness ready | model={_eval_cfg.model} | workers={_eval_cfg.max_workers}"
         )
@@ -89,7 +93,7 @@ class EvaluationHarness:
             old_cache_enabled = _settings.cache.enabled
             # Monkeypatch the cache temporarily for this thread
             object.__setattr__(_settings.cache, "enabled", False)
-            result, _q_summary, _r_summary = self._pipeline.ask_verbose(  # type: ignore[union-attr]
+            result, _q_summary, _r_summary = self._pipeline.ask_verbose(
                 question=sample.question,
                 metadata_filter=meta_filter,
             )

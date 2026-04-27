@@ -23,7 +23,7 @@ def make_pipeline() -> FinancialRAGPipeline:
     return FinancialRAGPipeline(qdrant_client=client)
 
 
-def main():
+def main() -> None:
     """Execute evaluation variants sequentially and print the unified portfolio README table."""
     exp = RetrievalExperiment(pipeline_factory=make_pipeline)
 

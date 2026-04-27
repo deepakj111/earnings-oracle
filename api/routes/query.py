@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated
 
@@ -325,7 +326,7 @@ async def ask_stream(
             # Sentinel — always sent, even after errors, so _consume() terminates
             asyncio.run_coroutine_threadsafe(queue.put(None), loop).result(timeout=5)
 
-    async def _consume():
+    async def _consume() -> AsyncGenerator[str, None]:
         """
         Async consumer: reads tokens from the queue and yields SSE strings.
 

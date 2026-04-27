@@ -53,7 +53,6 @@ from observability.trace_models import (
     PipelineTrace,
     QueryTransformSpan,
     RetrievalSpan,
-    SemanticCacheSpan,
     SpanStatus,
 )
 
@@ -162,18 +161,6 @@ class RAGTracer:
         return trace
 
     # ── Layer span recording ───────────────────────────────────────────────
-
-    def record_semantic_cache(self, trace: PipelineTrace, span: SemanticCacheSpan) -> None:
-        """Attach the Semantic Cache span to a trace."""
-        if not self.enabled:
-            return
-        trace.semantic_cache = span
-        logger.debug(
-            f"[Trace {trace.trace_id[:8]}] Cache span recorded | "
-            f"latency={span.latency_seconds:.3f}s | "
-            f"hit={span.cache_hit} | "
-            f"score={span.similarity_score:.4f}"
-        )
 
     def record_query_transform(self, trace: PipelineTrace, span: QueryTransformSpan) -> None:
         """Attach the Layer 2 query transformation span to a trace."""

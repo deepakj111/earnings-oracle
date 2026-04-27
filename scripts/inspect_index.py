@@ -22,12 +22,12 @@ TICKERS = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", 
 SEP = "-" * 68
 
 
-def fmt(n):
+def fmt(n: int | float) -> str:
     """Format an integer with comma thousands separators."""
     return f"{n:,}"
 
 
-def section(title):
+def section(title: str) -> None:
     """Print a prominent section header for the report."""
     print(f"\n{SEP}")
     print(f"  {title}")
@@ -135,8 +135,16 @@ try:
 
     info = client.get_collection(COLLECTION)
     total_points = info.points_count or 0
-    vector_dim = info.config.params.vectors.size
-    distance = info.config.params.vectors.distance.name
+
+    vectors_config = info.config.params.vectors
+    if isinstance(vectors_config, dict):
+        first_vector = list(vectors_config.values())[0]
+        vector_dim = first_vector.size
+        distance = first_vector.distance.name
+    else:
+        vector_dim = vectors_config.size
+        distance = vectors_config.distance.name
+
     indexed_vectors = info.indexed_vectors_count or 0
 
     print(f"\n  Collection         : {COLLECTION}")
@@ -145,8 +153,8 @@ try:
     print(f"  Vector dimensions  : {vector_dim}")
     print(f"  Distance metric    : {distance}")
     print(f"  Segments           : {info.segments_count}")
-    print(f"  Disk usage (bytes) : {fmt(info.disk_data_size)}")
-    print(f"  RAM  usage (bytes) : {fmt(info.ram_data_size)}")
+    print(f"  Disk usage (bytes) : {fmt(getattr(info, 'disk_data_size', 0))}")
+    print(f"  RAM  usage (bytes) : {fmt(getattr(info, 'ram_data_size', 0))}")
 
     if total_points == 0:
         print("\n  Collection is EMPTY — ingestion did not upsert any vectors.")

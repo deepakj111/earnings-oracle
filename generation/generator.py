@@ -47,6 +47,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Iterator
+from typing import Any, cast
 
 from loguru import logger
 from openai import APIError, APITimeoutError, OpenAI, RateLimitError
@@ -163,7 +164,7 @@ def _is_grounded(answer: str) -> bool:
     stop=stop_after_attempt(_cfg.max_retries),
     reraise=True,
 )
-def _call_llm(prompt_messages: list[dict]) -> tuple[str, int, int]:
+def _call_llm(prompt_messages: list[Any]) -> tuple[str, int, int]:
     """
     Single OpenAI chat completion call with tenacity retry on transient errors.
 
@@ -373,14 +374,19 @@ class Generator:
         ]
 
         client = _get_client()
-        with client.chat.completions.create(
+        stream = client.chat.completions.create(
             model=_cfg.model,
-            messages=prompt_messages,
+            messages=prompt_messages,  # type: ignore[arg-type]
             temperature=_cfg.temperature,
             max_completion_tokens=_cfg.max_tokens,
             stream=True,
-        ) as stream:
-            for chunk in stream:
-                delta = chunk.choices[0].delta.content
+        )
+        from openai.types.chat import ChatCompletionChunk
+        for chunk in stream:
+            # chunk may be a ChatCompletionChunk or other variant in stubs
+            # We use cast for mypy while keeping hasattr for runtime flexibility (and tests)
+            if hasattr(chunk, "choices") and cast(Any, chunk).choices:
+                c = cast(ChatCompletionChunk, chunk)
+                delta = c.choices[0].delta.content
                 if delta:
                     yield delta

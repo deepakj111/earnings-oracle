@@ -115,7 +115,7 @@ with st.sidebar:
     quarter_sel = st.selectbox("Quarter", _QUARTERS, index=0)
 
     ticker = None if ticker_sel == "(all)" else ticker_sel
-    year = None if year_sel == "(all)" else int(year_sel)
+    year = None if year_sel == "(all)" else int(str(year_sel))
     quarter = None if quarter_sel == "(all)" else quarter_sel
 
     metadata_filter = build_metadata_filter(ticker, year, quarter)
@@ -341,13 +341,13 @@ if question:
                 error_msg = f"❌ Unexpected error: {exc}"
                 st.error(error_msg)
 
-            meta: dict[str, Any] = {}  # no structured meta in streaming mode
+            resp_meta: dict[str, Any] = {}  # no structured meta in streaming mode
             content = full_answer or error_msg or ""
 
         else:
             # ── Structured path ─────────────────────────────────────────────
             content = ""
-            meta = {}
+            resp_meta = {}
             error_msg = None
 
             with st.spinner("Running RAG pipeline…"):
@@ -359,9 +359,9 @@ if question:
                         verbose=verbose_mode,
                     )
                     content = data.get("answer", "")
-                    meta = data
+                    resp_meta = data
                     st.markdown(content)
-                    _render_response_meta(meta)
+                    _render_response_meta(resp_meta)
 
                 except requests.ConnectionError:
                     error_msg = "❌ Cannot connect to the API. Is the server running?"
@@ -385,10 +385,10 @@ if question:
         {
             "role": "assistant",
             "content": content,
-            "meta": meta,
+            "meta": resp_meta,
         }
     )
-    st.session_state.last_response = meta if meta else None
+    st.session_state.last_response = resp_meta if resp_meta else None
 
     st.rerun()
 

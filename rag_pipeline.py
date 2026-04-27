@@ -66,7 +66,6 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from qdrant_client import QdrantClient
 
-from cache.semantic_cache import SemanticCache
 from config import settings as _settings
 from generation import Generator
 from generation.models import GenerationResult
@@ -103,7 +102,6 @@ class FinancialRAGPipeline:
         self._transformer = QueryTransformer(enable_cache=enable_query_cache)
         self._generator = Generator()
         self._router = QueryRouter()
-        self._cache = SemanticCache(qdrant_client)
         self._corrector: CRAGCorrector | None = None  # lazy-init in ask_with_crag()
 
         # ── Observability: structured per-request tracing ──────────────────
@@ -152,20 +150,6 @@ class FinancialRAGPipeline:
         # ── Start trace ───────────────────────────────────────────────────────
         trace = self._tracer.start_trace(question=question)
 
-        # ── Check semantic cache first ───────────────────────────────────────
-        cached_result, cache_span = self._cache.get(question)
-        self._tracer.record_semantic_cache(trace, cache_span)
-
-        if cached_result:
-            # Cache hit avoids all other layers
-            trace.status = self._tracer.end_trace(
-                trace,
-                total_latency=time.perf_counter() - pipeline_start,
-            ).status
-            cached_result.trace_id = trace.trace_id
-            cached_result.was_cached = True
-            return cached_result
-
         if enable_routing:
             routing = self._router.route(question)
             logger.info(f"[Router] {routing.summary()}")
@@ -174,6 +158,7 @@ class FinancialRAGPipeline:
                 from generation.models import GenerationResult
 
                 return GenerationResult(
+                    question=question,
                     answer=(
                         "I can only answer questions about SEC 8-K earnings filings "
                         "for AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, and WMT. "
@@ -181,11 +166,14 @@ class FinancialRAGPipeline:
                     ),
                     citations=[],
                     grounded=False,
+                    retrieval_failed=False,
                     prompt_tokens=0,
                     completion_tokens=0,
+                    total_tokens=0,
+                    latency_seconds=0.0,
                     model=_settings.generation.model,
                     context_tokens_used=0,
-                    chunks_used=0,
+                    context_chunks_used=0,
                 )
         else:
             routing = None
@@ -274,9 +262,6 @@ class FinancialRAGPipeline:
             completion_tokens=result.completion_tokens,
             latency_seconds=t4_elapsed,
         )
-
-        # Update semantic cache asynchronously
-        self._cache.set(question, result)
 
         # ── Finalize trace ─────────────────────────────────────────────────────
         total = time.perf_counter() - pipeline_start

@@ -399,8 +399,7 @@ class TestGeneratorStreaming:
                 yield chunk
 
         mock_stream = MagicMock()
-        mock_stream.__enter__ = MagicMock(return_value=_fake_chunks())
-        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.__iter__ = MagicMock(return_value=_fake_chunks())
 
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = mock_stream
