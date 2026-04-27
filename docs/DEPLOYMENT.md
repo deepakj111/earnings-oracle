@@ -233,14 +233,13 @@ Triggers:
 
 ### CI environment variables
 
-Set as GitHub repository secrets:
+Only the default `GITHUB_TOKEN` is required to push to GHCR:
 
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `OPENAI_API_KEY` | CI tests | Placeholder `sk-test-placeholder-never-called-in-unit-tests` |
+| Variable | Required In | Description |
+|----------|-------------|-------------|
 | `GITHUB_TOKEN` | CD | Auto-provided by GitHub Actions for GHCR push |
 
-CI tests never call real OpenAI — all LLM calls are mocked via `unittest.mock.patch`.
+*Note: No `OPENAI_API_KEY` secret is required! The pipeline injects a hardcoded placeholder (`sk-test-placeholder...`) directly in the workflow files. CI tests never call real OpenAI — all LLM calls are mocked via `unittest.mock.patch`.*
 
 ---
 
