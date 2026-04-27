@@ -12,9 +12,8 @@ from query.transformer import (
     _TEMP_MULTI,
     _TEMP_STEPBACK,
     QueryTransformer,
-    _cache_get,
+    _cache,
     _cache_key,
-    _cache_put,
     _run_hyde,
     _run_multi_query,
     _run_stepback,
@@ -82,38 +81,35 @@ class TestCacheKey:
 
 class TestCacheOperations:
     def setup_method(self):
-        transformer_module._cache.clear()
-        transformer_module._cache_insertion_order.clear()
+        _cache.clear()
 
     def test_miss_returns_none(self) -> None:
-        assert _cache_get("nonexistent_key_xyz") is None
+        assert _cache.get("nonexistent_key_xyz") is None
 
     def test_put_then_get_returns_same_object(self) -> None:
         tq = _make_transformed()
-        _cache_put("k1", tq)
-        assert _cache_get("k1") is tq
+        _cache["k1"] = tq
+        assert _cache.get("k1") is tq
 
     def test_cache_grows_after_put(self) -> None:
-        before = len(transformer_module._cache)
-        _cache_put("unique_abc", _make_transformed())
-        assert len(transformer_module._cache) == before + 1
-
-    def test_insertion_order_list_tracks_key(self) -> None:
-        _cache_put("order_key_x", _make_transformed())
-        assert "order_key_x" in transformer_module._cache_insertion_order
+        before = len(_cache)
+        _cache["unique_abc"] = _make_transformed()
+        assert len(_cache) == before + 1
 
     def test_lru_eviction_removes_oldest_on_overflow(self) -> None:
-        original_max = transformer_module.CACHE_MAX_SIZE
-        transformer_module.CACHE_MAX_SIZE = 2
+        from cachetools import LRUCache
+
+        old_cache = transformer_module._cache
         try:
+            transformer_module._cache = LRUCache(maxsize=2)
             tq = _make_transformed()
-            _cache_put("evict_k1", tq)
-            _cache_put("evict_k2", tq)
-            _cache_put("evict_k3", tq)
-            assert _cache_get("evict_k1") is None
-            assert _cache_get("evict_k2") is not None
+            transformer_module._cache["evict_k1"] = tq
+            transformer_module._cache["evict_k2"] = tq
+            transformer_module._cache["evict_k3"] = tq
+            assert "evict_k1" not in transformer_module._cache
+            assert "evict_k2" in transformer_module._cache
         finally:
-            transformer_module.CACHE_MAX_SIZE = original_max
+            transformer_module._cache = old_cache
 
 
 # ── _run_hyde ─────────────────────────────────────────────────────────────────
@@ -353,7 +349,6 @@ class TestQueryTransformerInit:
 class TestQueryTransformerTransform:
     def setup_method(self):
         transformer_module._cache.clear()
-        transformer_module._cache_insertion_order.clear()
         transformer_module._openai_client = None
 
     def _patched_transform(self, query, *, hyde="hyde doc", multi=None, stepback="broader q"):

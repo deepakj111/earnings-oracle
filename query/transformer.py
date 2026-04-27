@@ -23,12 +23,13 @@ hard failure only occurs if ALL techniques fail simultaneously.
 from __future__ import annotations
 
 import hashlib
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from cachetools import LRUCache
 from loguru import logger
 from openai import APIError, APITimeoutError, OpenAI, RateLimitError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # ── Configuration (all overridable via environment) ───────────────────────────
 # ── NEW: import from config ────────────────────────────────────────────────────
@@ -79,29 +80,26 @@ def _get_client() -> OpenAI:
 # Avoids redundant API calls when the same query appears multiple times in a
 # session (e.g., during evaluation, CRAG loops, or UI demos).
 
-_cache: dict[str, TransformedQuery] = {}
-_cache_insertion_order: list[str] = []
+_cache = LRUCache(maxsize=CACHE_MAX_SIZE)
 
 
 def _cache_key(query: str) -> str:
     return hashlib.sha256(query.strip().lower().encode("utf-8")).hexdigest()
 
 
-def _cache_get(key: str) -> TransformedQuery | None:
-    return _cache.get(key)
-
-
-def _cache_put(key: str, result: TransformedQuery) -> None:
-    if len(_cache) >= CACHE_MAX_SIZE:
-        oldest = _cache_insertion_order.pop(0)
-        _cache.pop(oldest, None)
-    _cache[key] = result
-    _cache_insertion_order.append(key)
-
-
 # ── Core LLM call with exponential backoff ────────────────────────────────────
 
 
+@retry(
+    retry=retry_if_exception_type((RateLimitError, APITimeoutError)),
+    wait=wait_exponential(
+        multiplier=_cfg.retry_base_delay_seconds,
+        min=_cfg.retry_base_delay_seconds,
+        max=30.0,
+    ),
+    stop=stop_after_attempt(MAX_RETRIES),
+    reraise=True,
+)
 def _call_llm(
     system: str,
     user: str,
@@ -112,73 +110,39 @@ def _call_llm(
     """
     Single OpenAI chat completion call with exponential backoff on transient errors.
 
-    Retries on: RateLimitError, APITimeoutError, APIError (5xx).
-    Propagates on: AuthenticationError, InvalidRequestError (unrecoverable).
-
-    Args:
-        system:      System prompt string.
-        user:        User message string.
-        temperature: Sampling temperature for this technique.
-        max_tokens:  Upper bound on response length.
-        label:       Technique name for log context ("HyDE", "MultiQuery", "StepBack").
-
-    Returns:
-        Stripped response text from the model.
+    Retries on: RateLimitError, APITimeoutError.
+    Propagates on: AuthenticationError, InvalidRequestError (unrecoverable), and APIError (5xx/4xx context).
     """
     client = _get_client()
-    delay = BASE_RETRY_DELAY
+    try:
+        response = client.chat.completions.create(
+            model=QUERY_TRANSFORM_MODEL,
+            messages=[
+                # Merge system and user into a single user message
+                {"role": "user", "content": f"{system}\n\n{user}"},
+            ],
+            temperature=temperature,
+            max_completion_tokens=max_tokens,
+        )
+    except APIError as exc:
+        status = getattr(exc, "status_code", None)
+        if status is not None and status < 500:
+            raise
+        raise
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            response = client.chat.completions.create(
-                model=QUERY_TRANSFORM_MODEL,
-                messages=[
-                    # Merge system and user into a single user message
-                    {"role": "user", "content": f"{system}\n\n{user}"},
-                ],
-                temperature=temperature,
-                max_completion_tokens=max_tokens,
-            )
-            text = response.choices[0].message.content or ""
-            text = text.strip()
+    text = response.choices[0].message.content or ""
+    text = text.strip()
 
-            if not text:
-                raise ValueError(f"[{label}] Model returned an empty response.")
+    if not text:
+        raise ValueError(f"[{label}] Model returned an empty response.")
 
-            if response.usage:
-                logger.debug(
-                    f"[{label}] tokens | "
-                    f"in={response.usage.prompt_tokens} "
-                    f"out={response.usage.completion_tokens}"
-                )
-            return text
-
-        except (RateLimitError, APITimeoutError) as exc:
-            if attempt == MAX_RETRIES:
-                raise
-            logger.warning(
-                f"[{label}] Transient error (attempt {attempt}/{MAX_RETRIES}): {exc}. "
-                f"Retrying in {delay:.1f}s..."
-            )
-            time.sleep(delay)
-            delay *= 2.0
-
-        except APIError as exc:
-            # Retry on 5xx server errors and connection errors (no status code).
-            # Propagate on 4xx client errors immediately.
-            status = getattr(exc, "status_code", None)
-            if status is not None and status < 500:
-                raise
-            if attempt == MAX_RETRIES:
-                raise
-            logger.warning(
-                f"[{label}] Server error {status} (attempt {attempt}/{MAX_RETRIES}). "
-                f"Retrying in {delay:.1f}s..."
-            )
-            time.sleep(delay)
-            delay *= 2.0
-
-    raise RuntimeError(f"[{label}] All {MAX_RETRIES} retry attempts exhausted.")
+    if response.usage:
+        logger.debug(
+            f"[{label}] tokens | "
+            f"in={response.usage.prompt_tokens} "
+            f"out={response.usage.completion_tokens}"
+        )
+    return text
 
 
 # ── Individual technique implementations ──────────────────────────────────────
@@ -311,13 +275,12 @@ class QueryTransformer:
             raise ValueError("Query must not be empty.")
 
         if self.enable_cache:
-            cached = _cache_get(_cache_key(query))
-            if cached is not None:
+            ckey = _cache_key(query)
+            if ckey in _cache:
                 logger.debug(f"Cache hit | query={query!r}")
-                return cached
+                return _cache[ckey]
 
         logger.info(f"Transforming query | {query!r}")
-        start = time.perf_counter()
         failed_techniques: list[str] = []
 
         # Fire all three techniques concurrently.
@@ -357,11 +320,10 @@ class QueryTransformer:
                     failed_techniques.append(name)
                     logger.warning(f"[{name}] failed, using fallback. Error: {exc}")
 
-        elapsed = time.perf_counter() - start
         logger.info(
             f"Transformation complete | "
-            f"{len(multi_queries)} multi-queries | "
-            f"{elapsed:.2f}s" + (f" | degraded={failed_techniques}" if failed_techniques else "")
+            f"{len(multi_queries)} multi-queries"
+            + (f" | degraded={failed_techniques}" if failed_techniques else "")
         )
 
         transformed = TransformedQuery(
@@ -373,6 +335,6 @@ class QueryTransformer:
         )
 
         if self.enable_cache:
-            _cache_put(_cache_key(query), transformed)
+            _cache[_cache_key(query)] = transformed
 
         return transformed

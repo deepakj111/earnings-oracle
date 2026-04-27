@@ -17,73 +17,9 @@ import threading
 import pytest
 
 from observability.cost_tracker import (
-    MODEL_PRICING,
     CostTracker,
-    ModelPricing,
     estimate_cost,
 )
-
-# ── ModelPricing ───────────────────────────────────────────────────────────────
-
-
-class TestModelPricing:
-    """Verify pricing dataclass properties."""
-
-    def test_input_cost_per_token(self) -> None:
-        pricing = ModelPricing(
-            model_name="test",
-            input_cost_per_1m=1.0,
-            output_cost_per_1m=4.0,
-        )
-        assert pricing.input_cost_per_token == pytest.approx(1.0 / 1_000_000)
-
-    def test_output_cost_per_token(self) -> None:
-        pricing = ModelPricing(
-            model_name="test",
-            input_cost_per_1m=1.0,
-            output_cost_per_1m=4.0,
-        )
-        assert pricing.output_cost_per_token == pytest.approx(4.0 / 1_000_000)
-
-    def test_frozen(self) -> None:
-        """ModelPricing is frozen — fields cannot be reassigned."""
-        pricing = ModelPricing("test", 1.0, 4.0)
-        with pytest.raises(AttributeError):
-            pricing.input_cost_per_1m = 999  # type: ignore[misc]
-
-
-# ── Pricing Table ──────────────────────────────────────────────────────────────
-
-
-class TestPricingTable:
-    """Verify the pricing table is complete and correctly structured."""
-
-    def test_nano_model_present(self) -> None:
-        assert "gpt-4.1-nano" in MODEL_PRICING
-
-    def test_mini_model_present(self) -> None:
-        assert "gpt-4.1-mini" in MODEL_PRICING
-
-    def test_full_model_present(self) -> None:
-        assert "gpt-4.1" in MODEL_PRICING
-
-    def test_all_models_have_positive_pricing(self) -> None:
-        for name, pricing in MODEL_PRICING.items():
-            assert pricing.input_cost_per_1m > 0, f"{name} input cost should be > 0"
-            assert pricing.output_cost_per_1m > 0, f"{name} output cost should be > 0"
-
-    def test_nano_is_cheapest_input(self) -> None:
-        nano = MODEL_PRICING["gpt-4.1-nano"]
-        full = MODEL_PRICING["gpt-4.1"]
-        assert nano.input_cost_per_1m < full.input_cost_per_1m
-
-    def test_output_more_expensive_than_input(self) -> None:
-        """Output tokens are always more expensive than input for OpenAI models."""
-        for name, pricing in MODEL_PRICING.items():
-            assert pricing.output_cost_per_1m >= pricing.input_cost_per_1m, (
-                f"{name}: output should be >= input cost"
-            )
-
 
 # ── estimate_cost ──────────────────────────────────────────────────────────────
 

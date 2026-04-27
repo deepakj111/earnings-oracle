@@ -19,7 +19,7 @@ Usage:
     print(trace.to_json())
 """
 
-from observability.cost_tracker import CostTracker, ModelPricing
+from observability.cost_tracker import CostTracker
 from observability.trace_models import (
     CostEstimate,
     CRAGSpan,
@@ -34,7 +34,6 @@ from observability.tracer import RAGTracer
 __all__ = [
     "RAGTracer",
     "CostTracker",
-    "ModelPricing",
     "PipelineTrace",
     "QueryTransformSpan",
     "RetrievalSpan",

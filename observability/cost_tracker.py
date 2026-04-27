@@ -21,71 +21,10 @@ Design decisions:
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
 
 from loguru import logger
 
 from observability.trace_models import CostEstimate
-
-
-@dataclass(frozen=True)
-class ModelPricing:
-    """
-    Pricing for a single OpenAI model.
-
-    All costs are in USD per 1,000,000 tokens.
-    Source: https://openai.com/api/pricing/ (as of April 2026)
-    """
-
-    model_name: str
-    input_cost_per_1m: float
-    output_cost_per_1m: float
-
-    @property
-    def input_cost_per_token(self) -> float:
-        return self.input_cost_per_1m / 1_000_000
-
-    @property
-    def output_cost_per_token(self) -> float:
-        return self.output_cost_per_1m / 1_000_000
-
-
-# ── Pricing table ──────────────────────────────────────────────────────────────
-# Models actively used by this pipeline, ordered by cost tier.
-# Update these when OpenAI publishes new pricing.
-
-MODEL_PRICING: dict[str, ModelPricing] = {
-    # gpt-4.1-nano — primary model for query transform, grading, eval
-    "gpt-4.1-nano": ModelPricing(
-        model_name="gpt-4.1-nano",
-        input_cost_per_1m=0.10,
-        output_cost_per_1m=0.40,
-    ),
-    # gpt-4.1-mini — mid-tier fallback
-    "gpt-4.1-mini": ModelPricing(
-        model_name="gpt-4.1-mini",
-        input_cost_per_1m=0.40,
-        output_cost_per_1m=1.60,
-    ),
-    # gpt-4.1 — higher-tier for generation if configured
-    "gpt-4.1": ModelPricing(
-        model_name="gpt-4.1",
-        input_cost_per_1m=2.00,
-        output_cost_per_1m=8.00,
-    ),
-    # gpt-4o-mini — legacy model, may still appear in some configs
-    "gpt-4o-mini": ModelPricing(
-        model_name="gpt-4o-mini",
-        input_cost_per_1m=0.15,
-        output_cost_per_1m=0.60,
-    ),
-    # o4-mini — reasoning model
-    "o4-mini": ModelPricing(
-        model_name="o4-mini",
-        input_cost_per_1m=1.10,
-        output_cost_per_1m=4.40,
-    ),
-}
 
 
 def estimate_cost(
@@ -105,12 +44,17 @@ def estimate_cost(
         CostEstimate with per-component and total USD costs.
         Unknown models default to $0 with a logged warning.
     """
-    pricing = MODEL_PRICING.get(model)
+    import litellm
 
-    if pricing is None:
+    try:
+        prompt_cost, completion_cost = litellm.cost_calculator.cost_per_token(
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+    except Exception as exc:
         logger.warning(
-            f"Unknown model '{model}' — cost estimate will be $0. "
-            f"Add pricing to observability/cost_tracker.py."
+            f"Unknown model '{model}' or litellm error — cost estimate will be $0. Error: {exc}"
         )
         return CostEstimate(
             model=model,
@@ -119,9 +63,6 @@ def estimate_cost(
             prompt_cost_usd=0.0,
             completion_cost_usd=0.0,
         )
-
-    prompt_cost = prompt_tokens * pricing.input_cost_per_token
-    completion_cost = completion_tokens * pricing.output_cost_per_token
 
     return CostEstimate(
         model=model,
