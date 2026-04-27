@@ -18,6 +18,7 @@ class ParsedDocument:
 
 
 def parse_html(file_path: Path) -> ParsedDocument | None:
+    """Parse pure content and financial sections from an SEC HTML file."""
     stem_parts = file_path.stem.split("_")
     ticker = stem_parts[0]
     date = stem_parts[1] if len(stem_parts) > 1 else "unknown"

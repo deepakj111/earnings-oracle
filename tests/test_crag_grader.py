@@ -46,6 +46,7 @@ def _mock_openai_response(content: str) -> MagicMock:
 
 
 def test_parse_response_valid_relevant() -> None:
+    """Parse response valid relevant."""
     raw = '{"relevant": true, "score": 0.95, "reasoning": "chunk contains Q4 revenue"}'
     relevant, score, reasoning = _parse_response(raw, "c1")
     assert relevant is True
@@ -54,6 +55,7 @@ def test_parse_response_valid_relevant() -> None:
 
 
 def test_parse_response_valid_irrelevant() -> None:
+    """Parse response valid irrelevant."""
     raw = '{"relevant": false, "score": 0.1, "reasoning": "wrong company"}'
     relevant, score, reasoning = _parse_response(raw, "c1")
     assert relevant is False
@@ -61,18 +63,21 @@ def test_parse_response_valid_irrelevant() -> None:
 
 
 def test_parse_response_score_clamped() -> None:
+    """Parse response score clamped."""
     raw = '{"relevant": true, "score": 1.5, "reasoning": "test"}'
     _, score, _ = _parse_response(raw, "c1")
     assert score <= 1.0
 
 
 def test_parse_response_score_clamped_negative() -> None:
+    """Parse response score clamped negative."""
     raw = '{"relevant": true, "score": -0.3, "reasoning": "test"}'
     _, score, _ = _parse_response(raw, "c1")
     assert score >= 0.0
 
 
 def test_parse_response_embedded_json() -> None:
+    """Parse response embedded json."""
     raw = 'Here is my assessment: {"relevant": true, "score": 0.8, "reasoning": "relevant"} done.'
     relevant, score, _ = _parse_response(raw, "c1")
     assert relevant is True
@@ -80,6 +85,7 @@ def test_parse_response_embedded_json() -> None:
 
 
 def test_parse_response_no_json_falls_back() -> None:
+    """Parse response no json falls back."""
     relevant, score, reasoning = _parse_response("not json at all", "c1")
     assert relevant is True  # fail-open
     assert score == 0.5
@@ -87,6 +93,7 @@ def test_parse_response_no_json_falls_back() -> None:
 
 
 def test_parse_response_malformed_json_falls_back() -> None:
+    """Parse response malformed json falls back."""
     relevant, score, _ = _parse_response("{broken json", "c1")
     assert relevant is True
     assert score == 0.5
@@ -97,6 +104,7 @@ def test_parse_response_malformed_json_falls_back() -> None:
 
 @patch("crag.grader._get_client")
 def test_grade_one_relevant(mock_get_client: MagicMock) -> None:
+    """Grade one relevant."""
     mock_get_client.return_value.chat.completions.create.return_value = _mock_openai_response(
         '{"relevant": true, "score": 0.92, "reasoning": "contains the revenue figure"}'
     )
@@ -111,6 +119,7 @@ def test_grade_one_relevant(mock_get_client: MagicMock) -> None:
 
 @patch("crag.grader._get_client")
 def test_grade_one_irrelevant(mock_get_client: MagicMock) -> None:
+    """Grade one irrelevant."""
     mock_get_client.return_value.chat.completions.create.return_value = _mock_openai_response(
         '{"relevant": false, "score": 0.05, "reasoning": "wrong fiscal period"}'
     )
@@ -135,6 +144,7 @@ def test_grade_one_api_failure_fails_open(mock_get_client: MagicMock) -> None:
 
 @patch("crag.grader._get_client")
 def test_grade_one_empty_response_falls_back(mock_get_client: MagicMock) -> None:
+    """Grade one empty response falls back."""
     mock_get_client.return_value.chat.completions.create.return_value = _mock_openai_response("")
     chunk = _make_chunk()
     grade = _grade_one("What was revenue?", chunk)
@@ -161,6 +171,7 @@ def test_grade_chunks_preserves_order(mock_grade_one: MagicMock) -> None:
 
 @patch("crag.grader._grade_one")
 def test_grade_chunks_empty_input(mock_grade_one: MagicMock) -> None:
+    """Grade chunks empty input."""
     grader = RelevanceGrader()
     grades = grader.grade_chunks("test", [])
     assert grades == []
@@ -169,6 +180,7 @@ def test_grade_chunks_empty_input(mock_grade_one: MagicMock) -> None:
 
 @patch("crag.grader._grade_one")
 def test_grade_chunks_all_relevant(mock_grade_one: MagicMock) -> None:
+    """Grade chunks all relevant."""
     chunks = [_make_chunk(f"c{i}") for i in range(3)]
     mock_grade_one.return_value = RelevanceGrade("x", True, 0.9, "relevant")
     grader = RelevanceGrader()
@@ -178,6 +190,7 @@ def test_grade_chunks_all_relevant(mock_grade_one: MagicMock) -> None:
 
 @patch("crag.grader._grade_one")
 def test_grade_chunks_none_relevant(mock_grade_one: MagicMock) -> None:
+    """Grade chunks none relevant."""
     chunks = [_make_chunk(f"c{i}") for i in range(3)]
     mock_grade_one.return_value = RelevanceGrade("x", False, 0.1, "irrelevant")
     grader = RelevanceGrader()
@@ -186,6 +199,7 @@ def test_grade_chunks_none_relevant(mock_grade_one: MagicMock) -> None:
 
 
 def test_grade_single_delegates_to_grade_one() -> None:
+    """Grade single delegates to grade one."""
     chunk = _make_chunk()
     grader = RelevanceGrader()
     with patch("crag.grader._grade_one") as mock:

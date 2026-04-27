@@ -18,11 +18,13 @@ from rag_pipeline import FinancialRAGPipeline
 
 
 def make_pipeline() -> FinancialRAGPipeline:
+    """Factory to create a new default pipeline for the experiment."""
     client = QdrantClient(url=settings.infra.qdrant_url)
     return FinancialRAGPipeline(qdrant_client=client)
 
 
 def main():
+    """Execute evaluation variants sequentially and print the unified portfolio README table."""
     exp = RetrievalExperiment(pipeline_factory=make_pipeline)
 
     # Test on a small representative batch so it runs fast and cheap
@@ -36,10 +38,10 @@ def main():
     # -------------------------------------------------------------
     naive_cfg = ExperimentConfig(
         label="Naive RAG (Dense only)",
-        top_k_bm25=0,                  # Disable sparse
-        reranker_enabled=False,        # Disable reranking
-        graphrag_enabled=False,        # Disable GraphRAG
-        use_crag=False                 # Disable CRAG
+        top_k_bm25=0,  # Disable sparse
+        reranker_enabled=False,  # Disable reranking
+        graphrag_enabled=False,  # Disable GraphRAG
+        use_crag=False,  # Disable CRAG
     )
 
     # -------------------------------------------------------------
@@ -47,10 +49,10 @@ def main():
     # -------------------------------------------------------------
     hybrid_cfg = ExperimentConfig(
         label="Hybrid + GraphRAG",
-        top_k_bm25=10,                 # Enable sparse
-        reranker_enabled=False,        # Still no reranking
-        graphrag_enabled=True,         # Enable GraphRAG
-        use_crag=False
+        top_k_bm25=10,  # Enable sparse
+        reranker_enabled=False,  # Still no reranking
+        graphrag_enabled=True,  # Enable GraphRAG
+        use_crag=False,
     )
 
     # -------------------------------------------------------------
@@ -59,9 +61,9 @@ def main():
     reranker_cfg = ExperimentConfig(
         label="Hybrid + Reranker",
         top_k_bm25=10,
-        reranker_enabled=True,         # Enable reranking
+        reranker_enabled=True,  # Enable reranking
         graphrag_enabled=True,
-        use_crag=False
+        use_crag=False,
     )
 
     # -------------------------------------------------------------
@@ -72,7 +74,7 @@ def main():
         top_k_bm25=10,
         reranker_enabled=True,
         graphrag_enabled=True,
-        use_crag=True                  # Full pipeline
+        use_crag=True,  # Full pipeline
     )
 
     configs = [naive_cfg, hybrid_cfg, reranker_cfg, full_stack_cfg]
@@ -82,6 +84,7 @@ def main():
     for cfg in configs:
         print(f"\n--- Running: {cfg.label} ---")
         from evaluation.dataset import GOLDEN_DATASET
+
         dataset = GOLDEN_DATASET[:n_samples]
 
         arm_res = exp._run_arm(cfg, dataset=dataset, metrics=exp._METRICS)

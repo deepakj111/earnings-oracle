@@ -23,10 +23,12 @@ SEP = "-" * 68
 
 
 def fmt(n):
+    """Format an integer with comma thousands separators."""
     return f"{n:,}"
 
 
 def section(title):
+    """Print a prominent section header for the report."""
     print(f"\n{SEP}")
     print(f"  {title}")
     print(SEP)

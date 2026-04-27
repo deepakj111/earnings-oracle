@@ -79,6 +79,7 @@ def _make_grades(relevant_flags: list[bool]) -> list[RelevanceGrade]:
 
 
 def test_web_to_search_result_structure() -> None:
+    """Web to search result structure."""
     web = WebSearchResult(
         title="AAPL Q4", url="https://example.com", snippet="Revenue $94.9B", score=0.8
     )
@@ -102,6 +103,7 @@ def test_web_to_search_result_deterministic() -> None:
 
 
 def test_build_corrected_incorrect_uses_web_only() -> None:
+    """Build corrected incorrect uses web only."""
     original = _make_retrieval_result()
     web = [WebSearchResult(title="X", url="u1", snippet="s1")]
     result = _build_corrected_result(original, [], web, CRAGAction.INCORRECT)
@@ -110,6 +112,7 @@ def test_build_corrected_incorrect_uses_web_only() -> None:
 
 
 def test_build_corrected_ambiguous_combines_local_and_web() -> None:
+    """Build corrected ambiguous combines local and web."""
     original = _make_retrieval_result()
     local = [_make_search_result("c1")]
     web = [WebSearchResult(title="X", url="u1", snippet="s1")]
@@ -120,6 +123,7 @@ def test_build_corrected_ambiguous_combines_local_and_web() -> None:
 
 
 def test_build_corrected_correct_keeps_original() -> None:
+    """Build corrected correct keeps original."""
     original = _make_retrieval_result()
     result = _build_corrected_result(original, [], [], CRAGAction.CORRECT)
     assert result.results is original.results
@@ -166,6 +170,7 @@ def test_correct_all_relevant_returns_correct(
     mock_web_cls: MagicMock,
     mock_grader_cls: MagicMock,
 ) -> None:
+    """Correct all relevant returns correct."""
     gen_result = _make_gen_result(grounded=False)
     chunks = [_make_search_result(f"c{i}") for i in range(3)]
     retrieval = _make_retrieval_result(chunks)
@@ -197,6 +202,7 @@ def test_correct_none_relevant_triggers_web(
     mock_web_cls: MagicMock,
     mock_grader_cls: MagicMock,
 ) -> None:
+    """Correct none relevant triggers web."""
     gen_result = _make_gen_result(grounded=False)
     chunks = [_make_search_result(f"c{i}") for i in range(3)]
     retrieval = _make_retrieval_result(chunks)
@@ -233,6 +239,7 @@ def test_correct_partial_relevant_triggers_ambiguous(
     mock_web_cls: MagicMock,
     mock_grader_cls: MagicMock,
 ) -> None:
+    """Correct partial relevant triggers ambiguous."""
     gen_result = _make_gen_result(grounded=False)
     chunks = [_make_search_result(f"c{i}") for i in range(4)]
     retrieval = _make_retrieval_result(chunks)
@@ -260,6 +267,7 @@ def test_correct_partial_relevant_triggers_ambiguous(
 
 
 def test_correct_crag_disabled_returns_original() -> None:
+    """Correct crag disabled returns original."""
     gen_result = _make_gen_result(grounded=False)
     retrieval = _make_retrieval_result()
 
@@ -281,6 +289,7 @@ def test_correct_crag_disabled_returns_original() -> None:
 
 
 def test_crag_result_relevance_ratio() -> None:
+    """Crag result relevance ratio."""
     gen = _make_gen_result()
     crag = CRAGResult(
         question="q",
@@ -294,6 +303,7 @@ def test_crag_result_relevance_ratio() -> None:
 
 
 def test_crag_result_was_corrected() -> None:
+    """Crag result was corrected."""
     gen = _make_gen_result()
     for action, expected in [
         (CRAGAction.CORRECT, False),
@@ -305,6 +315,7 @@ def test_crag_result_was_corrected() -> None:
 
 
 def test_crag_result_to_json_round_trips() -> None:
+    """Crag result to json round trips."""
     import json
 
     gen = _make_gen_result()

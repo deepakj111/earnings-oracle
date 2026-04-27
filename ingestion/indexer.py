@@ -95,6 +95,7 @@ def _ensure_payload_indices(client: QdrantClient) -> None:
 
 
 def init_qdrant(url: str) -> QdrantClient:
+    """Initialize Qdrant client and optionally create the target collection if missing."""
     client = QdrantClient(url=url)
     existing = {c.name for c in client.get_collections().collections}
     if COLLECTION_NAME not in existing:
@@ -116,6 +117,7 @@ async def index_document(
     metadata: DocumentMetadata,
     qdrant: QdrantClient,
 ) -> tuple[list[list[str]], list[dict]]:
+    """Embed chunks and index them into Qdrant, returning data for the BM25 corpus."""
     child_chunks = [c for c in chunks if c.chunk_type == "child"]
     points: list[PointStruct] = []
     new_bm25_texts: list[list[str]] = []

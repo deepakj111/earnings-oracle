@@ -33,6 +33,7 @@ SHORT_HTML = "<html><body><p>Too short.</p></body></html>"
 
 @pytest.fixture
 def transcript_dir(tmp_path: Path) -> Path:
+    """Transcript dir."""
     d = tmp_path / "data" / "transcripts"
     d.mkdir(parents=True)
     return d
@@ -40,6 +41,7 @@ def transcript_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def bm25_path(tmp_path: Path) -> Path:
+    """Bm25 path."""
     return tmp_path / "data" / "bm25_index.pkl"
 
 

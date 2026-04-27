@@ -60,6 +60,7 @@ def _detect_quarter(text: str, fallback_month: int) -> str:
 
 
 def extract_metadata(ticker: str, date: str, raw_text: str) -> DocumentMetadata:
+    """Extract standard metadata (e.g. quarter and year) from a financial document text."""
     parts = date.split("-")
     year = int(parts[0]) if len(parts) >= 1 else 2024
     month = int(parts[1]) if len(parts) >= 2 else 1

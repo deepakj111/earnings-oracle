@@ -33,6 +33,7 @@ def get_8k_filings(
     start_date: str = "2023-01-01",
     end_date: str = date.today().strftime("%Y-%m-%d"),
 ) -> list[dict]:
+    """Fetch recent 8-K filings for a specific company CIK within a date range."""
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
     resp = requests.get(url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
@@ -99,6 +100,7 @@ def get_filing_documents(cik: str, accession: str) -> list[dict]:
 
 
 def pick_best_document(documents: list[dict]) -> str | None:
+    """Select the most relevant earnings press release document from a filing."""
     # First pass: EX-99.1 / EX-99 is always the earnings press release
     for doc in documents:
         name = doc["name"].lower()
@@ -129,6 +131,7 @@ def download_document(
     filing_meta: dict,
     output_dir: str,
 ) -> str | None:
+    """Download the specific SEC EDGAR document HTML file."""
     accession_clean = accession.replace("-", "")
     cik_int = int(cik)
 

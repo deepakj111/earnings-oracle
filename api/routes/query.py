@@ -201,6 +201,7 @@ async def ask(
     pipeline: _Pipeline,
     request: Request,
 ) -> AskResponse:
+    """Respond to a financial question using the RAG pipeline."""
     rid = getattr(request.state, "request_id", "-")
     logger.info(
         f"[{rid}] POST /query | "
@@ -286,6 +287,7 @@ async def ask_stream(
     pipeline: _Pipeline,
     request: Request,
 ) -> StreamingResponse:
+    """Stream response tokens for a financial question."""
     rid = getattr(request.state, "request_id", "-")
     logger.info(f"[{rid}] POST /query/stream | q={body.question!r:.80}")
 

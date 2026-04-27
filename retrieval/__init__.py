@@ -42,6 +42,7 @@ def retrieve(
     qdrant_client: QdrantClient,
     metadata_filter: MetadataFilter | None = None,
 ) -> RetrievalResult:
+    """Perform hybrid retrieval, cross-encoder reranking, and fetch context parent chunks."""
     # 3a — Hybrid search + RRF (Returns small child chunks)
     candidates: list[SearchResult] = search(
         query=query,

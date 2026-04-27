@@ -27,17 +27,20 @@ def _make_web_result(**kwargs) -> WebSearchResult:
 
 
 def test_trim_short_text_unchanged() -> None:
+    """Trim short text unchanged."""
     text = "short text"
     assert _trim(text) == text
 
 
 def test_trim_long_text_truncated() -> None:
+    """Trim long text truncated."""
     text = "x" * 2000
     result = _trim(text)
     assert len(result) <= 1500
 
 
 def test_trim_strips_whitespace() -> None:
+    """Trim strips whitespace."""
     assert _trim("  hello  ") == "hello"
 
 
@@ -45,6 +48,7 @@ def test_trim_strips_whitespace() -> None:
 
 
 def test_web_search_result_to_context_block() -> None:
+    """Web search result to context block."""
     r = _make_web_result(title="AAPL Q4", snippet="Revenue $94.9B")
     block = r.to_context_block(3)
     assert "[3]" in block
@@ -53,6 +57,7 @@ def test_web_search_result_to_context_block() -> None:
 
 
 def test_web_search_result_to_dict_truncates_snippet() -> None:
+    """Web search result to dict truncates snippet."""
     r = _make_web_result(snippet="x" * 1000)
     d = r.to_dict()
     assert len(d["snippet"]) <= 500
@@ -62,12 +67,14 @@ def test_web_search_result_to_dict_truncates_snippet() -> None:
 
 
 def test_provider_tavily_when_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provider tavily when key set."""
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-test123")
     client = WebSearchClient()
     assert client.provider == "tavily"
 
 
 def test_provider_duckduckgo_when_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provider duckduckgo when no key."""
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     client = WebSearchClient()
     assert client.provider == "duckduckgo"
@@ -77,6 +84,7 @@ def test_provider_duckduckgo_when_no_key(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_search_tavily_returns_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Search tavily returns results."""
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
 
     _ = {
@@ -106,6 +114,7 @@ def test_search_tavily_returns_results(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_search_duckduckgo_returns_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Search duckduckgo returns results."""
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
 
     with patch(
@@ -122,6 +131,7 @@ def test_search_duckduckgo_returns_results(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_search_returns_empty_on_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Search returns empty on exception."""
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     with patch("crag.web_search._search_duckduckgo", side_effect=RuntimeError("network error")):
         client = WebSearchClient()
@@ -130,6 +140,7 @@ def test_search_returns_empty_on_exception(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_search_max_results_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Search max results clamped."""
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     with patch("crag.web_search._search_duckduckgo", return_value=[]) as mock:
         client = WebSearchClient()
@@ -139,6 +150,7 @@ def test_search_max_results_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_search_results_sorted_by_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Search results sorted by score."""
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     unsorted = [
         WebSearchResult("C", "u3", "s", 0.3),

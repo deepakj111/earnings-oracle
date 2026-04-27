@@ -19,6 +19,7 @@ from generation.models import GenerationResult
 
 @pytest.fixture
 def mock_pipeline(sample_generation_result: GenerationResult) -> MagicMock:
+    """Mock pipeline."""
     pipeline = MagicMock()
     pipeline.ask_verbose.return_value = (
         sample_generation_result,
@@ -30,6 +31,7 @@ def mock_pipeline(sample_generation_result: GenerationResult) -> MagicMock:
 
 @pytest.fixture
 def sample_eval_sample() -> EvalSample:
+    """Sample eval sample."""
     return EvalSample(
         sample_id="test_sample_001",
         question="What was Apple's total net sales in Q4 2024?",
@@ -44,36 +46,43 @@ def sample_eval_sample() -> EvalSample:
 
 
 def test_golden_dataset_not_empty() -> None:
+    """Golden dataset not empty."""
     assert len(GOLDEN_DATASET) > 0
 
 
 def test_golden_dataset_all_have_sample_ids() -> None:
+    """Golden dataset all have sample ids."""
     for s in GOLDEN_DATASET:
         assert s.sample_id, f"EvalSample missing sample_id: {s.question[:40]}"
 
 
 def test_golden_dataset_all_have_ground_truth() -> None:
+    """Golden dataset all have ground truth."""
     for s in GOLDEN_DATASET:
         assert s.ground_truth, f"EvalSample missing ground_truth: {s.question[:40]}"
 
 
 def test_get_dataset_by_ticker() -> None:
+    """Get dataset by ticker."""
     aapl = get_dataset_by_ticker("AAPL")
     assert all(s.ticker == "AAPL" for s in aapl)
     assert len(aapl) >= 1
 
 
 def test_get_dataset_subset_limits_count() -> None:
+    """Get dataset subset limits count."""
     subset = get_dataset_subset(3)
     assert len(subset) == 3
 
 
 def test_get_dataset_subset_zero_returns_empty() -> None:
+    """Get dataset subset zero returns empty."""
     subset = get_dataset_subset(0)
     assert subset == []
 
 
 def test_eval_sample_auto_generates_id() -> None:
+    """Eval sample auto generates id."""
     s = EvalSample(question="What was revenue?", ground_truth="$100B")
     assert s.sample_id != ""
     assert len(s.sample_id) == 12
@@ -88,6 +97,7 @@ def test_harness_run_single_sample(
     mock_pipeline: MagicMock,
     sample_eval_sample: EvalSample,
 ) -> None:
+    """Harness run single sample."""
     mock_score_all.return_value = [
         MetricScore("faithfulness", 0.9, "good"),
         MetricScore("answer_relevancy", 0.85, "relevant"),
@@ -111,6 +121,7 @@ def test_harness_run_empty_dataset(
     mock_score_all: MagicMock,
     mock_pipeline: MagicMock,
 ) -> None:
+    """Harness run empty dataset."""
     harness = EvaluationHarness(mock_pipeline)
     report = harness.run(dataset=[], metrics=["faithfulness"])
     assert report.n_samples == 0
@@ -163,6 +174,7 @@ def test_harness_pass_rate(
     mock_score_all: MagicMock,
     sample_eval_sample: EvalSample,
 ) -> None:
+    """Harness pass rate."""
     broken = MagicMock()
     broken.ask_verbose.side_effect = RuntimeError("fail")
     mock_score_all.return_value = []
@@ -176,6 +188,7 @@ def test_harness_pass_rate(
 
 
 def test_eval_report_to_json_valid() -> None:
+    """Eval report to json valid."""
     report = EvalReport(
         dataset_name="test",
         n_samples=2,
@@ -190,6 +203,7 @@ def test_eval_report_to_json_valid() -> None:
 
 
 def test_eval_report_to_csv_has_header() -> None:
+    """Eval report to csv has header."""
     report = EvalReport(
         dataset_name="test",
         n_samples=0,
@@ -204,6 +218,7 @@ def test_eval_report_to_csv_has_header() -> None:
 
 
 def test_eval_report_to_csv_includes_failed() -> None:
+    """Eval report to csv includes failed."""
     failed = EvalSampleResult(
         sample=EvalSample("Q?", "GT.", sample_id="s1"),
         generated_answer="",
@@ -224,6 +239,7 @@ def test_eval_report_to_csv_includes_failed() -> None:
 
 
 def test_eval_report_summary_contains_metrics() -> None:
+    """Eval report summary contains metrics."""
     report = EvalReport(
         dataset_name="test_run",
         n_samples=5,
@@ -249,6 +265,7 @@ def test_save_report_writes_json_and_csv(
     sample_eval_sample: EvalSample,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Save report writes json and csv."""
     monkeypatch.setattr("evaluation.harness._eval_cfg.output_dir", str(tmp_path))
     mock_score_all.return_value = [MetricScore("faithfulness", 0.9, "ok")]
 

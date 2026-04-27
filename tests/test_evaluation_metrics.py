@@ -21,6 +21,7 @@ from evaluation.models import MetricScore
 
 
 def test_parse_score_valid() -> None:
+    """Parse score valid."""
     raw = '{"score": 0.85, "reasoning": "all claims are supported"}'
     score, reasoning = _parse_score(raw, "faithfulness")
     assert abs(score - 0.85) < 0.001
@@ -28,30 +29,35 @@ def test_parse_score_valid() -> None:
 
 
 def test_parse_score_clamps_above_one() -> None:
+    """Parse score clamps above one."""
     raw = '{"score": 1.8, "reasoning": "test"}'
     score, _ = _parse_score(raw, "test")
     assert score == 1.0
 
 
 def test_parse_score_clamps_below_zero() -> None:
+    """Parse score clamps below zero."""
     raw = '{"score": -0.5, "reasoning": "test"}'
     score, _ = _parse_score(raw, "test")
     assert score == 0.0
 
 
 def test_parse_score_embedded_json() -> None:
+    """Parse score embedded json."""
     raw = 'Sure! {"score": 0.6, "reasoning": "partial"} That is my evaluation.'
     score, _ = _parse_score(raw, "test")
     assert abs(score - 0.6) < 0.001
 
 
 def test_parse_score_no_json_fallback() -> None:
+    """Parse score no json fallback."""
     score, reasoning = _parse_score("not json", "test")
     assert score == 0.5
     assert "error" in reasoning.lower() or "parse" in reasoning.lower()
 
 
 def test_parse_score_malformed_json_fallback() -> None:
+    """Parse score malformed json fallback."""
     score, _ = _parse_score("{score: invalid}", "test")
     assert score == 0.5
 
@@ -61,6 +67,7 @@ def test_parse_score_malformed_json_fallback() -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_faithfulness_high(mock_call: MagicMock) -> None:
+    """Score faithfulness high."""
     mock_call.return_value = '{"score": 0.95, "reasoning": "all claims supported by context"}'
     result = score_faithfulness(
         question="What was Apple's Q4 revenue?",
@@ -75,6 +82,7 @@ def test_score_faithfulness_high(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_faithfulness_low(mock_call: MagicMock) -> None:
+    """Score faithfulness low."""
     mock_call.return_value = '{"score": 0.1, "reasoning": "answer contains claims not in context"}'
     result = score_faithfulness("Q?", "Answer not in context.", ["Unrelated text."])
     assert result.score < 0.3
@@ -82,6 +90,7 @@ def test_score_faithfulness_low(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_faithfulness_api_failure_returns_default(mock_call: MagicMock) -> None:
+    """Score faithfulness api failure returns default."""
     mock_call.side_effect = RuntimeError("API error")
     result = score_faithfulness("Q?", "A.", ["C."])
     assert result.score == 0.5
@@ -101,6 +110,7 @@ def test_score_faithfulness_no_context_chunks() -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_answer_relevancy_on_topic(mock_call: MagicMock) -> None:
+    """Score answer relevancy on topic."""
     mock_call.return_value = '{"score": 1.0, "reasoning": "answer directly addresses question"}'
     result = score_answer_relevancy(
         question="What was Apple's Q4 revenue?",
@@ -112,6 +122,7 @@ def test_score_answer_relevancy_on_topic(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_answer_relevancy_off_topic(mock_call: MagicMock) -> None:
+    """Score answer relevancy off topic."""
     mock_call.return_value = '{"score": 0.0, "reasoning": "answer discusses wrong company"}'
     result = score_answer_relevancy("AAPL revenue?", "Microsoft reported $65B.")
     assert result.score < 0.2
@@ -122,6 +133,7 @@ def test_score_answer_relevancy_off_topic(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_context_precision_all_relevant(mock_call: MagicMock) -> None:
+    """Score context precision all relevant."""
     mock_call.return_value = '{"score": 1.0, "reasoning": "all chunks directly relevant"}'
     result = score_context_precision(
         question="What was Apple's Q4 revenue?",
@@ -132,6 +144,7 @@ def test_score_context_precision_all_relevant(mock_call: MagicMock) -> None:
 
 
 def test_score_context_precision_empty_returns_zero() -> None:
+    """Score context precision empty returns zero."""
     result = score_context_precision("Q?", [])
     assert result.score == 0.0
     assert "no context" in result.reasoning.lower()
@@ -139,6 +152,7 @@ def test_score_context_precision_empty_returns_zero() -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_context_precision_mixed_chunks(mock_call: MagicMock) -> None:
+    """Score context precision mixed chunks."""
     mock_call.return_value = '{"score": 0.5, "reasoning": "half the chunks are relevant"}'
     result = score_context_precision("AAPL revenue?", ["AAPL revenue", "NVDA boilerplate"])
     assert abs(result.score - 0.5) < 0.001
@@ -149,6 +163,7 @@ def test_score_context_precision_mixed_chunks(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_context_recall_full_coverage(mock_call: MagicMock) -> None:
+    """Score context recall full coverage."""
     mock_call.return_value = '{"score": 1.0, "reasoning": "all ground truth facts present"}'
     result = score_context_recall(
         question="What was AAPL Q4 revenue?",
@@ -160,6 +175,7 @@ def test_score_context_recall_full_coverage(mock_call: MagicMock) -> None:
 
 
 def test_score_context_recall_empty_returns_zero() -> None:
+    """Score context recall empty returns zero."""
     result = score_context_recall("Q?", [], "ground truth text")
     assert result.score == 0.0
 
@@ -169,6 +185,7 @@ def test_score_context_recall_empty_returns_zero() -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_all_returns_all_four_metrics(mock_call: MagicMock) -> None:
+    """Score all returns all four metrics."""
     mock_call.return_value = '{"score": 0.8, "reasoning": "good"}'
     results = score_all(
         question="Q?",
@@ -187,6 +204,7 @@ def test_score_all_returns_all_four_metrics(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_all_subset_of_metrics(mock_call: MagicMock) -> None:
+    """Score all subset of metrics."""
     mock_call.return_value = '{"score": 0.7, "reasoning": "ok"}'
     results = score_all(
         question="Q?",
@@ -201,6 +219,7 @@ def test_score_all_subset_of_metrics(mock_call: MagicMock) -> None:
 
 @patch("evaluation.metrics._call")
 def test_score_all_unknown_metric_ignored(mock_call: MagicMock) -> None:
+    """Score all unknown metric ignored."""
     mock_call.return_value = '{"score": 0.7, "reasoning": "ok"}'
     results = score_all("Q?", "A.", ["C."], "GT.", metrics=["faithfulness", "nonexistent_metric"])
     assert len(results) == 1

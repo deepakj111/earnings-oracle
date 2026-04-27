@@ -399,6 +399,7 @@ def create_parent_child_chunks(
     sections: list[str],
     doc_type: str = "earnings_release",
 ) -> list[Chunk]:
+    """Create structured parent and sentence-aware child chunks from document sections."""
     semantic_sections = _split_into_semantic_sections(sections)
     if not semantic_sections:
         return []

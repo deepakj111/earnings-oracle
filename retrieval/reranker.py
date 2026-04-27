@@ -44,6 +44,7 @@ def rerank(
     query: str,
     candidates: list[SearchResult],
 ) -> list[SearchResult]:
+    """Score search candidates against the original query using a cross-encoder model."""
     if not candidates:
         return []
 

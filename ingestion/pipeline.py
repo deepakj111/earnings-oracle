@@ -132,6 +132,7 @@ async def _process_document(
 
 
 async def run_pipeline_async() -> None:
+    """Run the ingestion indexing pipeline asynchronously for pending transcript files."""
     setup_embedder()
     qdrant = init_qdrant(_settings.infra.qdrant_url)
 
@@ -185,6 +186,7 @@ async def run_pipeline_async() -> None:
 
 
 def run_pipeline() -> None:
+    """Synchronous entry point to run the ingestion pipeline."""
     asyncio.run(run_pipeline_async())
 
 

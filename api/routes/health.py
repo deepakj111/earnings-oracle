@@ -66,6 +66,7 @@ _API_VERSION = "0.1.0"
     ),
 )
 async def health(request: Request) -> HealthResponse:
+    """Run full health check probing Qdrant and the pipeline."""
     uptime = get_uptime_seconds(request)
     components: dict[str, ComponentStatus] = {}
     overall = "healthy"
