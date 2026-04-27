@@ -382,6 +382,7 @@ class Generator:
             stream=True,
         )
         from openai.types.chat import ChatCompletionChunk
+
         for chunk in stream:
             # chunk may be a ChatCompletionChunk or other variant in stubs
             # We use cast for mypy while keeping hasattr for runtime flexibility (and tests)
