@@ -80,7 +80,7 @@ def _get_client() -> OpenAI:
 # Avoids redundant API calls when the same query appears multiple times in a
 # session (e.g., during evaluation, CRAG loops, or UI demos).
 
-_cache = LRUCache(maxsize=CACHE_MAX_SIZE)
+_cache: LRUCache[str, TransformedQuery] = LRUCache(maxsize=CACHE_MAX_SIZE)
 
 
 def _cache_key(query: str) -> str:
