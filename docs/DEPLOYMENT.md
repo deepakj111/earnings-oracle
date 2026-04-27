@@ -183,6 +183,8 @@ docker compose down -v
 
 ## CI/CD Pipeline
 
+For a deep technical dive into our automated pipelines, see [CI/CD & Automation](CI_CD.md).
+
 ### CI Workflow (`.github/workflows/ci.yml`)
 
 Six jobs run **in parallel** on every push to `main`/`develop` and on all pull requests:

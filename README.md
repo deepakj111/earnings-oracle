@@ -14,7 +14,6 @@
 This project is tailored to demonstrate senior-level competencies in **Applied AI, Machine Learning Engineering, and MLOps**:
 
 - **Rigorous LLM Evaluation**: Uses an automated LLM-as-a-judge harness to measure *Faithfulness* and *Context Relevancy*. Employs **Bootstrap Resampling (95% CIs)** and paired **Wilcoxon signed-rank tests** to prove architectural improvements are statistically significant, avoiding "vibe checks".
-- **Zero-Latency Semantic Caching**: Reduces cost and compute footprint by routing semantically identical queries to an ONNX-backed embedding cache layer (Qdrant).
 - **Corrective RAG (CRAG)**: An autonomous meta-model grades chunk relevance. If local context is inadequate (e.g. data outside the 8-K corpus), it falls back to a web search aggregator (Tavily/DDG).
 - **Advanced Context Engineering**: Mitigates the *Lost-in-the-Middle* phenomenon via U-shaped "valley reordering" of contexts. Utilizes token-aware parent-child chunking to guarantee bounded NLP context limits.
 - **Production Observability**: Full asynchronous FastAPI deployment equipped with custom **Prometheus** endpoints (`RAG_REGISTRY`). Tracks LLM token usage, cost-in-USD, latency-by-layer, and cross-encoder RRF drift.
@@ -23,19 +22,14 @@ This project is tailored to demonstrate senior-level competencies in **Applied A
 
 ## 🏗 System Architecture
 
-The pipeline consists of seven distinct execution layers, parallelized via `asyncio` to bound P95 latencies under 3 seconds.
+The pipeline consists of six distinct execution layers, parallelized via `asyncio` to bound P95 latencies under 3 seconds.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                      FINANCIAL RAG EVALUATION & DEPLOYMENT                   │
 │                                                                              │
-│                      ┌─────────────────────────────────┐                     │
-│                      │ L0: SEMANTIC CACHE (Qdrant)     │                     │
-│                      └────────────────┬────────────────┘                     │
-│                                       │ (Cache Miss)                         │
-│                                       ▼                                      │
 │  ┌─────────────┐   ┌──────────────────┐   ┌──────────────┐   ┌───────────┐   │
-│  │L1 INGESTION │   │ L2 QUERY XFORM   │   │ L3 RETRIEVAL │   │ L5 SYNTH  │   │
+│  │L1 INGESTION │   │ L2 QUERY XFORM   │   │ L3 RETRIEVAL │   │ L4 SYNTH  │   │
 │  │             │   │                  │   │              │   │           │   │
 │  │ SEC EDGAR   │   │ HyDE             │   │ BM25 Sparse  │   │ OpenAI    │   │
 │  │ Parser      │──▶│ Multi-Query (3x) │──▶│ Qdrant Dense │──▶│ Grounding │   │
@@ -44,11 +38,11 @@ The pipeline consists of seven distinct execution layers, parallelized via `asyn
 │  └─────────────┘   └──────────┬───────┘   └──────┬───────┘   └─────┬─────┘   │
 │                               │                  │                 │         │
 │                        ┌──────▼──────────────────▼────────┐        │         │
-│                        │ L4: GRAPH-FUSED RETRIEVAL        │        │         │
+│                        │ L3.5: GRAPH-FUSED RETRIEVAL      │        │         │
 │                        │ Knowledge Graph Traversal        │        │         │
 │                        └──────────────────────────────────┘        │         │
 │  ┌─────────────────────────────────────────────────────────────────▼───────┐ │
-│  │                    L6: CRAG (Corrective Fallback)                       │ │
+│  │                    L5: CRAG (Corrective Fallback)                       │ │
 │  │  Grade context → CORRECT / AMBIGUOUS / INCORRECT → Web Search + Regen   │ │
 │  └─────────────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -74,7 +68,7 @@ Achieving strong results on the `earnings-oracle` golden dataset requires precis
 ## 🛠 Tech Stack
 
 - **ML Frameworks**: `fastembed` (BAAI/bge-large-en-v1.5 local embedding), `FlashRank` (ms-marco cross-encoder)
-- **Vector Search**: `Qdrant` (Dense + Cache), `rank-bm25` (Sparse)
+- **Vector Search**: `Qdrant` (Dense), `rank-bm25` (Sparse)
 - **Generative AI**: `OpenAI SDK` (`gpt-4-turbo` for evaluation, `gpt-4.1-nano` for generation)
 - **Infrastructure**: `FastAPI`, `Streamlit`, `Docker Compose`, `Prometheus`, `Grafana`
 - **Code Quality**: Strict `mypy` typing, `ruff` checks, `bandit` security scanning, `pytest` suite (~100% coverage on ingestion).
@@ -125,7 +119,7 @@ This repository boasts a robust testing apparatus with **151+ parallelized unit 
 ```bash
 poetry run pytest tests/
 ```
-GitHub Actions orchestrates the CI/CD matrix: Python format enforcement (`ruff`), static analysis (`mypy`), security leak detection (`trufflehog`/`bandit`), and Docker smoke testing upon Main merges.
+GitHub Actions orchestrates the CI/CD matrix: Python format enforcement (`ruff`), static analysis (`mypy`), security leak detection (`trufflehog`/`bandit`), and Docker smoke testing upon Main merges. See [CI/CD & Automation](docs/CI_CD.md) for details.
 
 ## 📄 License
 MIT License.

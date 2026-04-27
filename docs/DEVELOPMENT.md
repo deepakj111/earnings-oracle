@@ -336,9 +336,11 @@ poetry run pre-commit run mypy --all-files
 | `debug-statements` | Forgotten `breakpoint()` / `pdb` | ❌ No |
 | `ruff` | PEP8 + bugbear + isort | ✅ Yes (`--fix`) |
 | `ruff-format` | Code formatting | ✅ Yes |
-| `mypy` | Type annotations (`ingestion/` scope) | ❌ No |
+| `mypy` | Type annotations | ❌ No |
 | `bandit` | Security patterns | ❌ No |
 | `trufflehog` | Verified secret scanning (staged changes) | ❌ No |
+
+For a deep dive into our automation pipelines, see [CI/CD & Automation](CI_CD.md).
 
 ### Ruff configuration
 
