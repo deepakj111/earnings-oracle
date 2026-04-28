@@ -58,11 +58,11 @@ def _save_bm25(bm25_texts: list[list[str]], bm25_corpus: list[dict]) -> None:
     BM25_INDEX_PATH.parent.mkdir(exist_ok=True)
 
     with open(BM25_INDEX_PATH, "wb") as f:
-        pickle.dump(bm25, f)  # nosec B403
+        pickle.dump(bm25, f)  # nosec B403 — trusted local data only; no user-supplied input
     logger.info(f"BM25 index saved → {BM25_INDEX_PATH} ({len(bm25_texts)} chunks)")
 
     with open(BM25_CORPUS_PATH, "wb") as f:
-        pickle.dump(bm25_corpus, f)  # nosec B403
+        pickle.dump(bm25_corpus, f)  # nosec B403 — trusted local data only; no user-supplied input
     logger.info(f"BM25 corpus saved → {BM25_CORPUS_PATH} ({len(bm25_corpus)} entries)")
 
 
@@ -76,8 +76,8 @@ def _load_existing_bm25() -> tuple[list[list[str]], list[dict]]:
         return [], []
 
     try:
-        with open(BM25_CORPUS_PATH, "rb") as f:  # nosec B403
-            bm25_corpus: list[dict] = pickle.load(f)  # nosec B301
+        with open(BM25_CORPUS_PATH, "rb") as f:  # nosec B403 — trusted local data
+            bm25_corpus: list[dict] = pickle.load(f)  # nosec B301 — trusted local data only
         bm25_texts = [entry["text"].lower().split() for entry in bm25_corpus]
         logger.info(f"Loaded existing BM25 corpus — {len(bm25_corpus)} chunks carried forward.")
         return bm25_texts, bm25_corpus

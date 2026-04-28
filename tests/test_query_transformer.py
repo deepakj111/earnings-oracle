@@ -246,11 +246,12 @@ class TestRunMultiQuery:
 
 class TestCallLlm:
     def setup_method(self):
-        transformer_module._openai_client = None
+        # We don't clear the shared singleton here as it affects other tests
+        pass
 
     def test_returns_stripped_text_on_success(self) -> None:
         mock_client = _mock_openai_client("  The revenue was $94.9 billion.  ")
-        with patch("query.transformer._get_client", return_value=mock_client):
+        with patch("query.transformer.get_openai_client", return_value=mock_client):
             from query.transformer import _call_llm
 
             result = _call_llm(
@@ -260,7 +261,7 @@ class TestCallLlm:
 
     def test_correct_model_passed_to_client(self) -> None:
         mock_client = _mock_openai_client("ok")
-        with patch("query.transformer._get_client", return_value=mock_client):
+        with patch("query.transformer.get_openai_client", return_value=mock_client):
             with patch("query.transformer.QUERY_TRANSFORM_MODEL", "test-model-xyz"):
                 from query.transformer import _call_llm
 
@@ -277,7 +278,7 @@ class TestCallLlm:
 
     def test_max_tokens_passed_to_client(self) -> None:
         mock_client = _mock_openai_client("ok")
-        with patch("query.transformer._get_client", return_value=mock_client):
+        with patch("query.transformer.get_openai_client", return_value=mock_client):
             from query.transformer import _call_llm
 
             _call_llm("sys", "usr", 0.3, 999, "test")
@@ -285,7 +286,7 @@ class TestCallLlm:
 
     def test_system_and_user_messages_structured_correctly(self) -> None:
         mock_client = _mock_openai_client("ok")
-        with patch("query.transformer._get_client", return_value=mock_client):
+        with patch("query.transformer.get_openai_client", return_value=mock_client):
             from query.transformer import _call_llm
 
             _call_llm("MY SYSTEM PROMPT", "MY USER MSG", 0.3, 100, "test")
@@ -299,35 +300,11 @@ class TestCallLlm:
 
     def test_empty_response_raises_exception(self) -> None:
         mock_client = _mock_openai_client("")
-        with patch("query.transformer._get_client", return_value=mock_client):
+        with patch("query.transformer.get_openai_client", return_value=mock_client):
             from query.transformer import _call_llm
 
             with pytest.raises(ValueError):
                 _call_llm("sys", "usr", 0.3, 100, "test")
-
-    def test_missing_api_key_raises_environment_error(self) -> None:
-        transformer_module._openai_client = None
-        with patch("query.transformer._settings") as mock_settings:
-            mock_settings.infra.openai_api_key = ""
-            from query.transformer import _get_client
-
-            with pytest.raises(EnvironmentError, match="OPENAI_API_KEY"):
-                _get_client()
-
-    def test_client_singleton_reused_on_second_call(self) -> None:
-        transformer_module._openai_client = None
-        mock_client = _mock_openai_client("ok")
-        with (
-            patch("query.transformer._settings") as mock_settings,
-            patch("query.transformer.OpenAI", return_value=mock_client) as mock_openai,
-        ):
-            mock_settings.infra.openai_api_key = "sk-test-key"
-            from query.transformer import _get_client
-
-            c1 = _get_client()
-            c2 = _get_client()
-        assert c1 is c2
-        assert mock_openai.call_count == 1
 
 
 # ── QueryTransformer.__init__ ─────────────────────────────────────────────────
@@ -349,7 +326,7 @@ class TestQueryTransformerInit:
 class TestQueryTransformerTransform:
     def setup_method(self):
         transformer_module._cache.clear()
-        transformer_module._openai_client = None
+        # No more direct client reset here
 
     def _patched_transform(self, query, *, hyde="hyde doc", multi=None, stepback="broader q"):
         if multi is None:

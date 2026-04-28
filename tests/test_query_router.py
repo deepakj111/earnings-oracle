@@ -22,7 +22,7 @@ from query.router import QueryIntent, QueryRouter
 @pytest.fixture
 def router() -> QueryRouter:
     """Router."""
-    with patch("query.router.OpenAI"):
+    with patch("query.router.get_openai_client"):
         r = QueryRouter()
     return r
 

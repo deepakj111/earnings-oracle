@@ -38,31 +38,17 @@ import re
 from collections.abc import Callable
 
 from loguru import logger
-from openai import OpenAI
 
 from config import settings as _settings
+from config.openai_client import get_openai_client
 from evaluation.models import MetricScore
 
 _eval_cfg = _settings.evaluation
 _JSON_RE = re.compile(r"\{[^}]*\}", re.DOTALL)
 
-# ── OpenAI client ──────────────────────────────────────────────────────────────
-
-_client: OpenAI | None = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        key = _settings.infra.openai_api_key
-        if not key:
-            raise OSError("OPENAI_API_KEY is not set.")
-        _client = OpenAI(api_key=key, max_retries=2)
-    return _client
-
 
 def _call(prompt: str) -> str:
-    resp = _get_client().chat.completions.create(
+    resp = get_openai_client().chat.completions.create(
         model=_eval_cfg.model,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
@@ -280,6 +266,8 @@ def compute_all_metrics(
     Convenience wrapper used by the retrieval experiment framework to
     evaluate a single pipeline call without working with MetricScore objects.
 
+    Delegates to ``score_all`` to avoid duplicating the metric dispatch table.
+
     Args:
         question       : The original user question
         answer         : The pipeline-generated answer
@@ -290,29 +278,5 @@ def compute_all_metrics(
     Returns:
         dict mapping metric name → float score in [0, 1]
     """
-    selected = metrics or [
-        "faithfulness",
-        "answer_relevancy",
-        "context_precision",
-        "context_recall",
-    ]
-
-    dispatch: dict[str, Callable[[], MetricScore]] = {
-        "faithfulness": lambda: score_faithfulness(question, answer, context_chunks),
-        "answer_relevancy": lambda: score_answer_relevancy(question, answer),
-        "context_precision": lambda: score_context_precision(question, context_chunks),
-        "context_recall": lambda: score_context_recall(question, context_chunks, ground_truth),
-    }
-
-    results: dict[str, float] = {}
-    for metric in selected:
-        if metric not in dispatch:
-            results[metric] = 0.0
-            continue
-        try:
-            results[metric] = dispatch[metric]().score
-        except Exception as exc:
-            logger.warning(f"compute_all_metrics | {metric} failed: {exc}")
-            results[metric] = 0.0
-
-    return results
+    scored = score_all(question, answer, context_chunks, ground_truth, metrics)
+    return {ms.metric: ms.score for ms in scored}

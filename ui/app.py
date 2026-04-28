@@ -191,21 +191,12 @@ def _render_response_meta(meta: dict[str, Any]) -> None:
     total_tokens = usage.get("total_tokens", 0)
     context_tokens = context.get("tokens_used", 0)
 
-    was_cached = meta.get("was_cached", False)
-
     grounded_cls = "grounded-true" if grounded else "grounded-false"
     grounded_label = "✓ Grounded" if grounded else "✗ Ungrounded"
-
-    cache_badge = (
-        '<span class="stat-chip" style="background:#fff3cd;color:#856404;border:1px solid #ffe69c;">⚡ Cached</span>'
-        if was_cached
-        else ""
-    )
 
     st.markdown(
         f"""
         <div style="margin: 8px 0 4px 0;">
-          {cache_badge}
           <span class="stat-chip">⏱ {format_latency(latency)}</span>
           <span class="stat-chip">🪙 {format_token_count(total_tokens)} tokens</span>
           <span class="stat-chip">📄 {context.get("chunks_used", 0)} chunks

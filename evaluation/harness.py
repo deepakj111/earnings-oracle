@@ -88,11 +88,7 @@ class EvaluationHarness:
             )
 
         # Run pipeline
-        # Disable cache to prevent data leakage during evaluation
         try:
-            old_cache_enabled = _settings.cache.enabled
-            # Monkeypatch the cache temporarily for this thread
-            object.__setattr__(_settings.cache, "enabled", False)
             result, _q_summary, _r_summary = self._pipeline.ask_verbose(
                 question=sample.question,
                 metadata_filter=meta_filter,
@@ -107,8 +103,6 @@ class EvaluationHarness:
                 pipeline_failed=True,
                 error_message=str(exc),
             )
-        finally:
-            object.__setattr__(_settings.cache, "enabled", old_cache_enabled)
 
         # Extract context chunks for metric scoring
         context_chunks = [(c.excerpt or "") for c in result.citations]

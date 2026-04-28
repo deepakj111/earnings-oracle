@@ -240,13 +240,19 @@ class RetrievalConfig:
 
 @dataclass(frozen=True)
 class InfraConfig:
-    """Infrastructure endpoints and secrets. All values come from .env only."""
+    """
+    Infrastructure endpoints and secrets. All values come from .env only.
+
+    log_format: 'text' (default, human-readable) or 'json' (structured logging
+      for Docker/K8s log aggregation via ELK, CloudWatch, Datadog).
+    """
 
     qdrant_url: str = field(default_factory=lambda: _env_str("QDRANT_URL", "http://localhost:6333"))
     openai_api_key: str = field(default_factory=lambda: _env_str("OPENAI_API_KEY", ""))
     sec_user_agent: str = field(
         default_factory=lambda: _env_str("SEC_USER_AGENT", "Your Name your@email.com")
     )
+    log_format: str = field(default_factory=lambda: _env_str("LOG_FORMAT", "text"))
     # Read by fastembed library automatically — surfaced here for documentation/validation only
     fastembed_cache_path: str = field(default_factory=lambda: _env_str("FASTEMBED_CACHE_PATH", ""))
 
@@ -355,29 +361,6 @@ class ObservabilityConfig:
     )
 
 
-# ── Semantic Cache ─────────────────────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class CacheConfig:
-    """
-    Configuration for the Embedding-Based Semantic Cache.
-
-    enabled: set RAG_CACHE_ENABLED=false to bypass the cache.
-    collection_name: Qdrant collection used to store the cache.
-    similarity_threshold: cosine similarity cutoff (0.0 to 1.0).
-      E.g., 0.95 means questions must be extremely semantically similar to trigger a hit.
-    """
-
-    enabled: bool = field(default_factory=lambda: _env_bool("RAG_CACHE_ENABLED", True))
-    collection_name: str = field(
-        default_factory=lambda: _env_str("RAG_CACHE_COLLECTION", "semantic_cache")
-    )
-    similarity_threshold: float = field(
-        default_factory=lambda: _env_float("RAG_CACHE_SIMILARITY_THRESHOLD", 0.95)
-    )
-
-
 # ── Knowledge Graph ────────────────────────────────────────────────────────────
 
 
@@ -429,7 +412,6 @@ class Settings:
     crag: CRAGConfig = field(default_factory=CRAGConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
-    cache: CacheConfig = field(default_factory=CacheConfig)
     knowledge_graph: KnowledgeGraphConfig = field(default_factory=KnowledgeGraphConfig)
 
     def validate(self) -> None:

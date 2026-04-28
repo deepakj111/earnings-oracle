@@ -143,7 +143,6 @@ def _serialise(
         ],
         grounded=result.grounded,
         retrieval_failed=result.retrieval_failed,
-        was_cached=result.was_cached,
         model=result.model,
         usage=UsageOut(
             prompt_tokens=result.prompt_tokens,

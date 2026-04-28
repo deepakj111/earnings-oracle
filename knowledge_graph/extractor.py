@@ -100,9 +100,9 @@ async def _call_llm_extract(
     Returns parsed JSON dict or empty dict on failure.
     """
     try:
-        from openai import AsyncOpenAI
+        from config.openai_client import get_async_openai_client
 
-        client = AsyncOpenAI(api_key=settings.infra.openai_api_key)
+        client = get_async_openai_client()
         response = await client.chat.completions.create(
             model=settings.knowledge_graph.extraction_model,
             messages=[

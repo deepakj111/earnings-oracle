@@ -102,7 +102,7 @@ def test_parse_response_malformed_json_falls_back() -> None:
 # ── _grade_one ─────────────────────────────────────────────────────────────────
 
 
-@patch("crag.grader._get_client")
+@patch("crag.grader.get_openai_client")
 def test_grade_one_relevant(mock_get_client: MagicMock) -> None:
     """Grade one relevant."""
     mock_get_client.return_value.chat.completions.create.return_value = _mock_openai_response(
@@ -117,7 +117,7 @@ def test_grade_one_relevant(mock_get_client: MagicMock) -> None:
     assert grade.score == pytest.approx(0.92, abs=0.001)
 
 
-@patch("crag.grader._get_client")
+@patch("crag.grader.get_openai_client")
 def test_grade_one_irrelevant(mock_get_client: MagicMock) -> None:
     """Grade one irrelevant."""
     mock_get_client.return_value.chat.completions.create.return_value = _mock_openai_response(
@@ -130,7 +130,7 @@ def test_grade_one_irrelevant(mock_get_client: MagicMock) -> None:
     assert grade.score < 0.2
 
 
-@patch("crag.grader._get_client")
+@patch("crag.grader.get_openai_client")
 def test_grade_one_api_failure_fails_open(mock_get_client: MagicMock) -> None:
     """Any API error should produce a lenient grade (relevant=True, score=0.5)."""
     mock_get_client.return_value.chat.completions.create.side_effect = RuntimeError("API down")
@@ -142,7 +142,7 @@ def test_grade_one_api_failure_fails_open(mock_get_client: MagicMock) -> None:
     assert "error" in grade.reasoning.lower()
 
 
-@patch("crag.grader._get_client")
+@patch("crag.grader.get_openai_client")
 def test_grade_one_empty_response_falls_back(mock_get_client: MagicMock) -> None:
     """Grade one empty response falls back."""
     mock_get_client.return_value.chat.completions.create.return_value = _mock_openai_response("")

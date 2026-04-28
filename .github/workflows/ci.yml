@@ -119,7 +119,16 @@ jobs:
 
       - name: Run mypy
         run: >
-          poetry run mypy ingestion/
+          poetry run mypy
+          ingestion/
+          query/
+          retrieval/
+          generation/
+          crag/
+          observability/
+          api/
+          config/
+          knowledge_graph/
           --ignore-missing-imports
           --disallow-untyped-defs
           --no-strict-optional
@@ -376,6 +385,7 @@ jobs:
           declare -A results=(
             [lint]="${{ needs.lint.result }}"
             [typecheck]="${{ needs.typecheck.result }}"
+            [security]="${{ needs.security.result }}"
             [test]="${{ needs.test.result }}"
             [validate-configs]="${{ needs.validate-configs.result }}"
             [docker-build]="${{ needs.docker-build.result }}"

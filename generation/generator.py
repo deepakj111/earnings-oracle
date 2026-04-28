@@ -50,7 +50,7 @@ from collections.abc import Iterator
 from typing import Any, cast
 
 from loguru import logger
-from openai import APIError, APITimeoutError, OpenAI, RateLimitError
+from openai import APIError, APITimeoutError, RateLimitError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -59,28 +59,13 @@ from tenacity import (
 )
 
 from config import settings as _settings
+from config.openai_client import get_openai_client
 from generation.context_builder import build_context
 from generation.models import Citation, GenerationResult
 from generation.prompts import GENERATION_SYSTEM, GENERATION_USER, UNGROUNDED_PHRASES
 from retrieval.models import RetrievalResult, SearchResult
 
 _cfg = _settings.generation
-
-# ── OpenAI client (lazy singleton) ────────────────────────────────────────────
-
-_openai_client: OpenAI | None = None
-
-
-def _get_client() -> OpenAI:
-    global _openai_client
-    if _openai_client is None:
-        api_key = _settings.infra.openai_api_key
-        if not api_key:
-            raise OSError("OPENAI_API_KEY is not set. Add it to your .env file.")
-        # max_retries=0 — tenacity handles our retry logic instead of the SDK default
-        _openai_client = OpenAI(api_key=api_key, max_retries=0)
-        logger.info(f"OpenAI generation client initialised | model={_cfg.model}")
-    return _openai_client
 
 
 # ── Citation extraction ────────────────────────────────────────────────────────
@@ -174,7 +159,7 @@ def _call_llm(prompt_messages: list[Any]) -> tuple[str, int, int]:
     Returns:
         (answer_text, prompt_tokens, completion_tokens)
     """
-    client = _get_client()
+    client = get_openai_client()
     try:
         response = client.chat.completions.create(
             model=_cfg.model,
@@ -373,7 +358,7 @@ class Generator:
             {"role": "user", "content": f"{GENERATION_SYSTEM}\n\n{user_content}"},
         ]
 
-        client = _get_client()
+        client = get_openai_client()
         stream = client.chat.completions.create(
             model=_cfg.model,
             messages=prompt_messages,  # type: ignore[arg-type]

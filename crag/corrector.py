@@ -34,7 +34,6 @@ import time
 from hashlib import md5
 
 from loguru import logger
-from qdrant_client import QdrantClient  # noqa: F401  (kept for future parent-fetch)
 
 from config import settings as _settings
 from crag.grader import RelevanceGrader

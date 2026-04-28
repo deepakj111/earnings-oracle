@@ -92,7 +92,6 @@ class GenerationResult:
     latency_seconds: float
     grounded: bool
     retrieval_failed: bool
-    was_cached: bool = False
     trace_id: str | None = None  # set by tracer for request correlation
 
     # ── Derived properties ────────────────────────────────────────────────────

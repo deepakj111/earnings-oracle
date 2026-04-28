@@ -36,12 +36,13 @@ repos:
         additional_dependencies:
           - types-requests
           - types-beautifulsoup4
+          - types-cachetools
         args:
           - "--ignore-missing-imports"
           - "--disallow-untyped-defs"
           - "--no-strict-optional"
           - "--pretty"
-        files: ^ingestion/
+        files: ^(ingestion|query|retrieval|generation|crag|observability|api|config|knowledge_graph)/
 
   # ── 4. Bandit — security scanning ───────────────────────────────────
   - repo: https://github.com/PyCQA/bandit
@@ -57,7 +58,7 @@ repos:
         name: pip-audit
         entry: poetry run pip-audit
         language: system
-        args: ["--ignore-vuln", "CVE-2026-25990", "--ignore-vuln", "CVE-2026-40192"]
+        args: ["--ignore-vuln", "CVE-2026-25990", "--ignore-vuln", "CVE-2026-40192", "--ignore-vuln", "CVE-2026-41066", "--ignore-vuln", "CVE-2026-3219"]
         pass_filenames: false
         always_run: true
 

@@ -28,12 +28,12 @@ from typing import Any
 
 from cachetools import LRUCache
 from loguru import logger
-from openai import APIError, APITimeoutError, OpenAI, RateLimitError
+from openai import APIError, APITimeoutError, RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # ── Configuration (all overridable via environment) ───────────────────────────
-# ── NEW: import from config ────────────────────────────────────────────────────
 from config import settings as _settings
+from config.openai_client import get_openai_client
 from query.models import TransformedQuery
 from query.prompts import (
     HYDE_SYSTEM,
@@ -58,22 +58,6 @@ CACHE_MAX_SIZE: int = _cfg.cache_max_size
 _TEMP_HYDE: float = _cfg.temperature_hyde
 _TEMP_MULTI: float = _cfg.temperature_multi_query
 _TEMP_STEPBACK: float = _cfg.temperature_stepback
-
-
-# ── OpenAI client (lazy singleton, thread-safe after first init) ──────────────
-
-_openai_client: OpenAI | None = None
-
-
-def _get_client() -> OpenAI:
-    global _openai_client
-    if _openai_client is None:
-        api_key = _settings.infra.openai_api_key
-        if not api_key:
-            raise OSError("OPENAI_API_KEY is not set. Add it to your .env file.")
-        _openai_client = OpenAI(api_key=api_key, max_retries=0)
-        logger.info(f"OpenAI client initialised | query model={QUERY_TRANSFORM_MODEL}")
-    return _openai_client
 
 
 # ── In-memory LRU cache ────────────────────────────────────────────────────────
@@ -113,7 +97,7 @@ def _call_llm(
     Retries on: RateLimitError, APITimeoutError.
     Propagates on: AuthenticationError, InvalidRequestError (unrecoverable), and APIError (5xx/4xx context).
     """
-    client = _get_client()
+    client = get_openai_client()
     try:
         response = client.chat.completions.create(
             model=QUERY_TRANSFORM_MODEL,

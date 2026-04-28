@@ -236,7 +236,7 @@ class TestIsGrounded:
 
 
 class TestGeneratorGenerate:
-    @patch("generation.generator._get_client")
+    @patch("generation.generator.get_openai_client")
     def test_empty_retrieval_returns_no_context_answer(self, mock_get_client) -> None:
         """Empty RetrievalResult must return the no-context fallback immediately."""
         generator = Generator()
@@ -386,7 +386,7 @@ class TestGeneratorStreaming:
         full_text = "".join(tokens)
         assert "No relevant documents" in full_text
 
-    @patch("generation.generator._get_client")
+    @patch("generation.generator.get_openai_client")
     def test_streaming_yields_tokens(self, mock_get_client) -> None:
         """Mock the streaming API and verify tokens are yielded correctly."""
 

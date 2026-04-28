@@ -36,9 +36,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from loguru import logger
-from openai import OpenAI
 
 from config import settings as _settings
+from config.openai_client import get_openai_client
 
 _TICKER_PATTERN = re.compile(
     r"\b(AAPL|NVDA|MSFT|AMZN|META|JPM|XOM|UNH|TSLA|WMT|"
@@ -199,7 +199,7 @@ class QueryRouter:
     """
 
     def __init__(self) -> None:
-        self._client = OpenAI(api_key=_settings.infra.openai_api_key)
+        self._client = get_openai_client()
         self._model = _settings.query_transform.model
         self._stats = RouterStats()
         logger.info(f"QueryRouter initialised | model={self._model}")

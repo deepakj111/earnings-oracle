@@ -82,9 +82,9 @@ def _load_bm25() -> tuple[object, list[dict]]:
         )
 
     with open(_BM25_INDEX_PATH, "rb") as f:
-        _bm25_index = pickle.load(f)  # nosec B301
+        _bm25_index = pickle.load(f)  # nosec B301 — trusted local data only
     with open(_BM25_CORPUS_PATH, "rb") as f:
-        _bm25_corpus = pickle.load(f)  # nosec B301
+        _bm25_corpus = pickle.load(f)  # nosec B301 — trusted local data only
 
     logger.info(f"BM25 index loaded: {len(_bm25_corpus)} corpus entries.")
     return _bm25_index, _bm25_corpus

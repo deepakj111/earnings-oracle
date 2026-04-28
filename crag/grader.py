@@ -26,9 +26,9 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loguru import logger
-from openai import OpenAI
 
 from config import settings as _settings
+from config.openai_client import get_openai_client
 from crag.models import RelevanceGrade
 from retrieval.models import SearchResult
 
@@ -96,21 +96,6 @@ def _parse_response(raw: str, chunk_id: str) -> tuple[bool, float, str]:
     return relevant, score, reasoning
 
 
-# ── OpenAI client singleton ────────────────────────────────────────────────────
-
-_client: OpenAI | None = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        key = _settings.infra.openai_api_key
-        if not key:
-            raise OSError("OPENAI_API_KEY is not set.")
-        _client = OpenAI(api_key=key, max_retries=2)
-    return _client
-
-
 # ── Core single-chunk grading ──────────────────────────────────────────────────
 
 
@@ -122,7 +107,7 @@ def _grade_one(question: str, chunk: SearchResult) -> RelevanceGrade:
     chunk_text = ((chunk.parent_text or chunk.text) or "")[:800].strip()
 
     try:
-        resp = _get_client().chat.completions.create(
+        resp = get_openai_client().chat.completions.create(
             model=_settings.query_transform.model,  # reuse nano tier
             messages=[
                 {
