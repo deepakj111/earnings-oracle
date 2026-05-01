@@ -354,7 +354,10 @@ class TestStreamQuery:
         with patch("requests.post", return_value=mock_resp):
             tokens = list(stream_query("http://localhost:8000", "What is AAPL revenue?"))
 
-        assert tokens == ["Apple", " reported"]
+        assert tokens == [
+            {"type": "token", "content": "Apple"},
+            {"type": "token", "content": " reported"},
+        ]
 
     def test_skips_blank_lines(self) -> None:
         from ui.utils import stream_query
@@ -369,7 +372,7 @@ class TestStreamQuery:
         with patch("requests.post", return_value=mock_resp):
             tokens = list(stream_query("http://localhost:8000", "question"))
 
-        assert tokens == ["hello"]
+        assert tokens == [{"type": "token", "content": "hello"}]
 
     def test_error_event_yields_error_token(self) -> None:
         from ui.utils import stream_query
@@ -382,7 +385,8 @@ class TestStreamQuery:
             tokens = list(stream_query("http://localhost:8000", "question"))
 
         assert len(tokens) == 1
-        assert "Rate limit exceeded" in tokens[0]
+        assert "Rate limit exceeded" in tokens[0]["content"]
+        assert tokens[0]["type"] == "error"
 
     def test_passes_metadata_filter_in_payload(self) -> None:
         from ui.utils import stream_query

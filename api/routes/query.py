@@ -310,11 +310,14 @@ async def ask_stream(
         Sends None as a sentinel to signal end-of-stream.
         """
         try:
-            for token in pipeline.ask_streaming(
+            for item in pipeline.ask_streaming(
                 question=body.question,
                 metadata_filter=metadata_filter,
             ):
-                payload = json.dumps({"token": token})
+                if isinstance(item, dict):
+                    payload = json.dumps(item)
+                else:
+                    payload = json.dumps({"token": item})
                 # .result(timeout) provides backpressure — blocks if queue is full
                 asyncio.run_coroutine_threadsafe(queue.put(payload), loop).result(timeout=30)
         except Exception as exc:

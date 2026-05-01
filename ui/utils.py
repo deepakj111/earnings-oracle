@@ -73,11 +73,11 @@ def stream_query(
     question: str,
     metadata_filter: dict[str, Any] | None = None,
     timeout: int = 90,
-) -> Generator[str, None, None]:
+) -> Generator[dict[str, Any], None, None]:
     """
-    Consume the POST /query/stream SSE endpoint and yield text tokens.
+    Consume the POST /query/stream SSE endpoint and yield event dicts.
 
-    Yields text strings as they arrive.  Raises on HTTP errors or connection
+    Yields events as they arrive. Raises on HTTP errors or connection
     failures so the Streamlit caller can display an error message.
 
     Args:
@@ -87,7 +87,7 @@ def stream_query(
         timeout        : total seconds before giving up
 
     Yields:
-        str — text token deltas from the LLM stream
+        dict — {"type": "token", "content": "..."} or {"type": "log", "content": "..."}
 
     Raises:
         requests.HTTPError    — non-2xx response from the API
@@ -106,10 +106,12 @@ def stream_query(
             if event is None:
                 continue
             if "token" in event:
-                yield event["token"]
+                yield {"type": "token", "content": event["token"]}
+            elif "log" in event:
+                yield {"type": "log", "content": event["log"]}
             elif "error" in event:
                 # Surface API-side errors as a final token with error formatting
-                yield f"\n\n⚠️ **API error:** {event['error']}"
+                yield {"type": "error", "content": f"\n\n⚠️ **API error:** {event['error']}"}
                 return
 
 

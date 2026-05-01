@@ -285,7 +285,7 @@ class FinancialRAGPipeline:
         self,
         question: str,
         metadata_filter: MetadataFilter | None = None,
-    ) -> Iterator[str]:
+    ) -> Iterator[str | dict[str, str]]:
         """
         Streaming pipeline: run L2 + L3 synchronously, then stream L4 tokens.
 
@@ -298,11 +298,14 @@ class FinancialRAGPipeline:
             metadata_filter: optional ticker/year/quarter scoping
 
         Yields:
-            str: raw text delta tokens from the LLM response
+            str | dict: raw text delta tokens from the LLM response, or progress log dicts
 
         Usage:
-            for token in pipeline.ask_streaming("What was Apple's Q4 revenue?"):
-                print(token, end="", flush=True)
+            for item in pipeline.ask_streaming("What was Apple's Q4 revenue?"):
+                if isinstance(item, dict):
+                    print("Log:", item["log"])
+                else:
+                    print(item, end="", flush=True)
         """
         question = question.strip()
         if not question:
@@ -310,13 +313,19 @@ class FinancialRAGPipeline:
 
         logger.info(f"Pipeline.ask_streaming | {question!r:.80}")
 
+        yield {"log": "Transforming query using HyDE and multi-query..."}
         transformed = self._transformer.transform(question)
+        yield {"log": f"Generated {len(transformed.multi_queries)} query variants."}
+
+        yield {"log": "Retrieving documents from dense and sparse indexes..."}
         retrieval_result = retrieve(
             query=transformed,
             qdrant_client=self.qdrant_client,
             metadata_filter=metadata_filter,
         )
+        yield {"log": f"Retrieved and reranked {len(retrieval_result.results)} document chunks."}
 
+        yield {"log": "Synthesizing answer..."}
         yield from self._generator.generate_streaming(
             question=question,
             retrieval_result=retrieval_result,

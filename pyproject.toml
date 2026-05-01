@@ -5,8 +5,18 @@ version = "0.1.0"
 description = "Financial Earnings Call RAG System"
 authors = ["Deepak J"]
 readme = "README.md"
-package-mode = false
-
+packages = [
+    { include = "api" },
+    { include = "config" },
+    { include = "crag" },
+    { include = "generation" },
+    { include = "ingestion" },
+    { include = "observability" },
+    { include = "query" },
+    { include = "retrieval" },
+    { include = "scripts" },
+    { include = "ui" }
+]
 [tool.poetry.dependencies]
 python          = ">=3.11,<3.13"
 requests        = "^2.32.0"

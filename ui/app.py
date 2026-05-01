@@ -297,30 +297,43 @@ if question:
     with st.chat_message("assistant"):
         if streaming_mode:
             # ── Streaming path ──────────────────────────────────────────────
-            answer_placeholder = st.empty()
             full_answer = ""
             error_msg = None
+            answer_started = False
+            answer_placeholder = None
 
             try:
-                with st.spinner("Thinking…"):
-                    # Let spinner show while the first token arrives
+                with st.status("Running pipeline...", expanded=True) as status_container:
                     token_gen = stream_query(
                         base_url=API_BASE_URL,
                         question=question,
                         metadata_filter=metadata_filter,
                     )
-                    # Consume first token inside spinner to cover L2+L3 latency
-                    first_token = next(token_gen, None)
 
-                if first_token is not None:
-                    full_answer = first_token
-                    answer_placeholder.markdown(full_answer + "▌")
-                    for token in token_gen:
-                        full_answer += token
-                        answer_placeholder.markdown(full_answer + "▌")
+                    for event in token_gen:
+                        if event["type"] == "log":
+                            st.write(f"🔄 {event['content']}")
+                        elif event["type"] == "token":
+                            if not answer_started:
+                                answer_started = True
+                                status_container.update(
+                                    label="Generating answer...", state="complete", expanded=False
+                                )
+                                answer_placeholder = st.empty()
+                            full_answer += event["content"]
+                            answer_placeholder.markdown(full_answer + "▌")
+                        elif event["type"] == "error":
+                            if not answer_started:
+                                status_container.update(
+                                    label="Error occurred", state="error", expanded=True
+                                )
+                            error_msg = event["content"]
+                            st.error(error_msg)
+
+                if answer_placeholder:
                     answer_placeholder.markdown(full_answer)
-                else:
-                    answer_placeholder.warning("No response received from the API.")
+                elif not error_msg:
+                    st.warning("No response received from the API.")
 
             except requests.ConnectionError:
                 error_msg = "❌ Cannot connect to the API. Is the server running?"
