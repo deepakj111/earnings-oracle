@@ -22,8 +22,12 @@ def test_retrieve_success() -> None:
         patch("knowledge_graph.graph_retriever.graph_retrieve") as mock_graph,
         patch("retrieval._fetch_parent_texts") as mock_fetch,
     ):
-        r1 = SearchResult.from_payload({"chunk_id": "c1", "text": "t1"}, rrf_score=1.0, source="dense")
-        g1 = SearchResult.from_payload({"chunk_id": "g1", "text": "g1"}, rrf_score=1.0, source="graph")
+        r1 = SearchResult.from_payload(
+            {"chunk_id": "c1", "text": "t1"}, rrf_score=1.0, source="dense"
+        )
+        g1 = SearchResult.from_payload(
+            {"chunk_id": "g1", "text": "g1"}, rrf_score=1.0, source="graph"
+        )
         mock_search.return_value = [r1]
         mock_rerank.return_value = [r1]
         mock_graph.return_value = ([g1], None)
@@ -54,7 +58,9 @@ def test_retrieve_graph_fail_open() -> None:
         patch("knowledge_graph.graph_retriever.graph_retrieve") as mock_graph,
         patch("retrieval._fetch_parent_texts") as mock_fetch,
     ):
-        r1 = SearchResult.from_payload({"chunk_id": "c1", "text": "t1"}, rrf_score=1.0, source="dense")
+        r1 = SearchResult.from_payload(
+            {"chunk_id": "c1", "text": "t1"}, rrf_score=1.0, source="dense"
+        )
         mock_search.return_value = [r1]
         mock_rerank.return_value = [r1]
         mock_graph.side_effect = Exception("Graph failed")

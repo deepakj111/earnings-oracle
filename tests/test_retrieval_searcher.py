@@ -222,7 +222,11 @@ class TestFetchParentTexts:
         with patch("retrieval.searcher.settings") as mock_settings:
             mock_settings.retrieval.parent_fetch_enabled = False
             results = [
-                SearchResult.from_payload({"chunk_id": "c1", "text": "text", "parent_id": "p1"}, rrf_score=1.0, source="dense")
+                SearchResult.from_payload(
+                    {"chunk_id": "c1", "text": "text", "parent_id": "p1"},
+                    rrf_score=1.0,
+                    source="dense",
+                )
             ]
             assert _fetch_parent_texts(Mock(), results) == results
             assert results[0].parent_text == "text"
@@ -231,7 +235,11 @@ class TestFetchParentTexts:
         with patch("retrieval.searcher.settings") as mock_settings:
             mock_settings.retrieval.parent_fetch_enabled = True
             results = [
-                SearchResult.from_payload({"chunk_id": "c1", "text": "text", "parent_id": None}, rrf_score=1.0, source="dense")
+                SearchResult.from_payload(
+                    {"chunk_id": "c1", "text": "text", "parent_id": None},
+                    rrf_score=1.0,
+                    source="dense",
+                )
             ]
             assert _fetch_parent_texts(Mock(), results) == results
 
@@ -252,9 +260,21 @@ class TestFetchParentTexts:
         with patch("retrieval.searcher.settings") as mock_settings:
             mock_settings.retrieval.parent_fetch_enabled = True
             results = [
-                SearchResult.from_payload({"chunk_id": "c1", "text": "t1", "parent_id": "p1"}, rrf_score=1.0, source="dense"),
-                SearchResult.from_payload({"chunk_id": "c2", "text": "t2", "parent_id": "p2"}, rrf_score=0.9, source="bm25"),
-                SearchResult.from_payload({"chunk_id": "c3", "text": "t3", "parent_id": "p3"}, rrf_score=0.8, source="dense"),
+                SearchResult.from_payload(
+                    {"chunk_id": "c1", "text": "t1", "parent_id": "p1"},
+                    rrf_score=1.0,
+                    source="dense",
+                ),
+                SearchResult.from_payload(
+                    {"chunk_id": "c2", "text": "t2", "parent_id": "p2"},
+                    rrf_score=0.9,
+                    source="bm25",
+                ),
+                SearchResult.from_payload(
+                    {"chunk_id": "c3", "text": "t3", "parent_id": "p3"},
+                    rrf_score=0.8,
+                    source="dense",
+                ),
             ]
 
             res = _fetch_parent_texts(client, results)
@@ -271,7 +291,11 @@ class TestFetchParentTexts:
         with patch("retrieval.searcher.settings") as mock_settings:
             mock_settings.retrieval.parent_fetch_enabled = True
             results = [
-                SearchResult.from_payload({"chunk_id": "c1", "text": "text1", "parent_id": "p1"}, rrf_score=1.0, source="dense"),
+                SearchResult.from_payload(
+                    {"chunk_id": "c1", "text": "text1", "parent_id": "p1"},
+                    rrf_score=1.0,
+                    source="dense",
+                ),
             ]
 
             res = _fetch_parent_texts(client, results)
