@@ -9,12 +9,23 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
-from retrieval.models import MetadataFilter
-from retrieval.searcher import _bm25_search, _build_qdrant_filter, _rrf_fuse
+from query.models import TransformedQuery
+from retrieval.models import MetadataFilter, SearchResult
+from retrieval.searcher import (
+    _bm25_search,
+    _build_qdrant_filter,
+    _embed,
+    _fetch_parent_texts,
+    _qdrant_search,
+    _rrf_fuse,
+    search,
+    warmup_bm25,
+    warmup_embed_client,
+)
 
 
 class TestBuildQdrantFilter:
@@ -182,3 +193,166 @@ class TestBm25Search:
         ):
             with pytest.raises(FileNotFoundError, match="BM25 index not found"):
                 _bm25_search("test", top_k=5, metadata_filter=None)
+
+
+class TestQdrantSearch:
+    def test_qdrant_search_returns_payloads(self) -> None:
+        from qdrant_client import QdrantClient
+
+        client = Mock(spec=QdrantClient)
+
+        class MockHit:
+            def __init__(self, payload: dict) -> None:
+                self.payload = payload
+
+        class MockPoints:
+            def __init__(self, points: list) -> None:
+                self.points = points
+
+        client.query_points.return_value = MockPoints([MockHit({"chunk_id": "c1"})])
+
+        with patch("retrieval.searcher._embed", return_value=[0.1, 0.2]):
+            res = _qdrant_search(client, "query", 5, None)
+            assert len(res) == 1
+            assert res[0]["chunk_id"] == "c1"
+
+
+class TestFetchParentTexts:
+    def test_disabled_in_config(self) -> None:
+        with patch("retrieval.searcher.settings") as mock_settings:
+            mock_settings.retrieval.parent_fetch_enabled = False
+            results = [
+                SearchResult.from_payload({"chunk_id": "c1", "text": "text", "parent_id": "p1"}, rrf_score=1.0, source="dense")
+            ]
+            assert _fetch_parent_texts(Mock(), results) == results
+            assert results[0].parent_text == "text"
+
+    def test_no_parents_needed(self) -> None:
+        with patch("retrieval.searcher.settings") as mock_settings:
+            mock_settings.retrieval.parent_fetch_enabled = True
+            results = [
+                SearchResult.from_payload({"chunk_id": "c1", "text": "text", "parent_id": None}, rrf_score=1.0, source="dense")
+            ]
+            assert _fetch_parent_texts(Mock(), results) == results
+
+    def test_fetch_success(self) -> None:
+        from qdrant_client import QdrantClient
+        from qdrant_client.http.models import Record
+
+        client = Mock(spec=QdrantClient)
+        # scroll returns (list of points, next_page_offset)
+        client.scroll.return_value = (
+            [
+                Record(id="p1", payload={"chunk_id": "p1", "text": "parent 1 text"}),
+                Record(id="p2", payload={"chunk_id": "p2", "text": "parent 2 text"}),
+            ],
+            None,
+        )
+
+        with patch("retrieval.searcher.settings") as mock_settings:
+            mock_settings.retrieval.parent_fetch_enabled = True
+            results = [
+                SearchResult.from_payload({"chunk_id": "c1", "text": "t1", "parent_id": "p1"}, rrf_score=1.0, source="dense"),
+                SearchResult.from_payload({"chunk_id": "c2", "text": "t2", "parent_id": "p2"}, rrf_score=0.9, source="bm25"),
+                SearchResult.from_payload({"chunk_id": "c3", "text": "t3", "parent_id": "p3"}, rrf_score=0.8, source="dense"),
+            ]
+
+            res = _fetch_parent_texts(client, results)
+            assert res[0].parent_text == "parent 1 text"
+            assert res[1].parent_text == "parent 2 text"
+            assert res[2].parent_text == "t3"  # Not found in returned records
+
+    def test_fetch_exception_returns_original(self) -> None:
+        from qdrant_client import QdrantClient
+
+        client = Mock(spec=QdrantClient)
+        client.scroll.side_effect = Exception("Network error")
+
+        with patch("retrieval.searcher.settings") as mock_settings:
+            mock_settings.retrieval.parent_fetch_enabled = True
+            results = [
+                SearchResult.from_payload({"chunk_id": "c1", "text": "text1", "parent_id": "p1"}, rrf_score=1.0, source="dense"),
+            ]
+
+            res = _fetch_parent_texts(client, results)
+            assert res[0].parent_text == "text1"
+
+
+class TestSearch:
+    def test_search_all_variants_failed(self) -> None:
+        query = TransformedQuery(
+            original="test",
+            hyde_document="hyde",
+            multi_queries=["q1"],
+            stepback_query="step",
+        )
+        from qdrant_client import QdrantClient
+
+        client = Mock(spec=QdrantClient)
+
+        with (
+            patch("retrieval.searcher._qdrant_search") as mock_qsearch,
+            patch("retrieval.searcher._bm25_search") as mock_bsearch,
+        ):
+            mock_qsearch.side_effect = Exception("qdrant fail")
+            mock_bsearch.side_effect = Exception("bm25 fail")
+
+            res = search(query, client)
+            assert res == []
+
+    def test_search_success(self) -> None:
+        query = TransformedQuery(
+            original="test",
+            hyde_document="hyde",
+            multi_queries=["q1"],
+            stepback_query="step",
+        )
+        from qdrant_client import QdrantClient
+
+        client = Mock(spec=QdrantClient)
+
+        with (
+            patch("retrieval.searcher._qdrant_search") as mock_qsearch,
+            patch("retrieval.searcher._bm25_search") as mock_bsearch,
+            patch("retrieval.searcher._fetch_parent_texts") as mock_fetch,
+            patch("retrieval.searcher.settings") as mock_settings,
+        ):
+            mock_settings.retrieval.top_k_dense = 2
+            mock_settings.retrieval.top_k_bm25 = 2
+            mock_settings.retrieval.rrf_k_constant = 60
+            mock_settings.reranker.top_k_pre_rerank = 5
+
+            mock_qsearch.side_effect = [
+                [{"chunk_id": "c1", "text": "t1"}],  # hyde
+                [{"chunk_id": "c2", "text": "t2"}],  # q1 dense
+            ]
+            mock_bsearch.side_effect = [
+                [{"chunk_id": "c2", "text": "t2", "bm25_score": 1.0}],  # q1 bm25
+            ]
+            mock_fetch.side_effect = lambda c, res: res
+
+            res = search(query, client)
+            assert len(res) == 2
+            assert any(r.chunk_id == "c1" for r in res)
+            assert any(r.chunk_id == "c2" for r in res)
+
+
+def test_embed() -> None:
+    class MockClient:
+        def embed(self, texts: list[str]) -> list:
+            import numpy as np
+
+            return [np.array([0.1, 0.2])]
+
+    with patch("retrieval.searcher._get_embed_client", return_value=MockClient()):
+        assert _embed("test") == [0.1, 0.2]
+
+
+def test_warmups() -> None:
+    with patch("retrieval.searcher._get_embed_client") as m1:
+        warmup_embed_client()
+        m1.assert_called_once()
+
+    with patch("retrieval.searcher._load_bm25") as m2:
+        warmup_bm25()
+        m2.assert_called_once()
