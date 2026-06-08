@@ -228,11 +228,7 @@ if CHECKPOINT_PATH.exists():
     checkpoint_count = len(lines)  # lines already loaded in section 1
 
 # total_points is set inside the Qdrant try/except block above
-# Use a module-level sentinel instead of dir() hack:
-try:
-    qdrant_count = total_points  # type: ignore[possibly-undefined]
-except NameError:
-    qdrant_count = 0
+qdrant_count = total_points
 
 print(f"  .htm files on disk   : {fmt(len(htm_files))}")
 print(f"  Checkpoint entries   : {fmt(checkpoint_count)}")
