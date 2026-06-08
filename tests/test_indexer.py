@@ -276,3 +276,59 @@ class TestIndexDocument:
         parent = _make_chunk("parent", 0)
         _, _, mock_qdrant, _ = await self._run([parent])
         mock_qdrant.upsert.assert_not_called()
+
+
+# ── Initialization ────────────────────────────────────────────────────────────
+
+class TestInitialization:
+    def test_setup_embedder(self) -> None:
+        from ingestion.indexer import setup_embedder
+        import ingestion.indexer
+        with patch("ingestion.indexer.TextEmbedding") as MockTextEmbedding:
+            setup_embedder()
+            MockTextEmbedding.assert_called_once_with(model_name=ingestion.indexer.EMBEDDING_MODEL)
+            assert ingestion.indexer._embed_model is not None
+
+    def test_ensure_payload_indices(self) -> None:
+        from ingestion.indexer import _ensure_payload_indices
+        mock_client = MagicMock()
+        _ensure_payload_indices(mock_client)
+        assert mock_client.create_payload_index.call_count == 4
+        
+        # Test the exception branch
+        mock_client.create_payload_index.side_effect = Exception("Index exists")
+        # Should not raise
+        _ensure_payload_indices(mock_client)
+
+    def test_init_qdrant(self) -> None:
+        from ingestion.indexer import init_qdrant, COLLECTION_NAME
+        with patch("ingestion.indexer.QdrantClient") as MockClient:
+            mock_client = MagicMock()
+            MockClient.return_value = mock_client
+            
+            mock_col1 = MagicMock()
+            mock_col1.name = "other_collection"
+            mock_collections = MagicMock()
+            mock_collections.collections = [mock_col1]
+            mock_client.get_collections.return_value = mock_collections
+            
+            with patch("ingestion.indexer._ensure_payload_indices") as mock_ensure:
+                client = init_qdrant("http://localhost:6333")
+                mock_client.create_collection.assert_called_once()
+                mock_ensure.assert_called_once_with(mock_client)
+                assert client == mock_client
+
+    def test_init_qdrant_collection_exists(self) -> None:
+        from ingestion.indexer import init_qdrant, COLLECTION_NAME
+        with patch("ingestion.indexer.QdrantClient") as MockClient:
+            mock_client = MagicMock()
+            MockClient.return_value = mock_client
+            
+            mock_col1 = MagicMock()
+            mock_col1.name = COLLECTION_NAME
+            mock_collections = MagicMock()
+            mock_collections.collections = [mock_col1]
+            mock_client.get_collections.return_value = mock_collections
+            
+            client = init_qdrant("http://localhost:6333")
+            mock_client.create_collection.assert_not_called()

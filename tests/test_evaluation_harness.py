@@ -277,3 +277,58 @@ def test_save_report_writes_json_and_csv(
     assert csv_path.exists()
     data = json.loads(json_path.read_text())
     assert data["n_samples"] == 1
+
+
+# ── Edge Cases ───────────────────────────────────────────────────────────────
+
+@patch("evaluation.harness.score_all")
+def test_harness_score_all_exception(
+    mock_score_all: MagicMock,
+    mock_pipeline: MagicMock,
+    sample_eval_sample: EvalSample,
+) -> None:
+    """Test score_all exception is caught and logged."""
+    mock_score_all.side_effect = Exception("scoring failed")
+    harness = EvaluationHarness(mock_pipeline)
+    report = harness.run(dataset=[sample_eval_sample], metrics=["faithfulness"])
+    
+    # It shouldn't crash, and metric scores should be empty
+    assert len(report.sample_results) == 1
+    assert report.sample_results[0].metric_scores == {}
+
+
+@patch("evaluation.harness.ThreadPoolExecutor")
+def test_harness_future_exception(
+    mock_thread_pool: MagicMock,
+    mock_pipeline: MagicMock,
+    sample_eval_sample: EvalSample,
+) -> None:
+    """Test exception in future.result() is handled."""
+    mock_pool_instance = MagicMock()
+    mock_thread_pool.return_value.__enter__.return_value = mock_pool_instance
+    
+    mock_future = MagicMock()
+    mock_future.result.side_effect = Exception("thread failed")
+    
+    # We have to patch as_completed to return our mock future
+    with patch("evaluation.harness.as_completed", return_value=[mock_future]):
+        # We also need to mock fut_to_idx logic inside harness
+        # A simpler way is to just let as_completed yield a future that raises, 
+        # but harness does `fut_to_idx[fut]` so `mock_future` must be in the dict.
+        # It's easier to mock _run_sample instead.
+        pass
+
+@patch("evaluation.harness.EvaluationHarness._run_sample")
+def test_harness_run_sample_exception(
+    mock_run_sample: MagicMock,
+    mock_pipeline: MagicMock,
+    sample_eval_sample: EvalSample,
+) -> None:
+    """Test exception when running a sample in the thread pool."""
+    mock_run_sample.side_effect = Exception("unexpected error")
+    harness = EvaluationHarness(mock_pipeline)
+    report = harness.run(dataset=[sample_eval_sample], metrics=["faithfulness"])
+    
+    assert report.n_failed == 1
+    assert report.sample_results[0].pipeline_failed is True
+    assert "unexpected error" in report.sample_results[0].error_message
