@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -167,8 +168,6 @@ def test_search_results_sorted_by_score(monkeypatch: pytest.MonkeyPatch) -> None
 
 # ── _search_tavily & _search_duckduckgo ────────────────────────────────────────
 
-import sys
-from unittest.mock import MagicMock
 
 def test_search_tavily_success() -> None:
     """Test _search_tavily returns correctly mapped results."""
@@ -181,11 +180,12 @@ def test_search_tavily_success() -> None:
         ]
     }
     mock_tavily.TavilyClient.return_value = mock_client
-    
+
     with patch.dict(sys.modules, {"tavily": mock_tavily}):
         from crag.web_search import _search_tavily
+
         res = _search_tavily("test", 2, "key")
-    
+
     assert len(res) == 2
     assert res[0].title == "T1"
     assert res[0].snippet == "C1"
@@ -196,6 +196,7 @@ def test_search_tavily_import_error() -> None:
     """Test _search_tavily raises ImportError if tavily is not installed."""
     with patch.dict(sys.modules, {"tavily": None}):
         from crag.web_search import _search_tavily
+
         with pytest.raises(ImportError):
             _search_tavily("test", 2, "key")
 
@@ -207,14 +208,15 @@ def test_search_duckduckgo_success() -> None:
     mock_ddgs_instance.__enter__.return_value = mock_ddgs_instance
     mock_ddgs_instance.text.return_value = [
         {"title": "T1", "href": "U1", "body": "B1"},
-        {"title": "", "href": "U2", "body": "B2"}
+        {"title": "", "href": "U2", "body": "B2"},
     ]
     mock_ddg.DDGS.return_value = mock_ddgs_instance
-    
+
     with patch.dict(sys.modules, {"duckduckgo_search": mock_ddg}):
         from crag.web_search import _search_duckduckgo
+
         res = _search_duckduckgo("test", 2)
-        
+
     assert len(res) == 2
     assert res[0].title == "T1"
     assert res[1].title == "Untitled"
@@ -225,6 +227,7 @@ def test_search_duckduckgo_import_error() -> None:
     """Test _search_duckduckgo raises ImportError if duckduckgo_search is not installed."""
     with patch.dict(sys.modules, {"duckduckgo_search": None}):
         from crag.web_search import _search_duckduckgo
+
         with pytest.raises(ImportError):
             _search_duckduckgo("test", 2)
 

@@ -13,6 +13,7 @@ Coverage:
 """
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from ingestion.download_filings import (
@@ -267,6 +268,7 @@ class TestDownloadDocument:
 
     def test_timeout_raises_exception(self, tmp_path) -> None:
         from requests.exceptions import Timeout
+
         with patch("ingestion.download_filings.requests.get", side_effect=Timeout("Timeout")):
             with pytest.raises(Timeout):
                 download_document(
@@ -281,6 +283,7 @@ class TestDownloadDocument:
 class TestEdgeCases:
     def test_get_8k_filings_timeout(self) -> None:
         from requests.exceptions import Timeout
+
         with patch("ingestion.download_filings.requests.get", side_effect=Timeout("Timeout")):
             with pytest.raises(Timeout):
                 get_8k_filings("0000320193", "AAPL")
@@ -288,12 +291,16 @@ class TestEdgeCases:
     def test_get_8k_filings_missing_data(self) -> None:
         # What if the JSON doesn't have the expected keys?
         bad_json = {"filings": {"recent": {}}}
-        with patch("ingestion.download_filings.requests.get", return_value=_mock_response(json_data=bad_json)):
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(json_data=bad_json),
+        ):
             with pytest.raises(KeyError):
                 get_8k_filings("0000320193", "AAPL")
 
     def test_get_filing_documents_timeout(self) -> None:
         from requests.exceptions import Timeout
+
         with patch("ingestion.download_filings.requests.get", side_effect=Timeout("Timeout")):
             with pytest.raises(Timeout):
                 get_filing_documents("0000320193", "0001234567-24-000001")
@@ -301,7 +308,9 @@ class TestEdgeCases:
     def test_get_filing_documents_missing_cells(self) -> None:
         # Test line 84: len(cells) < 4
         html = "<html><body><table><tr><td>1</td><td>2</td></tr></table></body></html>"
-        with patch("ingestion.download_filings.requests.get", return_value=_mock_response(text=html)):
+        with patch(
+            "ingestion.download_filings.requests.get", return_value=_mock_response(text=html)
+        ):
             result = get_filing_documents("0000320193", "0001234567-24-000001")
             assert result == []
 
