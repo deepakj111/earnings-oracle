@@ -151,7 +151,7 @@ def download_document(
     return str(file_path)
 
 
-if __name__ == "__main__":  # ← ADD THIS GUARD
+def main() -> None:
     # --- Main ---
     os.makedirs("data/transcripts", exist_ok=True)
 
@@ -188,3 +188,7 @@ if __name__ == "__main__":  # ← ADD THIS GUARD
         time.sleep(0.15)
 
     print(f"\nDone: {success} downloaded, {skipped} skipped")
+
+
+if __name__ == "__main__":
+    main()
