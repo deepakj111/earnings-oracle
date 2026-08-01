@@ -80,6 +80,8 @@ if TYPE_CHECKING:
     from crag.models import CRAGResult
 
 
+import threading
+
 class FinancialRAGPipeline:
     """
     Four-layer Financial RAG pipeline for SEC 8-K earnings filings.
@@ -97,12 +99,14 @@ class FinancialRAGPipeline:
         self,
         qdrant_client: QdrantClient,
         enable_query_cache: bool = True,
+        async_warmup: bool = True,
     ) -> None:
         self.qdrant_client = qdrant_client
         self._transformer = QueryTransformer(enable_cache=enable_query_cache)
         self._generator = Generator()
         self._router = QueryRouter()
         self._corrector: CRAGCorrector | None = None  # lazy-init in ask_with_crag()
+        self._warmup_complete = threading.Event()
 
         # ── Observability: structured per-request tracing ──────────────────
         obs_cfg = _settings.observability
@@ -114,14 +118,10 @@ class FinancialRAGPipeline:
             cost_alert_per_session_usd=obs_cfg.cost_alert_per_session_usd,
         )
 
-        logger.info("Pre-loading models into memory to prevent cold-start latency...")
-        warmup_embed_client()
-        with contextlib.suppress(FileNotFoundError):
-            warmup_bm25()
-
-        if _settings.reranker.enabled:
-            with contextlib.suppress(ImportError):
-                warmup_reranker()  # Loads FlashRank cross-encoder
+        if async_warmup:
+            threading.Thread(target=self._preload_models, daemon=True).start()
+        else:
+            self._preload_models()
 
         logger.info(
             "FinancialRAGPipeline ready | "
@@ -131,6 +131,30 @@ class FinancialRAGPipeline:
             f"reranker={'enabled' if _settings.reranker.enabled else 'disabled'} | "
             f"tracing={'enabled' if obs_cfg.tracing_enabled else 'disabled'}"
         )
+
+    def _preload_models(self) -> None:
+        logger.info("Pre-loading models into memory in background...")
+        try:
+            warmup_embed_client()
+            with contextlib.suppress(FileNotFoundError):
+                warmup_bm25()
+
+            if _settings.reranker.enabled:
+                with contextlib.suppress(ImportError):
+                    warmup_reranker()  # Loads FlashRank cross-encoder
+        except Exception as exc:
+            logger.warning(f"Model pre-loading warning: {exc}")
+        finally:
+            self._warmup_complete.set()
+
+    @property
+    def is_ready(self) -> bool:
+        return self._warmup_complete.is_set()
+
+    def ensure_ready(self, timeout: float = 60.0) -> None:
+        if not self._warmup_complete.is_set():
+            logger.info("Waiting for model pre-loading to complete...")
+            self._warmup_complete.wait(timeout=timeout)
 
     # ── Primary interface ─────────────────────────────────────────────────────
 
@@ -145,6 +169,7 @@ class FinancialRAGPipeline:
         if not question:
             raise ValueError("question must not be empty.")
 
+        self.ensure_ready()
         logger.info(f"Pipeline.ask | {question!r:.80}")
 
         # ── Start trace ───────────────────────────────────────────────────────
