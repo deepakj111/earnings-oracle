@@ -53,29 +53,28 @@ def _env_bool(key: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+# ── Layer 1: Query Routing ───────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class QueryRouterConfig:
+    """Configuration for query/router.py (Layer 1 — query intent classification)."""
+
+    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_ROUTER_MODEL", "gpt-5-mini"))
+    temperature: float = field(default_factory=lambda: _env_float("RAG_QUERY_ROUTER_TEMP", 0.0))
+    max_tokens: int = field(default_factory=lambda: _env_int("RAG_QUERY_ROUTER_MAX_TOKENS", 150))
+
+
 # ── Layer 2: Query Transformation ─────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
 class QueryTransformConfig:
-    """
-    Configuration for query/transformer.py (Layer 2 — HyDE + Multi-Query + Step-Back).
+    """Configuration for query/transformer.py (Layer 2 — HyDE + Multi-Query + Step-Back)."""
 
-    Model tier rationale:
-      gpt-4.1-nano — $0.10/1M input, $0.40/1M output.
-      Query transformation prompts are short (~120–350 tokens input, ~80–250 output).
-      At this scale, nano-tier models are more than sufficient for instruction-following
-      tasks like rephrasing and hypothetical passage generation.
-    """
-
-    model: str = field(
-        default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-4.1-nano")
-    )
+    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-5-mini"))
 
     # Per-technique temperatures — intentionally different
-    # HyDE: moderate creativity for realistic-sounding passages
-    # Multi-Query: higher variance so rephrasings actually differ
-    # Step-Back: near-determinism — same question, same abstraction
     temperature_hyde: float = field(
         default_factory=lambda: _env_float("RAG_QUERY_TRANSFORM_TEMP_HYDE", 0.3)
     )
@@ -86,7 +85,7 @@ class QueryTransformConfig:
         default_factory=lambda: _env_float("RAG_QUERY_TRANSFORM_TEMP_STEPBACK", 0.1)
     )
 
-    # Max output tokens per technique — kept tight to control cost
+    # Max output tokens per technique
     max_tokens_hyde: int = field(
         default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_HYDE", 4096)
     )
@@ -103,7 +102,7 @@ class QueryTransformConfig:
         default_factory=lambda: _env_float("RAG_QUERY_TRANSFORM_RETRY_DELAY", 1.0)
     )
 
-    # In-memory LRU cache size (number of distinct queries to cache per session)
+    # In-memory LRU cache size
     cache_max_size: int = field(
         default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_CACHE_SIZE", 256)
     )
@@ -117,25 +116,12 @@ class RerankerConfig:
     """
     Configuration for retrieval/reranker.py (Layer 3 — FlashRank cross-encoder).
 
-    Model: ms-marco-MiniLM-L-12-v2
-      - Fully local ONNX model (~66MB, cached after first download via flashrank)
-      - No API costs, no rate limits, runs entirely on CPU
-      - Trained on MS MARCO passage ranking — strong relevance scoring for
-        question-document pairs across domains including financial text
-      - L-12 (12-layer) gives better precision than L-6 at acceptable latency:
-        ~8–15ms for 20 candidates on CPU — well within real-time budget
-
     top_k_pre_rerank: number of RRF-fused candidates passed to the cross-encoder.
-      20 is the recommended sweet spot — broad enough not to miss relevant chunks,
-      small enough that reranking stays fast. Do not set above 40.
-
     enabled: set RAG_RERANKER_ENABLED=false to bypass reranking entirely.
-      Useful for latency benchmarks or retrieval quality ablation studies.
-      When disabled, retrieval returns top_k_final chunks sorted by RRF score.
     """
 
     model: str = field(
-        default_factory=lambda: _env_str("RAG_RERANKER_MODEL", "ms-marco-MiniLM-L-6-v2")
+        default_factory=lambda: _env_str("RAG_RERANKER_MODEL", "ms-marco-TinyBERT-L-2-v2")
     )
     top_k_pre_rerank: int = field(default_factory=lambda: _env_int("RAG_RERANKER_TOP_K_PRE", 20))
     enabled: bool = field(default_factory=lambda: _env_bool("RAG_RERANKER_ENABLED", True))
@@ -149,18 +135,10 @@ class GenerationConfig:
     """
     Configuration for generation/generator.py (Layer 4 — answer synthesis).
 
-    Model tier rationale:
-      gpt-5-nano — $0.05/1M input, $0.005/1M output.
-      Generation prompts carry 2000–5000 tokens of retrieved financial context.
-      gpt-5-nano handles long-context financial reasoning at this tier.
-
     max_context_tokens: hard cap on total tokens in the retrieved context block.
-      Prevents runaway costs and mitigates the "lost in the middle" problem where
-      models ignore chunks in the middle of very long contexts.
-      4096 comfortably fits 5 parent chunks (~512 tokens each) + prompt overhead.
     """
 
-    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-4.1-nano"))
+    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5-mini"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(
@@ -178,21 +156,28 @@ class GenerationConfig:
 @dataclass(frozen=True)
 class EmbeddingConfig:
     """
-    Configuration for ingestion/indexer.py (fastembed + Qdrant).
+    Configuration for ingestion/indexer.py (OpenAI API + Qdrant).
     Kept here so the retrieval layer can reference the same model name
     when embedding HyDE documents for dense search.
     """
 
     model: str = field(
-        default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+        default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
     )
-    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 384))
+    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 1536))
     collection_name: str = field(
-        default_factory=lambda: _env_str("RAG_QDRANT_COLLECTION", "earnings_transcripts")
+        default_factory=lambda: _env_str("RAG_QDRANT_COLLECTION", "company_filings")
     )
     upsert_batch_size: int = field(
         default_factory=lambda: _env_int("RAG_EMBEDDING_UPSERT_BATCH_SIZE", 50)
     )
+    ingestion_batch_size: int = field(
+        default_factory=lambda: _env_int("RAG_INGESTION_BATCH_SIZE", 100)
+    )
+    max_concurrency: int = field(
+        default_factory=lambda: _env_int("RAG_INGESTION_MAX_CONCURRENCY", 4)
+    )
+    threads: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_THREADS", 0))
 
 
 # ── Layer 3: Retrieval ─────────────────────────────────────────────────────────
@@ -200,28 +185,7 @@ class EmbeddingConfig:
 
 @dataclass(frozen=True)
 class RetrievalConfig:
-    """
-    Configuration for retrieval/searcher.py (Layer 3 — BM25 + Qdrant + RRF).
-
-    top_k_dense / top_k_bm25: candidates fetched per individual query variant.
-      With 6 query variants (4 multi-queries + 1 step-back + 1 HyDE for dense),
-      the raw pool before deduplication is up to 6×10=60 dense + 5×10=50 BM25.
-      After dedup the realistic pool is 30–60 unique chunks.
-
-    top_k_final: final chunks passed to the generation layer after reranking.
-      5 parent chunks × ~512 tokens ≈ 2560 context tokens — comfortably under
-      GenerationConfig.max_context_tokens (4096).
-
-    rrf_k_constant: the k in RRF score = 1/(k + rank). Standard default from
-      the original RRF paper. 60 works well across retrieval domains.
-
-    parent_fetch_enabled: after child chunk retrieval, fetch the full parent
-      chunk text from Qdrant for context-aware reranking and generation.
-      Should always be True in production. Set False only for ablation testing.
-
-    metadata_filter_enabled: allow MetadataFilter to be passed to Qdrant queries.
-      Disabling removes ticker/year/quarter scoping for all search calls.
-    """
+    """Configuration for retrieval/searcher.py (Layer 3 — BM25 + Qdrant + RRF)."""
 
     top_k_dense: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_DENSE", 10))
     top_k_bm25: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_BM25", 10))
@@ -240,12 +204,7 @@ class RetrievalConfig:
 
 @dataclass(frozen=True)
 class InfraConfig:
-    """
-    Infrastructure endpoints and secrets. All values come from .env only.
-
-    log_format: 'text' (default, human-readable) or 'json' (structured logging
-      for Docker/K8s log aggregation via ELK, CloudWatch, Datadog).
-    """
+    """Infrastructure endpoints and secrets."""
 
     qdrant_url: str = field(default_factory=lambda: _env_str("QDRANT_URL", "http://localhost:6333"))
     openai_api_key: str = field(default_factory=lambda: _env_str("OPENAI_API_KEY", ""))
@@ -253,7 +212,6 @@ class InfraConfig:
         default_factory=lambda: _env_str("SEC_USER_AGENT", "Your Name your@email.com")
     )
     log_format: str = field(default_factory=lambda: _env_str("LOG_FORMAT", "text"))
-    # Read by fastembed library automatically — surfaced here for documentation/validation only
     fastembed_cache_path: str = field(default_factory=lambda: _env_str("FASTEMBED_CACHE_PATH", ""))
 
 
@@ -262,23 +220,18 @@ class InfraConfig:
 
 @dataclass(frozen=True)
 class CRAGConfig:
-    """
-    Configuration for Layer 5 — Corrective RAG (crag/corrector.py).
-
-    Thresholds control when CRAG triggers web-search fallback:
-      relevant_ratio >= high_threshold  →  CORRECT   (trust local retrieval)
-      relevant_ratio <= low_threshold   →  INCORRECT  (discard local, web only)
-      between the two                   →  AMBIGUOUS  (local + web combined)
-
-    grade_even_if_grounded:
-      False (default) — skip grading when generation layer reports grounded=True.
-      True            — always grade; useful for evaluation ablation studies.
-
-    enabled:
-      Set RAG_CRAG_ENABLED=false to bypass CRAG entirely (returns original answer).
-    """
+    """Configuration for Layer 5 — Corrective RAG (crag/corrector.py & crag/grader.py)."""
 
     enabled: bool = field(default_factory=lambda: _env_bool("RAG_CRAG_ENABLED", True))
+    grader_model: str = field(
+        default_factory=lambda: _env_str("RAG_CRAG_GRADER_MODEL", "gpt-5-mini")
+    )
+    grader_temperature: float = field(
+        default_factory=lambda: _env_float("RAG_CRAG_GRADER_TEMP", 0.0)
+    )
+    grader_max_tokens: int = field(
+        default_factory=lambda: _env_int("RAG_CRAG_GRADER_MAX_TOKENS", 128)
+    )
     high_relevance_threshold: float = field(
         default_factory=lambda: _env_float("RAG_CRAG_HIGH_THRESHOLD", 0.6)
     )
@@ -299,19 +252,11 @@ class CRAGConfig:
 
 @dataclass()  # mutable so monkeypatch can redirect output_dir in tests
 class EvaluationConfig:
-    """
-    Configuration for evaluation/harness.py (LLMOps evaluation harness).
+    """Configuration for evaluation/harness.py & metrics.py (LLMOps evaluation harness)."""
 
-    model: LLM used to compute faithfulness, relevancy, precision, recall.
-      Uses the same nano tier as query transformation — short prompts, cheap.
-
-    max_workers: parallel pipeline calls during evaluation.
-      Keep low to avoid OpenAI rate limits. 2 is safe for gpt-4.1-nano.
-
-    output_dir: where EvalReports (JSON + CSV) are written.
-    """
-
-    model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-4.1-nano"))
+    model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-5-mini"))
+    temperature: float = field(default_factory=lambda: _env_float("RAG_EVAL_TEMP", 0.0))
+    max_tokens: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_TOKENS", 256))
     max_workers: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_WORKERS", 2))
     output_dir: str = field(
         default_factory=lambda: _env_str(
@@ -326,24 +271,7 @@ class EvaluationConfig:
 
 @dataclass(frozen=True)
 class ObservabilityConfig:
-    """
-    Configuration for observability/tracer.py (structured LLM tracing).
-
-    tracing_enabled: set RAG_TRACING_ENABLED=false to disable all tracing.
-      When disabled, tracer methods are no-ops with zero overhead.
-
-    trace_output_dir: directory for persisted JSON trace files.
-      Each trace is a single JSON file named trace_{timestamp}_{id}.json.
-
-    persist_traces: set RAG_TRACING_PERSIST=false to skip writing traces to disk.
-      Traces are still recorded in-memory for the request lifecycle.
-
-    cost_alert_per_request_usd: log a warning if a single pipeline request
-      exceeds this dollar amount. Default $0.10 is generous for nano-tier models.
-
-    cost_alert_per_session_usd: log a warning (once) if cumulative session cost
-      exceeds this dollar amount. Prevents runaway costs in evaluation harnesses.
-    """
+    """Configuration for observability/tracer.py (structured LLM tracing)."""
 
     tracing_enabled: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_ENABLED", True))
     trace_output_dir: str = field(
@@ -366,14 +294,7 @@ class ObservabilityConfig:
 
 @dataclass(frozen=True)
 class KnowledgeGraphConfig:
-    """
-    Configuration for GraphRAG knowledge graph extraction and retrieval.
-
-    extraction_enabled: run LLM entity extraction during ingestion.
-    retrieval_enabled: inject graph context during retrieval.
-    extraction_model: LLM model for entity extraction (cheapest tier).
-    max_graph_chunks: max additional chunks injected from graph traversal.
-    """
+    """Configuration for GraphRAG knowledge graph extraction and retrieval."""
 
     extraction_enabled: bool = field(
         default_factory=lambda: _env_bool("RAG_KG_EXTRACTION_ENABLED", True)
@@ -382,7 +303,13 @@ class KnowledgeGraphConfig:
         default_factory=lambda: _env_bool("RAG_KG_RETRIEVAL_ENABLED", True)
     )
     extraction_model: str = field(
-        default_factory=lambda: _env_str("RAG_KG_EXTRACTION_MODEL", "gpt-4.1-nano")
+        default_factory=lambda: _env_str("RAG_KG_EXTRACTION_MODEL", "gpt-5-mini")
+    )
+    extraction_temperature: float = field(
+        default_factory=lambda: _env_float("RAG_KG_EXTRACTION_TEMP", 0.0)
+    )
+    extraction_max_tokens: int = field(
+        default_factory=lambda: _env_int("RAG_KG_EXTRACTION_MAX_TOKENS", 1024)
     )
     max_graph_chunks: int = field(default_factory=lambda: _env_int("RAG_KG_MAX_GRAPH_CHUNKS", 3))
 
@@ -397,12 +324,14 @@ class Settings:
 
         from config import settings
 
+        settings.query_router.model           # Layer 1
         settings.query_transform.model        # Layer 2
         settings.retrieval.top_k_final        # Layer 3 search
         settings.reranker.enabled             # Layer 3 reranker
         settings.generation.max_context_tokens  # Layer 4
     """
 
+    query_router: QueryRouterConfig = field(default_factory=QueryRouterConfig)
     query_transform: QueryTransformConfig = field(default_factory=QueryTransformConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)

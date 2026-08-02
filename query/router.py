@@ -200,7 +200,7 @@ class QueryRouter:
 
     def __init__(self) -> None:
         self._client = get_openai_client()
-        self._model = _settings.query_transform.model
+        self._model = _settings.query_router.model
         self._stats = RouterStats()
         logger.info(f"QueryRouter initialised | model={self._model}")
 
@@ -307,8 +307,8 @@ class QueryRouter:
                     {"role": "system", "content": _ROUTER_SYSTEM_PROMPT},
                     {"role": "user", "content": question},
                 ],
-                temperature=0.0,
-                max_tokens=150,
+                temperature=_settings.query_router.temperature,
+                max_tokens=_settings.query_router.max_tokens,
                 response_format={"type": "json_object"},
             )
             raw = response.choices[0].message.content or "{}"

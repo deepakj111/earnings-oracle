@@ -37,19 +37,7 @@ from retrieval.models import MetadataFilter, SearchResult
 if TYPE_CHECKING:
     from query.models import TransformedQuery
 
-# ── Module-level fastembed client (lazy-initialised on first search) ───────────
-_embed_client: object | None = None
-
-
-def _get_embed_client() -> object:
-    global _embed_client
-    if _embed_client is None:
-        from fastembed import TextEmbedding
-
-        _embed_client = TextEmbedding(model_name=settings.embedding.model, threads=2)
-        logger.info(f"Embedding model loaded for retrieval: {settings.embedding.model}")
-    return _embed_client
-
+from config.openai_client import get_openai_client
 
 # ── BM25 index helpers ─────────────────────────────────────────────────────────
 
@@ -94,10 +82,10 @@ def _load_bm25() -> tuple[object, list[dict]]:
 
 
 def _embed(text: str) -> list[float]:
-    """Embed a single text string using fastembed. Returns a flat float list."""
-    client = _get_embed_client()
-    vectors = list(client.embed([text]))  # type: ignore[attr-defined]
-    return vectors[0].tolist()
+    """Embed a single query string using OpenAI API. Returns a flat float list."""
+    client = get_openai_client()
+    res = client.embeddings.create(input=[text], model=settings.embedding.model)
+    return res.data[0].embedding
 
 
 # ── Qdrant filter builder ──────────────────────────────────────────────────────
@@ -397,8 +385,9 @@ def search(
 
 
 def warmup_embed_client() -> None:
-    """Pre-load the fastembed model into memory. Safe to call multiple times."""
-    _get_embed_client()
+    """Pre-load/validate the OpenAI embedding client. Safe to call multiple times."""
+    get_openai_client()
+    logger.info("OpenAI embedding client initialised for retrieval.")
 
 
 def warmup_bm25() -> None:

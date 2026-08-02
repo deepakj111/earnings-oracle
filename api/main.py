@@ -87,14 +87,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
       2. Open Qdrant TCP connection
       3. Instantiate FinancialRAGPipeline — this triggers model downloads
          and loads all ONNX models into memory:
-            BAAI/bge-small-en-v1.5    ~130 MB (embedding)
+            OpenAI text-embedding-3-small  (API embedding)
            BM25 index                 ~30-100 MB (keyword search)
            ms-marco-MiniLM-L-12-v2   ~66 MB (reranker, if enabled)
 
 
     Expected startup time:
-      First run: 2–5 min (model download from HuggingFace Hub)
-      Subsequent runs: 10–20 s (load from local cache)
+      First run: 10–20 s
+      Subsequent runs: 10–20 s
     """
     logger.info("=" * 60)
     logger.info("Financial RAG API — startup initiated")
@@ -156,7 +156,7 @@ def create_app() -> FastAPI:
         description=(
             "Production-grade Retrieval-Augmented Generation system for querying "
             "SEC 8-K earnings filings from 10 major public companies.\n\n"
-            "Uses a hybrid retrieval approach — dense vector search (BAAI/bge-small-en-v1.5 + "
+            "Uses a hybrid retrieval approach — dense vector search (OpenAI text-embedding-3-small + "
             "Qdrant) combined with sparse keyword search (BM25) — fused via Reciprocal Rank "
             "Fusion and reranked with a FlashRank cross-encoder.  Query transformation uses "
             "HyDE, multi-query expansion, and step-back prompting for maximum recall."

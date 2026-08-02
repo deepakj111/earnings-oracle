@@ -1,13 +1,13 @@
 # tests/test_entity_extractor.py
 """
-Tests for knowledge_graph/extractor.py — LLM entity extraction.
+Tests for knowledge_graph/extractor.py — Per-chunk LLM entity extraction.
 
 Tests cover:
-  - Regex-based entity extraction (competitor tickers)
-  - LLM extraction with mocked API responses
-  - Handling of malformed LLM output
+  - Per-chunk LLM entity and relationship extraction
+  - Structured JSON parsing and fallback repair
   - Fail-open behavior on LLM errors
-  - Entity deduplication across chunks
+  - Proper binding of chunk_ids to extracted entities
+  - Disabled extraction returns empty results
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,63 +15,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from knowledge_graph.extractor import (
-    _regex_extract,
     extract_entities_from_chunks,
 )
-from knowledge_graph.models import EntityType, RelationType
-
-# ── Regex extraction ──────────────────────────────────────────────────────────
-
-
-class TestRegexExtraction:
-    """Verify deterministic regex-based entity extraction."""
-
-    def test_extracts_competitor_tickers(self) -> None:
-        text = "Apple's results compared favorably to MSFT and NVDA in cloud revenue."
-        entities, rels = _regex_extract(text, "AAPL", "Q4 2024", "chunk_1")
-
-        ticker_names = {e.name for e in entities}
-        assert "msft" in ticker_names
-        assert "nvda" in ticker_names
-        # Should not extract AAPL as its own competitor
-        assert "aapl" not in ticker_names
-
-    def test_extracts_competitor_relationships(self) -> None:
-        text = "AAPL outperformed NVDA in market cap growth."
-        entities, rels = _regex_extract(text, "AAPL", "Q4 2024", "chunk_1")
-
-        assert len(rels) >= 1
-        assert any(r.relation == RelationType.COMPETES_WITH for r in rels)
-
-    def test_no_competitors_in_clean_text(self) -> None:
-        text = "Revenue grew 6 percent year over year to $94.9 billion."
-        entities, rels = _regex_extract(text, "AAPL", "Q4 2024", "chunk_1")
-        assert len(entities) == 0
-
-    def test_sets_entity_metadata(self) -> None:
-        text = "Competition from MSFT intensified."
-        entities, _ = _regex_extract(text, "AAPL", "Q4 2024", "chunk_1")
-        assert len(entities) == 1
-        e = entities[0]
-        assert e.entity_type == EntityType.COMPETITOR
-        assert e.ticker == "AAPL"
-        assert e.fiscal_period == "Q4 2024"
-        assert "chunk_1" in e.chunk_ids
-
-
-# ── LLM extraction (mocked) ──────────────────────────────────────────────────
 
 
 class TestLLMExtraction:
-    """Verify LLM-powered extraction with mocked OpenAI responses."""
+    """Verify per-chunk LLM-powered extraction with mocked OpenAI responses."""
 
     @patch("knowledge_graph.extractor._call_llm_extract", new_callable=AsyncMock)
     @pytest.mark.asyncio
-    async def test_extracts_entities_from_llm(self, mock_llm: AsyncMock) -> None:
+    async def test_extracts_entities_from_llm_per_chunk(self, mock_llm: AsyncMock) -> None:
         mock_llm.return_value = {
             "entities": [
                 {"name": "Tim Cook", "entity_type": "PERSON", "properties": {"role": "CEO"}},
-                {"name": "iPhone 16", "entity_type": "PRODUCT", "properties": {}},
+                {"name": "Revenue", "entity_type": "METRIC", "properties": {"value": "$94.9B"}},
             ],
             "relationships": [
                 {
@@ -83,22 +40,31 @@ class TestLLMExtraction:
             ],
         }
 
-        chunk = MagicMock()
-        chunk.chunk_id = "aapl_q4_001"
-        chunk.text = "Tim Cook announced iPhone 16 at the event."
+        chunk1 = MagicMock()
+        chunk1.chunk_id = "aapl_q4_001"
+        chunk1.text = "Tim Cook announced Revenue of $94.9B."
+
+        chunk2 = MagicMock()
+        chunk2.chunk_id = "aapl_q4_002"
+        chunk2.text = "Second chunk text."
 
         with patch("knowledge_graph.extractor.settings") as mock_settings:
             mock_settings.knowledge_graph.extraction_enabled = True
             mock_settings.knowledge_graph.extraction_model = "gpt-4.1-nano"
 
-            entities, rels = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
+            entities, rels = await extract_entities_from_chunks([chunk1, chunk2], "AAPL", "Q4 2024")
 
-        # Should have LLM entities + regex entities
-        llm_entities = [e for e in entities if e.name in ("tim cook", "iphone 16")]
-        assert len(llm_entities) == 2
+        # Verify _call_llm_extract was called twice (once per chunk)
+        assert mock_llm.call_count == 2
 
-        # Should have LLM relationships
-        assert any(r.relation == "LEADS" for r in rels)
+        # Verify entities extracted with proper chunk provenance
+        extracted_names = {e.name for e in entities}
+        assert "tim cook" in extracted_names
+        assert "revenue" in extracted_names
+
+        tim_cook_entity = next(e for e in entities if e.name == "tim cook")
+        assert "aapl_q4_001" in tim_cook_entity.chunk_ids
+        assert tim_cook_entity.ticker == "AAPL"
 
     @patch("knowledge_graph.extractor._call_llm_extract", new_callable=AsyncMock)
     @pytest.mark.asyncio
@@ -115,9 +81,8 @@ class TestLLMExtraction:
 
             entities, rels = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
 
-        # Only regex entities (if any)
-        assert isinstance(entities, list)
-        assert isinstance(rels, list)
+        assert entities == []
+        assert rels == []
 
     @patch("knowledge_graph.extractor._call_llm_extract", new_callable=AsyncMock)
     @pytest.mark.asyncio
@@ -145,8 +110,8 @@ class TestLLMExtraction:
         assert len(llm_entities) == 1
 
     @pytest.mark.asyncio
-    async def test_disabled_extraction_uses_regex_only(self) -> None:
-        """When LLM extraction is disabled, only regex runs."""
+    async def test_disabled_extraction_returns_empty(self) -> None:
+        """When LLM extraction is disabled, returns empty lists."""
         chunk = MagicMock()
         chunk.chunk_id = "test_001"
         chunk.text = "Apple outperformed MSFT this quarter."
@@ -156,14 +121,14 @@ class TestLLMExtraction:
 
             entities, rels = await extract_entities_from_chunks([chunk], "AAPL", "Q4 2024")
 
-        # Should still extract MSFT via regex
-        assert any(e.name == "msft" for e in entities)
+        assert entities == []
+        assert rels == []
 
     @pytest.mark.asyncio
     async def test_empty_chunks_list(self) -> None:
         """No chunks → no entities."""
         with patch("knowledge_graph.extractor.settings") as mock_settings:
-            mock_settings.knowledge_graph.extraction_enabled = False
+            mock_settings.knowledge_graph.extraction_enabled = True
 
             entities, rels = await extract_entities_from_chunks([], "AAPL", "Q4 2024")
 

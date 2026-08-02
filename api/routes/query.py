@@ -165,7 +165,7 @@ def _serialise(
 
 
 @router.post(
-    "/",
+    "",
     response_model=AskResponse,
     summary="Ask a financial question (structured response)",
     description=(

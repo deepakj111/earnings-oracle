@@ -362,18 +362,17 @@ class TestSearch:
 
 
 def test_embed() -> None:
-    class MockClient:
-        def embed(self, texts: list[str]) -> list:
-            import numpy as np
+    mock_client = Mock()
+    mock_item = Mock()
+    mock_item.embedding = [0.1, 0.2]
+    mock_client.embeddings.create.return_value = Mock(data=[mock_item])
 
-            return [np.array([0.1, 0.2])]
-
-    with patch("retrieval.searcher._get_embed_client", return_value=MockClient()):
+    with patch("retrieval.searcher.get_openai_client", return_value=mock_client):
         assert _embed("test") == [0.1, 0.2]
 
 
 def test_warmups() -> None:
-    with patch("retrieval.searcher._get_embed_client") as m1:
+    with patch("retrieval.searcher.get_openai_client") as m1:
         warmup_embed_client()
         m1.assert_called_once()
 

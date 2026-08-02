@@ -14,26 +14,21 @@ HEADERS = {
 }
 
 COMPANIES = {
-    "AAPL": "0000320193",
     "NVDA": "0001045810",
-    "MSFT": "0000789019",
-    "AMZN": "0001018724",
-    "META": "0001326801",
     "JPM": "0000019617",
-    "XOM": "0000034088",
-    "UNH": "0000072971",
-    "TSLA": "0001318605",
     "WMT": "0000104169",
+    "TSLA": "0001318605",
 }
 
 
-def get_8k_filings(
+def get_company_filings(
     cik: str,
     ticker: str,
-    start_date: str = "2023-01-01",
+    form_types: tuple[str, ...] = ("10-K", "10-Q", "8-K"),
+    start_date: str = "2020-01-01",
     end_date: str = date.today().strftime("%Y-%m-%d"),
 ) -> list[dict]:
-    """Fetch recent 8-K filings for a specific company CIK within a date range."""
+    """Fetch recent 10-K, 10-Q, and 8-K filings for a specific company CIK within a date range."""
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
     resp = requests.get(url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
@@ -42,18 +37,39 @@ def get_8k_filings(
     filings = data["filings"]["recent"]
     results = []
     for i, form in enumerate(filings["form"]):
-        if form == "8-K":
+        if form in form_types:
             filing_date = filings["filingDate"][i]
             if start_date <= filing_date <= end_date:
+                primary_doc = (
+                    filings["primaryDocument"][i] if "primaryDocument" in filings else None
+                )
                 results.append(
                     {
                         "ticker": ticker,
                         "cik": cik,
+                        "form": form,
                         "date": filing_date,
                         "accession": filings["accessionNumber"][i],
+                        "primary_doc": primary_doc,
                     }
                 )
     return results
+
+
+def get_8k_filings(
+    cik: str,
+    ticker: str,
+    start_date: str = "2020-01-01",
+    end_date: str = date.today().strftime("%Y-%m-%d"),
+) -> list[dict]:
+    """Fetch 8-K filings specifically for backward compatibility."""
+    return get_company_filings(
+        cik=cik,
+        ticker=ticker,
+        form_types=("8-K",),
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 def get_filing_documents(cik: str, accession: str) -> list[dict]:
@@ -99,9 +115,21 @@ def get_filing_documents(cik: str, accession: str) -> list[dict]:
     return docs
 
 
-def pick_best_document(documents: list[dict]) -> str | None:
-    """Select the most relevant earnings press release document from a filing."""
-    # First pass: EX-99.1 / EX-99 is always the earnings press release
+def pick_best_document(
+    documents: list[dict],
+    form_type: str = "8-K",
+    primary_doc: str | None = None,
+) -> str | None:
+    """Select the most relevant report or exhibit document from a filing."""
+    # For 10-K and 10-Q, prefer primary document or form matching document
+    if form_type in ("10-K", "10-Q"):
+        if primary_doc and any(d["name"] == primary_doc for d in documents):
+            return primary_doc
+        for doc in documents:
+            if doc["type"] in ("10-K", "10-Q", "10-K/A", "10-Q/A"):
+                return doc["name"]
+
+    # For 8-K: First pass check EX-99 press release exhibit
     for doc in documents:
         name = doc["name"].lower()
         doc_type = doc["type"]
@@ -116,9 +144,11 @@ def pick_best_document(documents: list[dict]) -> str | None:
         ):
             return doc["name"]
 
-    # Second pass: fallback to 8-K body
+    # Fallback: check primary document or main body
+    if primary_doc and any(d["name"] == primary_doc for d in documents):
+        return primary_doc
     for doc in documents:
-        if doc["type"] == "8-K" and doc["name"]:
+        if doc["type"] == form_type and doc["name"]:
             return doc["name"]
 
     return None
@@ -143,9 +173,10 @@ def download_document(
         return None
 
     ticker = filing_meta["ticker"]
+    form = filing_meta.get("form", "8-K")
     filing_date = filing_meta["date"]
     safe_acc = accession_clean[:10]
-    file_path = Path(output_dir) / f"{ticker}_{filing_date}_{safe_acc}.htm"
+    file_path = Path(output_dir) / f"{ticker}_{form}_{filing_date}_{safe_acc}.htm"
     file_path.write_text(resp.text, encoding="utf-8")
     print(f"  Downloaded: {file_path.name}  [{doc_name}]")
     return str(file_path)
@@ -153,17 +184,17 @@ def download_document(
 
 def main() -> None:
     # --- Main ---
-    os.makedirs("data/transcripts", exist_ok=True)
+    os.makedirs("data/company_filings", exist_ok=True)
 
     all_filings = []
     for ticker, cik in COMPANIES.items():
-        print(f"Fetching 8-K list for {ticker}...")
-        filings = get_8k_filings(cik, ticker)
+        print(f"Fetching 10-K, 10-Q, 8-K filing lists for {ticker}...")
+        filings = get_company_filings(cik, ticker)
         all_filings.extend(filings)
         time.sleep(0.2)
 
-    print(f"\nTotal 8-K filings found: {len(all_filings)}")
-    print("Fetching document indexes and downloading exhibits...\n")
+    print(f"\nTotal filings found across NVDA, JPM, WMT, TSLA: {len(all_filings)}")
+    print("Fetching document indexes and downloading reports...\n")
 
     success, skipped = 0, 0
     for filing in all_filings:
@@ -174,14 +205,18 @@ def main() -> None:
             skipped += 1
             continue
 
-        best_doc = pick_best_document(documents)
+        best_doc = pick_best_document(
+            documents,
+            form_type=filing.get("form", "8-K"),
+            primary_doc=filing.get("primary_doc"),
+        )
         if not best_doc:
-            print(f"  No exhibit found: {filing['ticker']} {filing['date']}")
+            print(f"  No report found: {filing['ticker']} {filing['form']} {filing['date']}")
             skipped += 1
             continue
 
         result = download_document(
-            filing["cik"], filing["accession"], best_doc, filing, "data/transcripts"
+            filing["cik"], filing["accession"], best_doc, filing, "data/company_filings"
         )
         success += 1 if result else 0
         skipped += 0 if result else 1

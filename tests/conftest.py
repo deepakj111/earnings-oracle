@@ -77,7 +77,7 @@ def sample_generation_result(sample_citation: Citation) -> GenerationResult:
         question="What was Apple's revenue in Q4 2024?",
         answer="Apple reported total net sales of $94.9 billion in Q4 2024 [1].",
         citations=[sample_citation],
-        model="gpt-4.1-nano",
+        model="gpt-5-mini",
         prompt_tokens=1200,
         completion_tokens=80,
         total_tokens=1280,
@@ -96,7 +96,7 @@ def sample_generation_result_ungrounded() -> GenerationResult:
         question="What was Berkshire Hathaway's Q4 2024 revenue?",
         answer="The provided documents do not contain sufficient information to answer this question.",
         citations=[],
-        model="gpt-4.1-nano",
+        model="gpt-5-mini",
         prompt_tokens=900,
         completion_tokens=20,
         total_tokens=920,
@@ -153,8 +153,10 @@ def mock_qdrant() -> MagicMock:
     qdrant = MagicMock(spec=QdrantClient)
 
     # get_collections() response
+    from config import settings
+
     mock_coll_desc = MagicMock()
-    mock_coll_desc.name = "earnings_transcripts"
+    mock_coll_desc.name = settings.embedding.collection_name
     mock_get_collections_resp = MagicMock()
     mock_get_collections_resp.collections = [mock_coll_desc]
     qdrant.get_collections.return_value = mock_get_collections_resp

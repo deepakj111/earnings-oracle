@@ -53,22 +53,22 @@ def _make_metadata() -> DocumentMetadata:
     )
 
 
-def _mock_embed_model(vec: list[float] | None = None) -> MagicMock:
+def _mock_openai_client(vec: list[float] | None = None) -> MagicMock:
     """
-    Return a MagicMock that mimics fastembed TextEmbedding.
-    Each call to .embed([text]) must return a fresh iterable of numpy arrays.
-    Using side_effect ensures a new iterator is created per call.
+    Return a MagicMock that mimics OpenAI API client embeddings endpoint.
     """
-    embedding = np.array(vec if vec is not None else _fake_embedding(), dtype=np.float32)
-    mock = MagicMock()
-    mock.embed.side_effect = lambda texts: iter([embedding for _ in texts])
-    return mock
+    embedding = vec if vec is not None else _fake_embedding()
+    mock_client = MagicMock()
+    mock_client.embeddings.create.side_effect = lambda input, **kwargs: MagicMock(
+        data=[MagicMock(embedding=embedding) for _ in input]
+    )
+    return mock_client
 
 
 class TestGetEmbedding:
     def test_returns_list_of_floats(self) -> None:
-        mock_model = _mock_embed_model()
-        with patch("ingestion.indexer._embed_model", mock_model):
+        mock_client = _mock_openai_client()
+        with patch("ingestion.indexer.get_openai_client", return_value=mock_client):
             result = _get_embeddings(["Revenue grew 6 percent."])
         assert isinstance(result, list)
         assert len(result) == 1
@@ -76,24 +76,14 @@ class TestGetEmbedding:
         assert all(isinstance(v, float) for v in result[0])
 
     def test_returns_correct_dimension(self) -> None:
-        mock_model = _mock_embed_model()
-        with patch("ingestion.indexer._embed_model", mock_model):
+        mock_client = _mock_openai_client()
+        with patch("ingestion.indexer.get_openai_client", return_value=mock_client):
             result = _get_embeddings(["Revenue grew 6 percent."])
         assert len(result[0]) == VECTOR_DIM
 
-    def test_output_is_unit_normalized(self) -> None:
-        raw = np.array([3.0, 4.0] + [0.0] * (VECTOR_DIM - 2), dtype=np.float32)
-        mock_model = MagicMock()
-        mock_model.embed.side_effect = lambda texts: iter([raw for _ in texts])
-        with patch("ingestion.indexer._embed_model", mock_model):
-            result = _get_embeddings(["Revenue grew 6 percent."])
-        norm = np.linalg.norm(np.array(result[0], dtype=np.float32))
-        assert abs(norm - 1.0) < 1e-5
-
-    def test_raises_if_client_not_initialized(self) -> None:
-        with patch("ingestion.indexer._embed_model", None):
-            with pytest.raises(RuntimeError, match="setup_embedder"):
-                _get_embeddings(["Revenue grew 6 percent."])
+    def test_empty_input_returns_empty_list(self) -> None:
+        result = _get_embeddings([])
+        assert result == []
 
 
 @pytest.mark.asyncio
@@ -106,19 +96,19 @@ class TestIndexDocument:
         """
         Helper that calls index_document with mocked embedder and Qdrant client.
 
-        Returns (bm25_texts, bm25_corpus, mock_qdrant, mock_embed_model)
+        Returns (bm25_texts, bm25_corpus, mock_qdrant, mock_client)
         so each test can assert on any of the four outputs independently.
         """
-        mock_model = _mock_embed_model()
+        mock_client = _mock_openai_client()
         mock_qdrant = MagicMock()
 
-        with patch("ingestion.indexer._embed_model", mock_model):
+        with patch("ingestion.indexer.get_openai_client", return_value=mock_client):
             bm25_texts, bm25_corpus = await index_document(
                 chunks,
                 metadata or _make_metadata(),
                 mock_qdrant,
             )
-        return bm25_texts, bm25_corpus, mock_qdrant, mock_model
+        return bm25_texts, bm25_corpus, mock_qdrant, mock_client
 
     # ── Return type ───────────────────────────────────────────────────────────
 
@@ -139,13 +129,13 @@ class TestIndexDocument:
         parent = _make_chunk("parent", 0)
         child = _make_chunk("child", 1, parent.chunk_id)
         table = _make_chunk("table", 2)
-        _, _, _, mock_model = await self._run([parent, child, table])
-        assert mock_model.embed.call_count == 1
+        _, _, _, mock_client = await self._run([parent, child, table])
+        assert mock_client.embeddings.create.call_count == 1
 
     async def test_no_children_produces_no_embed_calls(self) -> None:
         parent = _make_chunk("parent", 0)
-        _, _, _, mock_model = await self._run([parent])
-        mock_model.embed.assert_not_called()
+        _, _, _, mock_client = await self._run([parent])
+        mock_client.embeddings.create.assert_not_called()
 
     # ── BM25 texts ────────────────────────────────────────────────────────────
 
@@ -283,15 +273,10 @@ class TestIndexDocument:
 
 class TestInitialization:
     def test_setup_embedder(self) -> None:
-        import ingestion.indexer
         from ingestion.indexer import setup_embedder
 
-        with patch("ingestion.indexer.TextEmbedding") as mock_text_embedding:
-            setup_embedder()
-            mock_text_embedding.assert_called_once_with(
-                model_name=ingestion.indexer.EMBEDDING_MODEL, threads=2
-            )
-            assert ingestion.indexer._embed_model is not None
+        # setup_embedder is a no-op/logger for OpenAI API
+        setup_embedder()
 
     def test_ensure_payload_indices(self) -> None:
         from ingestion.indexer import _ensure_payload_indices

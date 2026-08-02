@@ -108,7 +108,7 @@ def _grade_one(question: str, chunk: SearchResult) -> RelevanceGrade:
 
     try:
         resp = get_openai_client().chat.completions.create(
-            model=_settings.query_transform.model,  # reuse nano tier
+            model=_settings.crag.grader_model,
             messages=[
                 {
                     "role": "user",
@@ -118,8 +118,8 @@ def _grade_one(question: str, chunk: SearchResult) -> RelevanceGrade:
                     ),
                 }
             ],
-            temperature=0.0,
-            max_completion_tokens=128,
+            temperature=_settings.crag.grader_temperature,
+            max_completion_tokens=_settings.crag.grader_max_tokens,
         )
         raw = (resp.choices[0].message.content or "").strip()
         relevant, score, reasoning = _parse_response(raw, chunk.chunk_id)

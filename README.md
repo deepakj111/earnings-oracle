@@ -50,21 +50,6 @@ The pipeline consists of six distinct execution layers, parallelized via `asynci
 
 ---
 
-## 📈 Quantitative Evaluation Results
-
-Achieving strong results on the `earnings-oracle` golden dataset requires precise numerical extraction. Our automated LLM-as-a-judge tracking shows the following validated metrics (sampled over 1k bootstraps):
-
-| Architecture Variant | Faithfulness | Answer Relevancy | Context Precision |
-|----------------------|--------------|------------------|-------------------|
-| **Naive RAG** (Dense only) | 0.612 ± 0.05 | 0.720 ± 0.04 | 0.531 ± 0.07 |
-| **Hybrid + RRF** | 0.814 ± 0.03 | 0.865 ± 0.03 | 0.760 ± 0.05 |
-| **Hybrid + Reranker** | 0.901 ± 0.02 | 0.925 ± 0.02 | 0.890 ± 0.03 |
-| **Full Stack (+ CRAG)**| **0.954 ± 0.01** | **0.963 ± 0.01** | **0.922 ± 0.02** |
-
-*Note: CRAG significantly bumps score characteristics on adverserial queries designed to cause hallucinations.*
-
----
-
 ## 🛠 Tech Stack
 
 - **ML Frameworks**: `fastembed` (BAAI/bge-small-en-v1.5 local embedding), `FlashRank` (ms-marco-MiniLM-L-6-v2 cross-encoder)
@@ -102,11 +87,33 @@ poetry run python -m ingestion.download_filings
 poetry run python -m ingestion.pipeline
 ```
 
-### 4. Serve API and Run E2E Test
+### 4. Serve API & Query Endpoints
 Launch the production Uvicorn server:
 ```bash
 poetry run serve-prod
 ```
+
+Query the API via `curl` (use `-L` or trailing slash `/query/` to follow HTTP 307 redirects and pipe to `json.tool` for formatted output):
+
+```bash
+# Option A: Follow redirects (-L)
+curl -L -s -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What was Apple total revenue in 2024?",
+    "filter": {"ticker": "AAPL"}
+  }' | python3 -m json.tool
+
+# Option B: Direct request with trailing slash (/query/)
+curl -s -X POST http://localhost:8000/query/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What was Apple total revenue in 2024?",
+    "filter": {"ticker": "AAPL"}
+  }' | python3 -m json.tool
+```
+
+### 5. Run E2E Evaluation Suite
 Execute the automated MLOps statistical evaluation suite:
 ```bash
 poetry run python -m evaluation.harness --metrics faithfulness answer_relevancy

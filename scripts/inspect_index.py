@@ -11,13 +11,13 @@ from qdrant_client.models import FieldCondition, Filter, MatchValue
 load_dotenv()
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-COLLECTION = os.getenv("RAG_QDRANT_COLLECTION", "earnings_transcripts")
-TRANSCRIPTS_DIR = Path("data/transcripts")
+COLLECTION = os.getenv("RAG_QDRANT_COLLECTION", "company_filings")
+TRANSCRIPTS_DIR = Path("data/company_filings")
 BM25_INDEX_PATH = Path("data/bm25_index.pkl")
 BM25_CORPUS_PATH = Path("data/bm25_corpus.pkl")
-CHECKPOINT_PATH = Path("data/ingested_transcripts_checkpoint.txt")
+CHECKPOINT_PATH = Path("data/ingested_filings_checkpoint.txt")
 
-TICKERS = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", "WMT"]
+TICKERS = ["NVDA", "JPM", "WMT", "TSLA"]
 
 SEP = "-" * 68
 
@@ -239,7 +239,9 @@ if qdrant_count == 0 and bm25_count > 0:
     print("\n  MISMATCH: BM25 has chunks but Qdrant is empty.")
     print("  This means ingestion wrote BM25 but did NOT upsert to Qdrant,")
     print("  OR Qdrant was recreated with empty storage after ingestion.")
-    print("  Fix: rm data/ingested_transcripts_checkpoint.txt && poetry run python -m ingestion.pipeline")
+    print(
+        "  Fix: rm data/ingested_transcripts_checkpoint.txt && poetry run python -m ingestion.pipeline"
+    )
 elif qdrant_count > 0 and bm25_count > 0:
     ratio = qdrant_count / bm25_count
     if 0.95 <= ratio <= 1.05:

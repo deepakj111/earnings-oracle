@@ -1,16 +1,16 @@
 # knowledge_graph/extractor.py
 """
-LLM-powered entity and relationship extraction for SEC 8-K filings.
+LLM-powered financial entity and relationship extraction for SEC filings.
 
-Runs during ingestion to populate the knowledge graph. Uses gpt-4.1-nano
-for cost-efficient extraction with structured JSON output.
+Runs during ingestion to populate the knowledge graph using pure LLM extraction
+(e.g., gpt-4.1-nano) evaluated per parent chunk for exhaustive metric, segment,
+executive, and relationship discovery with precise chunk-level provenance.
 
 Design decisions:
-  - Extracts from parent chunks (512 tokens), not children, to minimize LLM calls
-  - Includes regex-based fallback for common financial entities (tickers, dollar amounts)
-  - Uses structured JSON output format for reliable parsing
-  - Fail-open: extraction errors skip the chunk, never crash the pipeline
-  - Batch-friendly: processes all parent chunks from one document at once
+  - Evaluated per parent chunk (512 tokens) to capture all financial data without truncation
+  - Pure LLM extraction (no regex fallback) for high accuracy and clean structured output
+  - Fail-open: extraction errors skip the chunk, never crash the ingestion pipeline
+  - Concurrent per-chunk LLM calls bounded by asyncio Semaphore
 """
 
 from __future__ import annotations
@@ -18,45 +18,25 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from typing import Any
 
 from loguru import logger
 
 from config import settings
 from knowledge_graph.models import Entity, EntityType, Relationship, RelationType
 
-# ── Regex fallback patterns for deterministic extraction ──────────────────────
-
-_DOLLAR_RE = re.compile(
-    r"\$[\d,]+\.?\d*\s*(?:billion|million|B|M|bn|mn|trillion|T)",
-    re.IGNORECASE,
-)
-_PERCENT_RE = re.compile(
-    r"[\d.]+\s*(?:percent|%)",
-    re.IGNORECASE,
-)
-_TICKER_RE = re.compile(
-    r"\b(?:AAPL|NVDA|MSFT|AMZN|META|JPM|XOM|UNH|TSLA|WMT|GOOG|GOOGL)\b",
-)
-
-# Known executive patterns
-_EXEC_RE = re.compile(
-    r"(?:CEO|CFO|COO|CTO|Chief\s+(?:Executive|Financial|Operating|Technology)\s+Officer)",
-    re.IGNORECASE,
-)
-
 # ── LLM extraction prompt ─────────────────────────────────────────────────────
 
 EXTRACTION_SYSTEM_PROMPT = """\
-You are a financial document analyst. Extract entities and relationships \
-from the given SEC 8-K earnings filing text.
+You are an expert financial document analyst. Extract all key financial entities, metrics, numbers, segment performance, guidance, products, executives, risks, and relationships from the provided SEC filing text section.
 
 Return ONLY a JSON object with this exact structure:
 {
   "entities": [
     {
-      "name": "entity name",
+      "name": "entity or metric name",
       "entity_type": "PERSON|PRODUCT|SEGMENT|METRIC|COMPETITOR|RISK|INITIATIVE",
-      "properties": {}
+      "properties": {"value": "optional exact numerical value or description"}
     }
   ],
   "relationships": [
@@ -64,21 +44,19 @@ Return ONLY a JSON object with this exact structure:
       "source": "entity name",
       "target": "entity name",
       "relation": "LEADS|REPORTS|DRIVES_REVENUE|COMPETES_WITH|RISK_TO|PART_OF|MENTIONED_WITH",
-      "properties": {}
+      "properties": {"value": "optional relationship details or metric value"}
     }
   ]
 }
 
 Rules:
-- Extract PERSONS (executives, board members) with their roles in properties
-- Extract PRODUCTS and SEGMENTS mentioned in the filing
-- Extract key METRICS (revenue, EPS, margins) with values in properties
-- Extract COMPETITORS by name
-- Extract RISK factors and headwinds
-- Extract strategic INITIATIVES (AI, cloud, sustainability)
-- Only extract entities explicitly mentioned in the text
-- Keep entity names short and canonical (e.g., "iPhone" not "the iPhone product line")
-- Return empty lists if no entities/relationships are found
+- Extract METRICS exhaustively (Revenue, Net Income, Operating Margin, EPS, CapEx, Free Cash Flow, Growth Rates) with exact numbers in properties.
+- Extract SEGMENTS (e.g., Services, Cloud, Hardware) and link them to reported METRICS.
+- Extract PERSONS (CEOs, CFOs, executives) and their roles.
+- Extract PRODUCTS, COMPETITORS, strategic INITIATIVES (AI, cloud), and RISKS.
+- Keep entity names canonical, normalized, and concise (e.g., "revenue", "cloud segment", "tim cook").
+- Only extract entities explicitly mentioned in the text.
+- Return empty lists if no entities or relationships are present.
 """
 
 EXTRACTION_USER_TEMPLATE = """\
@@ -167,12 +145,12 @@ async def _call_llm_extract(
                     "content": EXTRACTION_USER_TEMPLATE.format(
                         ticker=ticker,
                         fiscal_period=fiscal_period,
-                        text=text[:3000],  # cap input to control cost
+                        text=text[:4000],
                     ),
                 },
             ],
-            temperature=0.0,
-            max_tokens=4096,
+            temperature=settings.knowledge_graph.extraction_temperature,
+            max_tokens=settings.knowledge_graph.extraction_max_tokens,
             response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content or "{}"
@@ -182,49 +160,52 @@ async def _call_llm_extract(
         return {}
 
 
-def _regex_extract(
-    text: str,
+async def _extract_single_chunk(
+    chunk: Any,
     ticker: str,
     fiscal_period: str,
-    chunk_id: str,
+    semaphore: asyncio.Semaphore,
 ) -> tuple[list[Entity], list[Relationship]]:
-    """
-    Deterministic regex-based extraction as a fallback/supplement.
+    """Extract entities and relationships from a single chunk using OpenAI LLM."""
+    async with semaphore:
+        raw = await _call_llm_extract(chunk.text, ticker, fiscal_period)
+        entities: list[Entity] = []
+        relationships: list[Relationship] = []
 
-    Extracts:
-      - Dollar amounts as METRIC entities
-      - Percentage changes as METRIC entities
-      - Competitor ticker mentions as COMPETITOR entities
-      - Executive role mentions as PERSON entities
-    """
-    entities: list[Entity] = []
-    relationships: list[Relationship] = []
+        chunk_id = getattr(chunk, "chunk_id", "")
 
-    # Extract competitor tickers mentioned in text
-    for match in _TICKER_RE.finditer(text):
-        mentioned_ticker = match.group()
-        if mentioned_ticker != ticker:
-            entities.append(
-                Entity(
-                    name=mentioned_ticker,
-                    entity_type=EntityType.COMPETITOR,
+        for e_data in raw.get("entities", []):
+            try:
+                entity = Entity(
+                    name=e_data.get("name", ""),
+                    entity_type=e_data.get("entity_type", EntityType.METRIC),
                     ticker=ticker,
                     fiscal_period=fiscal_period,
-                    chunk_ids=[chunk_id],
+                    chunk_ids=[chunk_id] if chunk_id else [],
+                    properties=e_data.get("properties", {}),
                 )
-            )
-            relationships.append(
-                Relationship(
-                    source=ticker.lower(),
-                    target=mentioned_ticker.lower(),
-                    relation=RelationType.COMPETES_WITH,
+                if entity.name:
+                    entities.append(entity)
+            except Exception as exc:
+                logger.debug(f"Skipping malformed entity: {exc}")
+
+        for r_data in raw.get("relationships", []):
+            try:
+                rel = Relationship(
+                    source=r_data.get("source", ""),
+                    target=r_data.get("target", ""),
+                    relation=r_data.get("relation", RelationType.MENTIONED_WITH),
                     ticker=ticker,
                     fiscal_period=fiscal_period,
                     chunk_id=chunk_id,
+                    properties=r_data.get("properties", {}),
                 )
-            )
+                if rel.source and rel.target:
+                    relationships.append(rel)
+            except Exception as exc:
+                logger.debug(f"Skipping malformed relationship: {exc}")
 
-    return entities, relationships
+        return entities, relationships
 
 
 async def extract_entities_from_chunks(
@@ -233,9 +214,10 @@ async def extract_entities_from_chunks(
     fiscal_period: str,
 ) -> tuple[list[Entity], list[Relationship]]:
     """
-    Extract entities and relationships from a list of parent chunks asynchronously.
+    Extract financial entities and relationships from parent chunks asynchronously.
 
-    Combines concurrent LLM extraction (if enabled) with regex-based fallback.
+    Runs OpenAI LLM extraction per parent chunk in parallel with controlled concurrency,
+    ensuring exhaustive financial data extraction and accurate chunk provenance.
 
     Args:
         parent_chunks: List of Chunk objects (parent type only)
@@ -245,89 +227,27 @@ async def extract_entities_from_chunks(
     Returns:
         Tuple of (entities, relationships) ready for knowledge graph insertion.
     """
-    all_entities: list[Entity] = []
-    all_relationships: list[Relationship] = []
     llm_enabled = settings.knowledge_graph.extraction_enabled
 
-    # ── LLM extraction (Batched & Concurrent) ──────────────────────────────────
-    if llm_enabled:
-        # Group parent chunks into batches of up to 3500 chars to minimize LLM network overhead
-        chunk_batches: list[list] = []
-        current_batch: list = []
-        current_len = 0
-        for chunk in parent_chunks:
-            if current_len + len(chunk.text) > 3500 and current_batch:
-                chunk_batches.append(current_batch)
-                current_batch = [chunk]
-                current_len = len(chunk.text)
-            else:
-                current_batch.append(chunk)
-                current_len += len(chunk.text)
-        if current_batch:
-            chunk_batches.append(current_batch)
+    if not llm_enabled or not parent_chunks:
+        return [], []
 
-        tasks = [_call_llm_extract("\n\n".join([c.text for c in batch]), ticker, fiscal_period) for batch in chunk_batches]
-        raw_responses = await asyncio.gather(*tasks) if tasks else []
+    all_entities: list[Entity] = []
+    all_relationships: list[Relationship] = []
 
-        for batch, raw in zip(chunk_batches, raw_responses, strict=False):
-            batch_chunk_ids = [c.chunk_id for c in batch]
-            first_chunk_id = batch_chunk_ids[0] if batch_chunk_ids else ""
-            for e_data in raw.get("entities", []):
-                try:
-                    entity = Entity(
-                        name=e_data.get("name", ""),
-                        entity_type=e_data.get("entity_type", EntityType.METRIC),
-                        ticker=ticker,
-                        fiscal_period=fiscal_period,
-                        chunk_ids=batch_chunk_ids,
-                        properties=e_data.get("properties", {}),
-                    )
-                    if entity.name:
-                        all_entities.append(entity)
-                except Exception as exc:
-                    logger.debug(f"Skipping malformed entity: {exc}")
+    semaphore = asyncio.Semaphore(5)
+    tasks = [
+        _extract_single_chunk(chunk, ticker, fiscal_period, semaphore) for chunk in parent_chunks
+    ]
+    results = await asyncio.gather(*tasks)
 
-            for r_data in raw.get("relationships", []):
-                try:
-                    rel = Relationship(
-                        source=r_data.get("source", ""),
-                        target=r_data.get("target", ""),
-                        relation=r_data.get("relation", RelationType.MENTIONED_WITH),
-                        ticker=ticker,
-                        fiscal_period=fiscal_period,
-                        chunk_id=first_chunk_id,
-                        properties=r_data.get("properties", {}),
-                    )
-                    if rel.source and rel.target:
-                        all_relationships.append(rel)
-                except Exception as exc:
-                    logger.debug(f"Skipping malformed relationship: {exc}")
-
-    # ── Regex fallback (always runs sequentially, CPU bounds) ───────────────────
-    for chunk in parent_chunks:
-        regex_entities, regex_rels = _regex_extract(
-            chunk.text, ticker, fiscal_period, chunk.chunk_id
-        )
-        all_entities.extend(regex_entities)
-        all_relationships.extend(regex_rels)
-
-    for entity in all_entities:
-        logger.debug(
-            f"  └─ [KG ENTITY] Name: '{entity.name}' | Type: {entity.entity_type} | "
-            f"Ticker: {entity.ticker} | Period: {entity.fiscal_period} | "
-            f"Chunk IDs: {entity.chunk_ids} | Properties: {entity.properties}"
-        )
-    for rel in all_relationships:
-        logger.debug(
-            f"  └─ [KG RELATIONSHIP] {rel.source} --({rel.relation})--> {rel.target} | "
-            f"Ticker: {rel.ticker} | Period: {rel.fiscal_period} | "
-            f"Chunk ID: {rel.chunk_id} | Properties: {rel.properties}"
-        )
+    for chunk_entities, chunk_rels in results:
+        all_entities.extend(chunk_entities)
+        all_relationships.extend(chunk_rels)
 
     logger.info(
         f"[KG Extract] {ticker} {fiscal_period} | "
         f"{len(all_entities)} entities, {len(all_relationships)} relationships "
-        f"from {len(parent_chunks)} parent chunks "
-        f"(llm={'on' if llm_enabled else 'off'})"
+        f"extracted from {len(parent_chunks)} parent chunks (pure LLM)"
     )
     return all_entities, all_relationships

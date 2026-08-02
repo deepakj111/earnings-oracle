@@ -51,8 +51,8 @@ def _call(prompt: str) -> str:
     resp = get_openai_client().chat.completions.create(
         model=_eval_cfg.model,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_completion_tokens=256,
+        temperature=_eval_cfg.temperature,
+        max_completion_tokens=_eval_cfg.max_tokens,
     )
     return (resp.choices[0].message.content or "").strip()
 

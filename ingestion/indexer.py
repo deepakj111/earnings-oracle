@@ -11,15 +11,15 @@ BM25 result indices back to chunk IDs and document metadata.
 """
 
 import asyncio
+import time
 import uuid
 
-import numpy as np
-from fastembed import TextEmbedding
 from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, HnswConfigDiff, PointStruct, VectorParams
 
 from config import settings as _settings
+from config.openai_client import get_openai_client
 from ingestion.chunker import Chunk
 from ingestion.metadata_extractor import DocumentMetadata
 
@@ -29,37 +29,26 @@ VECTOR_DIM: int = _cfg.vector_dim
 EMBEDDING_MODEL: str = _cfg.model
 UPSERT_BATCH_SIZE: int = _cfg.upsert_batch_size
 
-_embed_model: TextEmbedding | None = None
 
-
-def setup_embedder() -> None:
+def setup_embedder(threads: int | None = None) -> None:
     """
-    Load the ONNX embedding model into memory.
-    First call downloads the model (~340MB) to ~/.cache/fastembed/
-    and caches it permanently — subsequent runs are instant.
+    Initialise OpenAI API embedding configuration.
     """
-    global _embed_model
-    logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
-    _embed_model = TextEmbedding(model_name=EMBEDDING_MODEL, threads=2)
-    logger.info("Embedding model ready.")
+    logger.info(f"OpenAI embedding model ready: {EMBEDDING_MODEL} (dim={VECTOR_DIM})")
 
 
-def _get_embeddings(texts: list[str]) -> list[list[float]]:
-    if _embed_model is None:
-        raise RuntimeError(
-            "Embedding model is not loaded. Call setup_embedder() before calling _get_embeddings()."
-        )
-    vectors = list(_embed_model.embed(texts))
-    result = []
-    for vec in vectors:
-        if isinstance(vec, np.ndarray):
-            norm = float(np.linalg.norm(vec))
-            if norm > 0 and abs(norm - 1.0) > 1e-5:
-                vec = vec / norm
-            result.append(vec.tolist())
-        else:
-            result.append(list(vec))
-    return result
+def _get_embeddings(texts: list[str], batch_size: int = 100) -> list[list[float]]:
+    if not texts:
+        return []
+    client = get_openai_client()
+    embeddings: list[list[float]] = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        res = client.embeddings.create(input=batch, model=EMBEDDING_MODEL)
+        for item in res.data:
+            vec = item.embedding
+            embeddings.append(vec)
+    return embeddings
 
 
 def _ensure_payload_indices(client: QdrantClient) -> None:
@@ -122,6 +111,7 @@ async def index_document(
     chunks: list[Chunk],
     metadata: DocumentMetadata,
     qdrant: QdrantClient,
+    timings: dict | None = None,
 ) -> tuple[list[list[str]], list[dict]]:
     """Embed chunks and index them into Qdrant, returning data for the BM25 corpus."""
     child_chunks = [c for c in chunks if c.chunk_type == "child"]
@@ -135,7 +125,11 @@ async def index_document(
     texts = [chunk.text for chunk in child_chunks]
 
     # Run heavy embedding CPU work in a thread pool
+    t0 = time.perf_counter()
     embeddings = await asyncio.to_thread(_get_embeddings, texts)
+    t1 = time.perf_counter()
+    if timings is not None:
+        timings["embedding"] = round(t1 - t0, 4)
 
     logger.debug(
         f"[QDRANT INDEX] Embedding and preparing {len(child_chunks)} points for {metadata.ticker} ({metadata.fiscal_period})..."
@@ -174,6 +168,14 @@ async def index_document(
         new_bm25_corpus.append(payload)
 
     def _sync_upsert() -> None:
+        if not qdrant.collection_exists(COLLECTION_NAME):
+            qdrant.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
+                on_disk_payload=True,
+                hnsw_config=HnswConfigDiff(on_disk=True),
+            )
+            _ensure_payload_indices(qdrant)
         for i in range(0, len(points), UPSERT_BATCH_SIZE):
             qdrant.upsert(
                 collection_name=COLLECTION_NAME,
@@ -184,6 +186,10 @@ async def index_document(
         )
 
     # Run blocking IO Qdrant insert in a thread
+    t2 = time.perf_counter()
     await asyncio.to_thread(_sync_upsert)
+    t3 = time.perf_counter()
+    if timings is not None:
+        timings["qdrant_upsert"] = round(t3 - t2, 4)
 
     return new_bm25_texts, new_bm25_corpus
