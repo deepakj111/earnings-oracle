@@ -581,10 +581,6 @@ poetry run mypy ingestion/ --ignore-missing-imports --disallow-untyped-defs --pr
 
 This happens if tests create multiple apps without using the test `client` fixture. Always use the `client` fixture from `conftest.py` which patches `api.main.lifespan` — it prevents the real lifespan (which creates Prometheus metrics) from running.
 
-### `fastembed` model download hangs
-
-First run downloads ~340 MB. Set `FASTEMBED_CACHE_PATH` to a writable directory if the default cache location (`~/.cache/fastembed`) has permission issues.
-
 ### `collect_items_mock_error` in pytest
 
 If `ask_streaming` mock is exhausted between tests, reset it in the test:

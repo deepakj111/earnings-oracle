@@ -212,7 +212,6 @@ class InfraConfig:
         default_factory=lambda: _env_str("SEC_USER_AGENT", "Your Name your@email.com")
     )
     log_format: str = field(default_factory=lambda: _env_str("LOG_FORMAT", "text"))
-    fastembed_cache_path: str = field(default_factory=lambda: _env_str("FASTEMBED_CACHE_PATH", ""))
 
 
 # ── Layer 5: CRAG ──────────────────────────────────────────────────────────────

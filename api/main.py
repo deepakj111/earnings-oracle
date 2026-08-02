@@ -34,7 +34,7 @@ Design decisions:
      instantiated in tests with different settings without running startup.
 
 
-  2. Heavy models (BAAI/bge, BM25, FlashRank) are pre-loaded in the lifespan
+  2. Heavy models (BM25, FlashRank) are pre-loaded in the lifespan
      startup rather than lazily on first request.  This gives:
        - Predictable cold-start latency (pays it at process start, not first user)
        - Kubernetes readiness probe accuracy (/health/ready returns 200 only

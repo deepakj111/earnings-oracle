@@ -34,7 +34,7 @@ The pipeline consists of six distinct execution layers, parallelized via `asynci
 │  │ SEC EDGAR   │   │ HyDE             │   │ BM25 Sparse  │   │ OpenAI    │   │
 │  │ Parser      │──▶│ Multi-Query (3x) │──▶│ Qdrant Dense │──▶│ Grounding │   │
 │  │ Chunking    │   │ Step-Back Prompt │   │ FlashRank    │   │ Citations │   │
-│  │ fastembed   │   │                  │   │              │   │           │   │
+│  │ OpenAI Emb  │   │                  │   │              │   │           │   │
 │  └─────────────┘   └──────────┬───────┘   └──────┬───────┘   └─────┬─────┘   │
 │                               │                  │                 │         │
 │                        ┌──────▼──────────────────▼────────┐        │         │

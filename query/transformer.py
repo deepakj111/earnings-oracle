@@ -137,7 +137,7 @@ def _run_hyde(query: str) -> str:
     Technique 1: Hypothetical Document Embeddings.
 
     Asks the model to write a passage as if it came from an earnings press
-    release. The resulting text is embedded (using the same fastembed model
+    release. The resulting text is embedded (using the same embedding model
     as the index) instead of the raw query — this closes the query-document
     semantic gap because the hypothetical passage lives in the same region
     of embedding space as real document chunks.
@@ -223,7 +223,7 @@ class QueryTransformer:
         transformer = QueryTransformer()
         result = transformer.transform("How did Apple's revenue guidance change?")
 
-        # result.hyde_document    → embed this with fastembed for dense retrieval
+        # result.hyde_document    → embed this for dense retrieval
         # result.all_retrieval_queries → fan out to BM25 + dense retrieval
         # result.stepback_query   → included in all_retrieval_queries
 

@@ -368,7 +368,6 @@ Status values:
 | Constraint | Cause | Impact |
 |-----------|-------|--------|
 | BM25 is in-process | `_bm25_index` module-level singleton | Each worker process loads its own copy (~60–100 MB each) |
-| fastembed is CPU-bound | ONNX inference on CPU | Embedding latency ~50 ms per batch; scales with CPU cores |
 | FlashRank is CPU-bound | Cross-encoder ONNX inference | ~8–15 ms per 20 candidates; independent per request |
 | OpenAI rate limits | API tier | Enforced by tenacity backoff; consider `max_workers` in ThreadPool |
 
@@ -386,7 +385,6 @@ Status values:
 
 **Long-term**:
 - Async ingestion pipeline for concurrent embedding + upsert
-- GPU acceleration for fastembed (fastembed supports CUDA via ONNX)
 - Streaming token counting for cost attribution per request
 
 ---

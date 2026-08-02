@@ -7,7 +7,7 @@ chunk, it returns a RelevanceGrade indicating whether the chunk contains
 information directly relevant to answering the question.
 
 Design decisions:
-  - Uses gpt-4.1-nano (same tier as query transform — cheap, fast)
+  - Uses gpt-5-mini (same tier as query transform — cheap, fast)
   - Structured JSON output for reliable regex-based parsing
   - Concurrent grading via ThreadPoolExecutor (one LLM call per chunk)
   - Fail-open: on any error, defaults to relevant=True so the pipeline
@@ -146,7 +146,7 @@ class RelevanceGrader:
     Concurrent LLM-based relevance grader for CRAG.
 
     Grades all chunks in parallel using a shared thread pool so total latency ≈ one LLM call
-    (~200–400ms for gpt-4.1-nano) regardless of chunk count.
+    regardless of chunk count.
 
     Usage:
         grader = RelevanceGrader()

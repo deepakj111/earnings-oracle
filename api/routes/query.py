@@ -20,14 +20,14 @@ they return results:
 
 Threading model:
   FastAPI runs on an async event loop (uvicorn + asyncio).  The RAG pipeline
-  is entirely synchronous (OpenAI SDK, fastembed, BM25, FlashRank are all
+  is entirely synchronous (OpenAI SDK, BM25, FlashRank are all
   blocking calls).  We offload every pipeline call to a ThreadPoolExecutor so
   the event loop stays free to handle other requests concurrently.
 
 
   _THREAD_POOL is module-level with max_workers=4 — tune based on:
     - OpenAI rate limits (tokens-per-minute / requests-per-minute)
-    - Available CPU cores for FlashRank / fastembed
+    - Available CPU cores for FlashRank
     - Expected concurrent users
 
 

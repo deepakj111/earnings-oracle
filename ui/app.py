@@ -401,5 +401,5 @@ if question:
 
 st.caption(
     f"Financial RAG v0.1.0 · API: `{API_BASE_URL}` · "
-    "Model: BAAI/bge-small-en-v1.5 + Qdrant + BM25 + FlashRank"
+    "Model: OpenAI text-embedding-3-small + Qdrant + BM25 + FlashRank"
 )
