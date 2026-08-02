@@ -3,11 +3,9 @@ Tests for ingestion/download_filings.py
 
 All HTTP calls are mocked — we test parsing/picking logic only.
 Coverage:
-  - get_8k_filings filters by form type and date range
+  - get_company_filings filters by form type (10-K, 10-Q) and date range
   - get_filing_documents parses HTML index table correctly
-  - pick_best_document prefers EX-99.1 over 8-K body
-  - pick_best_document falls back to 8-K body when no exhibit found
-  - pick_best_document returns None when no document available
+  - pick_best_document prefers primary_doc and matches form types
   - download_document writes file and returns path on success
   - download_document returns None on HTTP failure
 """
@@ -18,27 +16,29 @@ import pytest
 
 from ingestion.download_filings import (
     download_document,
-    get_8k_filings,
+    get_company_filings,
     get_filing_documents,
     pick_best_document,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-# test_download_filings.py — fix the fixture at the top of the file
-
 SEC_SUBMISSIONS_JSON = {
     "filings": {
         "recent": {
-            "form": ["8-K", "10-Q", "8-K", "8-K"],
+            "form": ["10-K", "10-Q", "8-K", "10-Q"],
             "filingDate": ["2024-10-31", "2024-08-01", "2022-12-01", "2026-01-01"],
-            #                                                                ^^^^^^^^^^
-            #                                                  was "2025-06-01" — inside range
             "accessionNumber": [
                 "0001234567-24-000001",
                 "0001234567-24-000002",
                 "0001234567-22-000003",
                 "0001234567-26-000004",
+            ],
+            "primaryDocument": [
+                "nvda-20241031.htm",
+                "nvda-20240801.htm",
+                "nvda-8k.htm",
+                "nvda-20260101.htm",
             ],
         }
     }
@@ -48,26 +48,14 @@ FILING_INDEX_HTML = """
 <html><body>
 <table>
   <tr>
-    <td>1</td><td>Earnings Press Release</td>
-    <td><a href="ex99_1.htm">ex99_1.htm</a></td>
-    <td>EX-99.1</td><td>120KB</td>
+    <td>1</td><td>Form 10-K</td>
+    <td><a href="form10k.htm">form10k.htm</a></td>
+    <td>10-K</td><td>120KB</td>
   </tr>
   <tr>
-    <td>2</td><td>Form 8-K</td>
-    <td><a href="form8k.htm">form8k.htm</a></td>
-    <td>8-K</td><td>20KB</td>
-  </tr>
-</table>
-</body></html>
-"""
-
-FILING_INDEX_NO_EXHIBIT = """
-<html><body>
-<table>
-  <tr>
-    <td>1</td><td>Form 8-K</td>
-    <td><a href="form8k.htm">form8k.htm</a></td>
-    <td>8-K</td><td>20KB</td>
+    <td>2</td><td>Exhibit 10-Q</td>
+    <td><a href="form10q.htm">form10q.htm</a></td>
+    <td>10-Q</td><td>20KB</td>
   </tr>
 </table>
 </body></html>
@@ -84,31 +72,30 @@ def _mock_response(json_data=None, text="", status_code=200):
     return resp
 
 
-# ── get_8k_filings ────────────────────────────────────────────────────────────
+# ── get_company_filings ───────────────────────────────────────────────────────
 
 
-class TestGet8kFilings:
+class TestGetCompanyFilings:
     def _run(self, start="2023-01-01", end="2025-12-31"):
         with patch(
             "ingestion.download_filings.requests.get",
             return_value=_mock_response(json_data=SEC_SUBMISSIONS_JSON),
         ):
-            return get_8k_filings("0000320193", "AAPL", start, end)
+            return get_company_filings("0000320193", "AAPL", start_date=start, end_date=end)
 
-    def test_returns_only_8k_forms(self) -> None:
+    def test_returns_only_10k_and_10q_forms(self) -> None:
         results = self._run()
-        assert all(r.get("ticker") == "AAPL" for r in results)
-
-    def test_filters_out_10q(self) -> None:
-        results = self._run()
-        # 10-Q at index 1 must not appear
-        assert len(results) == 1
+        forms = [r.get("form") for r in results]
+        assert "8-K" not in forms
+        assert all(f in ("10-K", "10-Q") for f in forms)
 
     def test_filters_by_date_range(self) -> None:
         results = self._run(start="2023-01-01", end="2025-12-31")
-        # 2022-12-01 and 2025-06-01 both outside range
-        assert len(results) == 1
-        assert results[0]["date"] == "2024-10-31"
+        # 2022-12-01 and 2026-01-01 outside range
+        assert len(results) == 2
+        dates = [r["date"] for r in results]
+        assert "2024-10-31" in dates
+        assert "2024-08-01" in dates
 
     def test_result_contains_required_keys(self) -> None:
         results = self._run()
@@ -117,6 +104,7 @@ class TestGet8kFilings:
             assert "cik" in r
             assert "date" in r
             assert "accession" in r
+            assert "primary_doc" in r
 
     def test_ticker_attached_to_result(self) -> None:
         results = self._run()
@@ -142,20 +130,16 @@ class TestGetFilingDocuments:
         result = self._run()
         assert isinstance(result, list)
 
-    def test_parses_exhibit_type(self) -> None:
+    def test_parses_form_types(self) -> None:
         result = self._run()
         types = [d["type"] for d in result]
-        assert "EX-99.1" in types
-
-    def test_parses_8k_form_type(self) -> None:
-        result = self._run()
-        types = [d["type"] for d in result]
-        assert "8-K" in types
+        assert "10-K" in types
+        assert "10-Q" in types
 
     def test_parses_document_name(self) -> None:
         result = self._run()
         names = [d["name"] for d in result]
-        assert "ex99_1.htm" in names
+        assert "form10k.htm" in names
 
     def test_failed_index_returns_empty(self) -> None:
         result = self._run(status=404)
@@ -166,39 +150,30 @@ class TestGetFilingDocuments:
 
 
 class TestPickBestDocument:
-    def test_prefers_ex99_1_over_8k(self) -> None:
+    def test_prefers_primary_doc(self) -> None:
         docs = [
-            {"name": "form8k.htm", "type": "8-K", "description": "form 8-k"},
-            {"name": "ex99_1.htm", "type": "EX-99.1", "description": "press release"},
+            {"name": "form10k.htm", "type": "10-K", "description": "form 10-k"},
+            {"name": "nvda-2024.htm", "type": "10-K", "description": "primary"},
         ]
-        assert pick_best_document(docs) == "ex99_1.htm"
+        assert (
+            pick_best_document(docs, form_type="10-K", primary_doc="nvda-2024.htm")
+            == "nvda-2024.htm"
+        )
 
-    def test_fallback_to_8k_body(self) -> None:
+    def test_fallback_to_matching_form_type(self) -> None:
         docs = [
-            {"name": "form8k.htm", "type": "8-K", "description": "form 8-k"},
+            {"name": "form10k.htm", "type": "10-K", "description": "form 10-k"},
         ]
-        assert pick_best_document(docs) == "form8k.htm"
+        assert pick_best_document(docs, form_type="10-K") == "form10k.htm"
 
     def test_returns_none_when_no_document(self) -> None:
         docs = [
             {"name": "cover.htm", "type": "COVER", "description": "cover page"},
         ]
-        assert pick_best_document(docs) is None
+        assert pick_best_document(docs, form_type="10-K") is None
 
     def test_empty_list_returns_none(self) -> None:
-        assert pick_best_document([]) is None
-
-    def test_ex99_2_also_accepted(self) -> None:
-        docs = [
-            {"name": "ex99_2.htm", "type": "EX-99.2", "description": "tables"},
-        ]
-        assert pick_best_document(docs) == "ex99_2.htm"
-
-    def test_description_keyword_match(self) -> None:
-        docs = [
-            {"name": "results.htm", "type": "OTHER", "description": "earnings press release"},
-        ]
-        assert pick_best_document(docs) == "results.htm"
+        assert pick_best_document([], form_type="10-K") is None
 
 
 # ── download_document ─────────────────────────────────────────────────────────
@@ -206,7 +181,7 @@ class TestPickBestDocument:
 
 class TestDownloadDocument:
     def _filing_meta(self):
-        return {"ticker": "AAPL", "date": "2024-10-31"}
+        return {"ticker": "AAPL", "date": "2024-10-31", "form": "10-K"}
 
     def test_returns_path_on_success(self, tmp_path) -> None:
         with patch(
@@ -216,7 +191,7 @@ class TestDownloadDocument:
             result = download_document(
                 "0000320193",
                 "0001234567-24-000001",
-                "ex99_1.htm",
+                "form10k.htm",
                 self._filing_meta(),
                 str(tmp_path),
             )
@@ -231,7 +206,7 @@ class TestDownloadDocument:
             download_document(
                 "0000320193",
                 "0001234567-24-000001",
-                "ex99_1.htm",
+                "form10k.htm",
                 self._filing_meta(),
                 str(tmp_path),
             )
@@ -245,7 +220,7 @@ class TestDownloadDocument:
             result = download_document(
                 "0000320193",
                 "0001234567-24-000001",
-                "ex99_1.htm",
+                "form10k.htm",
                 self._filing_meta(),
                 str(tmp_path),
             )
@@ -259,7 +234,7 @@ class TestDownloadDocument:
             result = download_document(
                 "0000320193",
                 "0001234567-24-000001",
-                "ex99_1.htm",
+                "form10k.htm",
                 self._filing_meta(),
                 str(tmp_path),
             )
@@ -274,29 +249,28 @@ class TestDownloadDocument:
                 download_document(
                     "0000320193",
                     "0001234567-24-000001",
-                    "ex99_1.htm",
+                    "form10k.htm",
                     self._filing_meta(),
                     str(tmp_path),
                 )
 
 
 class TestEdgeCases:
-    def test_get_8k_filings_timeout(self) -> None:
+    def test_get_company_filings_timeout(self) -> None:
         from requests.exceptions import Timeout
 
         with patch("ingestion.download_filings.requests.get", side_effect=Timeout("Timeout")):
             with pytest.raises(Timeout):
-                get_8k_filings("0000320193", "AAPL")
+                get_company_filings("0000320193", "AAPL")
 
-    def test_get_8k_filings_missing_data(self) -> None:
-        # What if the JSON doesn't have the expected keys?
+    def test_get_company_filings_missing_data(self) -> None:
         bad_json = {"filings": {"recent": {}}}
         with patch(
             "ingestion.download_filings.requests.get",
             return_value=_mock_response(json_data=bad_json),
         ):
             with pytest.raises(KeyError):
-                get_8k_filings("0000320193", "AAPL")
+                get_company_filings("0000320193", "AAPL")
 
     def test_get_filing_documents_timeout(self) -> None:
         from requests.exceptions import Timeout
@@ -306,17 +280,9 @@ class TestEdgeCases:
                 get_filing_documents("0000320193", "0001234567-24-000001")
 
     def test_get_filing_documents_missing_cells(self) -> None:
-        # Test line 84: len(cells) < 4
         html = "<html><body><table><tr><td>1</td><td>2</td></tr></table></body></html>"
         with patch(
             "ingestion.download_filings.requests.get", return_value=_mock_response(text=html)
         ):
             result = get_filing_documents("0000320193", "0001234567-24-000001")
             assert result == []
-
-    def test_pick_best_document_ex99_in_name(self) -> None:
-        # Test line 113: "ex99" in name
-        docs = [
-            {"name": "some_ex99_file.htm", "type": "OTHER", "description": "other"},
-        ]
-        assert pick_best_document(docs) == "some_ex99_file.htm"

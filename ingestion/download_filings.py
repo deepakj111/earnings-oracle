@@ -24,11 +24,11 @@ COMPANIES = {
 def get_company_filings(
     cik: str,
     ticker: str,
-    form_types: tuple[str, ...] = ("10-K", "10-Q", "8-K"),
+    form_types: tuple[str, ...] = ("10-K", "10-Q"),
     start_date: str = "2020-01-01",
     end_date: str = date.today().strftime("%Y-%m-%d"),
 ) -> list[dict]:
-    """Fetch recent 10-K, 10-Q, and 8-K filings for a specific company CIK within a date range."""
+    """Fetch recent 10-K and 10-Q filings for a specific company CIK within a date range."""
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
     resp = requests.get(url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
@@ -54,22 +54,6 @@ def get_company_filings(
                     }
                 )
     return results
-
-
-def get_8k_filings(
-    cik: str,
-    ticker: str,
-    start_date: str = "2020-01-01",
-    end_date: str = date.today().strftime("%Y-%m-%d"),
-) -> list[dict]:
-    """Fetch 8-K filings specifically for backward compatibility."""
-    return get_company_filings(
-        cik=cik,
-        ticker=ticker,
-        form_types=("8-K",),
-        start_date=start_date,
-        end_date=end_date,
-    )
 
 
 def get_filing_documents(cik: str, accession: str) -> list[dict]:
@@ -117,36 +101,20 @@ def get_filing_documents(cik: str, accession: str) -> list[dict]:
 
 def pick_best_document(
     documents: list[dict],
-    form_type: str = "8-K",
+    form_type: str = "10-K",
     primary_doc: str | None = None,
 ) -> str | None:
-    """Select the most relevant report or exhibit document from a filing."""
-    # For 10-K and 10-Q, prefer primary document or form matching document
-    if form_type in ("10-K", "10-Q"):
-        if primary_doc and any(d["name"] == primary_doc for d in documents):
-            return primary_doc
-        for doc in documents:
-            if doc["type"] in ("10-K", "10-Q", "10-K/A", "10-Q/A"):
-                return doc["name"]
-
-    # For 8-K: First pass check EX-99 press release exhibit
-    for doc in documents:
-        name = doc["name"].lower()
-        doc_type = doc["type"]
-        desc = doc["description"]
-
-        if doc_type in ("EX-99.1", "EX-99.2", "EX-99"):
-            return doc["name"]
-        if "ex99" in name or "ex-99" in name:
-            return doc["name"]
-        if any(
-            kw in desc for kw in ["earnings", "press release", "financial results", "exhibit 99"]
-        ):
-            return doc["name"]
-
-    # Fallback: check primary document or main body
+    """Select the most relevant report document from a filing."""
+    # Prefer primary document if present
     if primary_doc and any(d["name"] == primary_doc for d in documents):
         return primary_doc
+
+    # Search for matching document type
+    for doc in documents:
+        if doc["type"] in (form_type, f"{form_type}/A"):
+            return doc["name"]
+
+    # Fallback to any document matching form_type
     for doc in documents:
         if doc["type"] == form_type and doc["name"]:
             return doc["name"]
@@ -173,7 +141,7 @@ def download_document(
         return None
 
     ticker = filing_meta["ticker"]
-    form = filing_meta.get("form", "8-K")
+    form = filing_meta.get("form", "10-K")
     filing_date = filing_meta["date"]
     safe_acc = accession_clean[:10]
     file_path = Path(output_dir) / f"{ticker}_{form}_{filing_date}_{safe_acc}.htm"
@@ -188,7 +156,7 @@ def main() -> None:
 
     all_filings = []
     for ticker, cik in COMPANIES.items():
-        print(f"Fetching 10-K, 10-Q, 8-K filing lists for {ticker}...")
+        print(f"Fetching 10-K, 10-Q filing lists for {ticker}...")
         filings = get_company_filings(cik, ticker)
         all_filings.extend(filings)
         time.sleep(0.2)
@@ -207,7 +175,7 @@ def main() -> None:
 
         best_doc = pick_best_document(
             documents,
-            form_type=filing.get("form", "8-K"),
+            form_type=filing.get("form", "10-K"),
             primary_doc=filing.get("primary_doc"),
         )
         if not best_doc:
