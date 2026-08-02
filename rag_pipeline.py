@@ -82,6 +82,7 @@ if TYPE_CHECKING:
 
 import threading
 
+
 class FinancialRAGPipeline:
     """
     Four-layer Financial RAG pipeline for SEC 8-K earnings filings.

@@ -67,7 +67,7 @@ Achieving strong results on the `earnings-oracle` golden dataset requires precis
 
 ## 🛠 Tech Stack
 
-- **ML Frameworks**: `fastembed` (BAAI/bge-large-en-v1.5 local embedding), `FlashRank` (ms-marco cross-encoder)
+- **ML Frameworks**: `fastembed` (BAAI/bge-small-en-v1.5 local embedding), `FlashRank` (ms-marco-MiniLM-L-6-v2 cross-encoder)
 - **Vector Search**: `Qdrant` (Dense), `rank-bm25` (Sparse)
 - **Generative AI**: `OpenAI SDK` (`gpt-4-turbo` for evaluation, `gpt-4.1-nano` for generation)
 - **Infrastructure**: `FastAPI`, `Streamlit`, `Docker Compose`, `Prometheus`, `Grafana`

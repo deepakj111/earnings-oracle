@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
       2. Open Qdrant TCP connection
       3. Instantiate FinancialRAGPipeline — this triggers model downloads
          and loads all ONNX models into memory:
-           BAAI/bge-large-en-v1.5    ~340 MB (embedding)
+            BAAI/bge-small-en-v1.5    ~130 MB (embedding)
            BM25 index                 ~30-100 MB (keyword search)
            ms-marco-MiniLM-L-12-v2   ~66 MB (reranker, if enabled)
 
@@ -122,6 +122,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.qdrant = qdrant
     app.state.startup_time = _PROCESS_START
 
+    # ── Freeze pre-loaded singletons into permanent GC generation ──────────────
+    import gc
+
+    gc.collect()
+    gc.freeze()
+    logger.info("Startup model singletons frozen in permanent GC generation.")
+
     logger.info("=" * 60)
     logger.info("Financial RAG API — ready to serve requests")
     logger.info("=" * 60)
@@ -149,7 +156,7 @@ def create_app() -> FastAPI:
         description=(
             "Production-grade Retrieval-Augmented Generation system for querying "
             "SEC 8-K earnings filings from 10 major public companies.\n\n"
-            "Uses a hybrid retrieval approach — dense vector search (BAAI/bge-large-en-v1.5 + "
+            "Uses a hybrid retrieval approach — dense vector search (BAAI/bge-small-en-v1.5 + "
             "Qdrant) combined with sparse keyword search (BM25) — fused via Reciprocal Rank "
             "Fusion and reranked with a FlashRank cross-encoder.  Query transformation uses "
             "HyDE, multi-query expansion, and step-back prompting for maximum recall."

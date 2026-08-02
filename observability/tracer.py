@@ -409,6 +409,17 @@ class RAGTracer:
             path = self._output_dir / filename
             path.write_text(trace.to_json(), encoding="utf-8")
             logger.debug(f"Trace persisted → {path}")
+
+            # Prune older trace files if directory exceeds 100 entries
+            all_traces = sorted(
+                self._output_dir.glob("trace_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+            )
+            if len(all_traces) > 100:
+                for old_trace in all_traces[100:]:
+                    try:
+                        old_trace.unlink()
+                    except OSError:
+                        pass
             return path
         except Exception as exc:
             logger.warning(f"Failed to persist trace: {exc}")

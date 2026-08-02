@@ -17,7 +17,7 @@ import numpy as np
 from fastembed import TextEmbedding
 from loguru import logger
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import Distance, HnswConfigDiff, PointStruct, VectorParams
 
 from config import settings as _settings
 from ingestion.chunker import Chunk
@@ -40,7 +40,7 @@ def setup_embedder() -> None:
     """
     global _embed_model
     logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
-    _embed_model = TextEmbedding(model_name=EMBEDDING_MODEL)
+    _embed_model = TextEmbedding(model_name=EMBEDDING_MODEL, threads=2)
     logger.info("Embedding model ready.")
 
 
@@ -52,11 +52,13 @@ def _get_embeddings(texts: list[str]) -> list[list[float]]:
     vectors = list(_embed_model.embed(texts))
     result = []
     for vec in vectors:
-        arr = np.array(vec, dtype=np.float32)
-        norm = np.linalg.norm(arr)
-        if norm > 0:
-            arr = arr / norm
-        result.append(arr.tolist())
+        if isinstance(vec, np.ndarray):
+            norm = float(np.linalg.norm(vec))
+            if norm > 0 and abs(norm - 1.0) > 1e-5:
+                vec = vec / norm
+            result.append(vec.tolist())
+        else:
+            result.append(list(vec))
     return result
 
 
@@ -102,8 +104,12 @@ def init_qdrant(url: str) -> QdrantClient:
         client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
+            on_disk_payload=True,
+            hnsw_config=HnswConfigDiff(on_disk=True),
         )
-        logger.info(f"Created Qdrant collection '{COLLECTION_NAME}' (dim={VECTOR_DIM})")
+        logger.info(
+            f"Created Qdrant collection '{COLLECTION_NAME}' (dim={VECTOR_DIM}, on_disk=True)"
+        )
     else:
         logger.info(f"Qdrant collection '{COLLECTION_NAME}' already exists — reusing.")
 

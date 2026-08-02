@@ -233,9 +233,9 @@ score(chunk_id) = sum(1.0 / (k + rank_i) for rank_i in all_rankings_containing_c
 
 ### FlashRank Reranking
 
-After RRF, the top `top_k_pre_rerank=20` candidates are passed to FlashRank's `ms-marco-MiniLM-L-12-v2` cross-encoder:
+After RRF, the top `top_k_pre_rerank=20` candidates are passed to FlashRank's `ms-marco-MiniLM-L-6-v2` cross-encoder:
 
-- **Model**: 12-layer MiniLM (~66 MB ONNX), fully local, no API cost
+- **Model**: 6-layer MiniLM (~30 MB ONNX), fully local, no API cost
 - **Input**: `(query_original, parent_text_or_child_text)` pairs
 - **Output**: Relevance scores from 0–1 (higher = more relevant)
 - **Latency**: ~8–15 ms for 20 candidates on CPU
@@ -540,7 +540,7 @@ CRAGResult                 (crag/models.py)
 
 ## Design Decisions & Trade-offs
 
-### Why fastembed + BAAI/bge-large-en-v1.5 (not OpenAI text-embedding-3)?
+### Why fastembed + BAAI/bge-small-en-v1.5 (not OpenAI text-embedding-3)?
 
 | Concern | fastembed/bge | OpenAI embeddings |
 |---------|--------------|------------------|
@@ -548,7 +548,7 @@ CRAGResult                 (crag/models.py)
 | Latency | CPU: ~50 ms/batch | Network: ~100–500 ms |
 | Privacy | No data leaves machine | Data sent to OpenAI |
 | Offline | Works without internet | Requires connectivity |
-| Quality | 1024-dim, MTEB competitive | Excellent |
+| Quality | 384-dim, MTEB competitive | Excellent |
 
 For a project ingesting thousands of chunks and running frequent re-indexing, free local embeddings eliminate cost uncertainty while maintaining retrieval quality.
 

@@ -75,3 +75,29 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -sf http://localhost:8000/health/live || exit 1
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+# ── Stage 3: ui-runtime (Lightweight Streamlit Frontend) ────────────────────────
+FROM python:3.11-slim AS ui-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash appuser
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir streamlit requests python-dotenv
+
+ENV PYTHONPATH="/app"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+COPY --chown=appuser:appuser ui ./ui
+
+USER appuser
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "ui/app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true", "--server.fileWatcherType", "none", "--browser.gatherUsageStats", "false"]

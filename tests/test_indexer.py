@@ -289,7 +289,7 @@ class TestInitialization:
         with patch("ingestion.indexer.TextEmbedding") as mock_text_embedding:
             setup_embedder()
             mock_text_embedding.assert_called_once_with(
-                model_name=ingestion.indexer.EMBEDDING_MODEL
+                model_name=ingestion.indexer.EMBEDDING_MODEL, threads=2
             )
             assert ingestion.indexer._embed_model is not None
 

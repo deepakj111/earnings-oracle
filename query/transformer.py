@@ -212,6 +212,9 @@ def _run_stepback(query: str) -> str:
 # ── Public transformer class ──────────────────────────────────────────────────
 
 
+_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="query_transform")
+
+
 class QueryTransformer:
     """
     Layer 2: Query Transformation for Financial RAG.
@@ -224,7 +227,7 @@ class QueryTransformer:
         # result.all_retrieval_queries → fan out to BM25 + dense retrieval
         # result.stepback_query   → included in all_retrieval_queries
 
-    All three techniques run concurrently (ThreadPoolExecutor, 3 workers).
+    All three techniques run concurrently using a persistent thread pool.
     Total latency ≈ single LLM call latency (~0.8–1.2s) instead of 3× serial.
 
     Graceful degradation: if one technique fails after retries, it falls back
@@ -267,8 +270,7 @@ class QueryTransformer:
         logger.info(f"Transforming query | {query!r}")
         failed_techniques: list[str] = []
 
-        # Fire all three techniques concurrently.
-        # Each runs in its own thread — safe because OpenAI SDK is thread-safe.
+        # Fire techniques concurrently via persistent thread pool.
         hyde_doc: str = query  # fallback: original query
         multi_queries: list[str] = [query]  # fallback: only original
         stepback_query: str = query  # fallback: original query
@@ -285,24 +287,21 @@ class QueryTransformer:
                 "HyDE skipped by router (skip_hyde=True) — using original query as hyde_document"
             )
 
-        n_workers = len(tasks)
+        futures = {_pool.submit(fn, query): name for name, fn in tasks.items()}
 
-        with ThreadPoolExecutor(max_workers=max(n_workers, 1)) as executor:
-            futures = {executor.submit(fn, query): name for name, fn in tasks.items()}
-
-            for future in as_completed(futures):
-                name = futures[future]
-                try:
-                    result = future.result()
-                    if name == "hyde":
-                        hyde_doc = result
-                    elif name == "multi":
-                        multi_queries = result
-                    else:
-                        stepback_query = result
-                except Exception as exc:
-                    failed_techniques.append(name)
-                    logger.warning(f"[{name}] failed, using fallback. Error: {exc}")
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                result = future.result()
+                if name == "hyde":
+                    hyde_doc = result
+                elif name == "multi":
+                    multi_queries = result
+                else:
+                    stepback_query = result
+            except Exception as exc:
+                failed_techniques.append(name)
+                logger.warning(f"[{name}] failed, using fallback. Error: {exc}")
 
         logger.info(
             f"Transformation complete | "

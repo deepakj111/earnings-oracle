@@ -46,7 +46,7 @@ def _get_embed_client() -> object:
     if _embed_client is None:
         from fastembed import TextEmbedding
 
-        _embed_client = TextEmbedding(model_name=settings.embedding.model)
+        _embed_client = TextEmbedding(model_name=settings.embedding.model, threads=2)
         logger.info(f"Embedding model loaded for retrieval: {settings.embedding.model}")
     return _embed_client
 
@@ -245,25 +245,24 @@ def _fetch_parent_texts(
 ) -> list[SearchResult]:
     """
     For each SearchResult that has a parent_id, fetch the full parent chunk
-    text from Qdrant and replace parent_text with it.
+    text from Qdrant and replace parent_text with it. If child text is missing
+    (e.g. lightweight BM25 corpus payload), fetch child text as well.
 
     Parent chunks contain ~512 tokens of context vs the child's ~128 tokens.
     This is the core of the parent/child architecture — retrieve small (child)
     for precision, read large (parent) for context in generation.
-
-    Results without a parent_id (tables, standalone chunks) keep their own text.
     """
     if not settings.retrieval.parent_fetch_enabled:
         return results
 
-    # Collect unique parent IDs that need fetching
     parent_ids_needed = {r.parent_id for r in results if r.parent_id is not None}
+    missing_child_ids = {r.chunk_id for r in results if not r.text}
+    ids_to_fetch = parent_ids_needed | missing_child_ids
 
-    if not parent_ids_needed:
+    if not ids_to_fetch:
         return results
 
-    # Fetch all parent payloads in one batch call
-    parent_map: dict[str, str] = {}
+    payload_map: dict[str, str] = {}
     try:
         scroll_result, _ = client.scroll(
             collection_name=settings.embedding.collection_name,
@@ -271,11 +270,11 @@ def _fetch_parent_texts(
                 must=[
                     qmodels.FieldCondition(
                         key="chunk_id",
-                        match=qmodels.MatchAny(any=list(parent_ids_needed)),
+                        match=qmodels.MatchAny(any=list(ids_to_fetch)),
                     )
                 ]
             ),
-            limit=len(parent_ids_needed) + 10,
+            limit=len(ids_to_fetch) + 10,
             with_payload=True,
         )
         for point in scroll_result:
@@ -283,17 +282,20 @@ def _fetch_parent_texts(
                 cid = point.payload.get("chunk_id", "")
                 text = point.payload.get("text", "")
                 if cid:
-                    parent_map[cid] = text
+                    payload_map[cid] = text
     except Exception as e:
         logger.warning(f"Parent fetch failed (using child text as fallback): {e}")
         return results
 
-    # Patch parent_text onto each result
     for r in results:
-        if r.parent_id and r.parent_id in parent_map:
-            r.parent_text = parent_map[r.parent_id]
+        if not r.text and r.chunk_id in payload_map:
+            r.text = payload_map[r.chunk_id]
+            if not r.parent_id:
+                r.parent_text = payload_map[r.chunk_id]
+        if r.parent_id and r.parent_id in payload_map:
+            r.parent_text = payload_map[r.parent_id]
 
-    fetched = sum(1 for r in results if r.parent_id and r.parent_id in parent_map)
+    fetched = sum(1 for r in results if r.parent_id and r.parent_id in payload_map)
     logger.debug(f"Parent fetch: {fetched}/{len(results)} chunks upgraded to parent context.")
     return results
 

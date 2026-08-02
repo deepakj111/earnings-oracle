@@ -57,7 +57,9 @@ def rerank(
         candidates.sort(key=lambda r: r.rerank_score, reverse=True)
         return candidates[:top_k_final]
 
-    passages = [{"id": i, "text": r.parent_text or r.text} for i, r in enumerate(candidates)]
+    passages = [
+        {"id": i, "text": (r.text or r.parent_text)[:400]} for i, r in enumerate(candidates)
+    ]
 
     try:
         ranker, rerank_request_cls = _get_ranker()  # moved inside try

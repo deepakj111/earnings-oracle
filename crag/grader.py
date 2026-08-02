@@ -138,11 +138,14 @@ def _grade_one(question: str, chunk: SearchResult) -> RelevanceGrade:
 # ── Public grader class ────────────────────────────────────────────────────────
 
 
+_grader_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="crag_grader")
+
+
 class RelevanceGrader:
     """
     Concurrent LLM-based relevance grader for CRAG.
 
-    Grades all chunks in parallel so total latency ≈ one LLM call
+    Grades all chunks in parallel using a shared thread pool so total latency ≈ one LLM call
     (~200–400ms for gpt-4.1-nano) regardless of chunk count.
 
     Usage:
@@ -182,22 +185,21 @@ class RelevanceGrader:
         n = len(chunks)
         grades: list[RelevanceGrade | None] = [None] * n
 
-        with ThreadPoolExecutor(max_workers=min(self._workers, n)) as pool:
-            fut_to_idx = {
-                pool.submit(_grade_one, question, chunk): i for i, chunk in enumerate(chunks)
-            }
-            for fut in as_completed(fut_to_idx):
-                idx = fut_to_idx[fut]
-                try:
-                    grades[idx] = fut.result()
-                except Exception as exc:
-                    logger.error(f"Unexpected grader future error idx={idx}: {exc}")
-                    grades[idx] = RelevanceGrade(
-                        chunk_id=chunks[idx].chunk_id,
-                        relevant=True,
-                        score=0.5,
-                        reasoning="unexpected future error",
-                    )
+        fut_to_idx = {
+            _grader_pool.submit(_grade_one, question, chunk): i for i, chunk in enumerate(chunks)
+        }
+        for fut in as_completed(fut_to_idx):
+            idx = fut_to_idx[fut]
+            try:
+                grades[idx] = fut.result()
+            except Exception as exc:
+                logger.error(f"Unexpected grader future error idx={idx}: {exc}")
+                grades[idx] = RelevanceGrade(
+                    chunk_id=chunks[idx].chunk_id,
+                    relevant=True,
+                    score=0.5,
+                    reasoning="unexpected future error",
+                )
 
         result = [g for g in grades if g is not None]
         n_relevant = sum(1 for g in result if g.relevant)

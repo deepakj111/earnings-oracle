@@ -135,7 +135,7 @@ class RerankerConfig:
     """
 
     model: str = field(
-        default_factory=lambda: _env_str("RAG_RERANKER_MODEL", "ms-marco-MiniLM-L-12-v2")
+        default_factory=lambda: _env_str("RAG_RERANKER_MODEL", "ms-marco-MiniLM-L-6-v2")
     )
     top_k_pre_rerank: int = field(default_factory=lambda: _env_int("RAG_RERANKER_TOP_K_PRE", 20))
     enabled: bool = field(default_factory=lambda: _env_bool("RAG_RERANKER_ENABLED", True))
@@ -184,9 +184,9 @@ class EmbeddingConfig:
     """
 
     model: str = field(
-        default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
+        default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
     )
-    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 1024))
+    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 384))
     collection_name: str = field(
         default_factory=lambda: _env_str("RAG_QDRANT_COLLECTION", "earnings_transcripts")
     )
@@ -288,7 +288,7 @@ class CRAGConfig:
     grade_even_if_grounded: bool = field(
         default_factory=lambda: _env_bool("RAG_CRAG_GRADE_IF_GROUNDED", False)
     )
-    grader_max_workers: int = field(default_factory=lambda: _env_int("RAG_CRAG_GRADER_WORKERS", 5))
+    grader_max_workers: int = field(default_factory=lambda: _env_int("RAG_CRAG_GRADER_WORKERS", 2))
     web_search_max_results: int = field(
         default_factory=lambda: _env_int("RAG_CRAG_WEB_MAX_RESULTS", 4)
     )
@@ -352,7 +352,7 @@ class ObservabilityConfig:
             os.path.join(os.path.dirname(__file__), "..", "data", "traces"),
         )
     )
-    persist_traces: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_PERSIST", True))
+    persist_traces: bool = field(default_factory=lambda: _env_bool("RAG_TRACING_PERSIST", False))
     cost_alert_per_request_usd: float = field(
         default_factory=lambda: _env_float("RAG_COST_ALERT_PER_REQUEST", 0.10)
     )

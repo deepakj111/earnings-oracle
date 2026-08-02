@@ -159,7 +159,7 @@ async def run_pipeline_async() -> None:
     indexed_count: int = 0
     skipped_count: int = len(already_done)
 
-    semaphore = asyncio.Semaphore(5)
+    semaphore = asyncio.Semaphore(2)
 
     tasks = [_process_document(f, qdrant, semaphore, kg_enabled, kg_graph) for f in pending]
 
@@ -174,6 +174,10 @@ async def run_pipeline_async() -> None:
                 indexed_count += 1
                 bm25_texts.extend(new_bm25_texts)
                 bm25_corpus.extend(new_bm25_corpus)
+
+        import gc
+
+        gc.collect()
 
     _save_bm25(bm25_texts, bm25_corpus)
 
