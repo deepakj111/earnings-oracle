@@ -440,7 +440,7 @@ spec:
 docker compose stop api
 
 # 2. Delete checkpoint so all files are re-processed
-rm data/pipeline_checkpoint.txt
+rm data/ingested_transcripts_checkpoint.txt
 
 # 3. Optionally delete existing Qdrant collection (forces fresh start)
 # curl -X DELETE http://localhost:6333/collections/earnings_transcripts

@@ -16,7 +16,7 @@ from ingestion.parser import parse_html
 TRANSCRIPTS_DIR = Path("data/transcripts")
 BM25_INDEX_PATH = Path("data/bm25_index.pkl")
 BM25_CORPUS_PATH = Path("data/bm25_corpus.pkl")
-CHECKPOINT_PATH = Path("data/pipeline_checkpoint.txt")
+CHECKPOINT_PATH = Path("data/ingested_transcripts_checkpoint.txt")
 
 
 def _load_checkpoint() -> set[str]:
@@ -166,14 +166,20 @@ async def run_pipeline_async() -> None:
     if tasks:
         logger.info(f"Launching {len(tasks)} document ingestion tasks concurrently...")
         results = await asyncio.gather(*tasks)
-
+        existing_chunk_ids = {entry["chunk_id"] for entry in bm25_corpus if "chunk_id" in entry}
         for child_count, new_bm25_texts, new_bm25_corpus in results:
             if child_count == 0 and not new_bm25_texts:
                 skipped_count += 1
             else:
                 indexed_count += 1
-                bm25_texts.extend(new_bm25_texts)
-                bm25_corpus.extend(new_bm25_corpus)
+                for text, corpus_entry in zip(new_bm25_texts, new_bm25_corpus, strict=False):
+                    cid = corpus_entry.get("chunk_id")
+                    if cid and cid in existing_chunk_ids:
+                        continue
+                    if cid:
+                        existing_chunk_ids.add(cid)
+                    bm25_texts.append(text)
+                    bm25_corpus.append(corpus_entry)
 
         import gc
 

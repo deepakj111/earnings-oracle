@@ -169,3 +169,31 @@ class TestLLMExtraction:
 
         assert entities == []
         assert rels == []
+
+
+class TestJSONRepair:
+    """Verify JSON repair fallback parsing functionality."""
+
+    def test_valid_json(self) -> None:
+        from knowledge_graph.extractor import _parse_json_response
+
+        res = _parse_json_response('{"entities": [{"name": "AWS"}]}')
+        assert res == {"entities": [{"name": "AWS"}]}
+
+    def test_empty_input(self) -> None:
+        from knowledge_graph.extractor import _parse_json_response
+
+        assert _parse_json_response("") == {}
+        assert _parse_json_response("  ") == {}
+
+    def test_repairs_trailing_comma(self) -> None:
+        from knowledge_graph.extractor import _parse_json_response
+
+        res = _parse_json_response('{"entities": [{"name": "AWS"},]}')
+        assert res == {"entities": [{"name": "AWS"}]}
+
+    def test_repairs_unclosed_json(self) -> None:
+        from knowledge_graph.extractor import _parse_json_response
+
+        res = _parse_json_response('{"entities": [{"name": "AWS"')
+        assert res == {"entities": [{"name": "AWS"}]}

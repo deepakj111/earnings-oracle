@@ -78,7 +78,7 @@ list[Chunk]  (parent + child + table chunks)
         ├──▶  index_document()  ──▶  Qdrant (child embeddings)
         │                        ──▶  bm25_texts + bm25_corpus (in-memory)
         │
-        └──▶  _mark_done()  ──▶  pipeline_checkpoint.txt
+        └──▶  _mark_done()  ──▶  ingested_transcripts_checkpoint.txt
 ```
 
 ### Chunking Architecture

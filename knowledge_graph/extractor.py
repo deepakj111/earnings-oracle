@@ -89,6 +89,61 @@ Text:
 """
 
 
+def _parse_json_response(content: str) -> dict:
+    """Parse JSON string with fallback repair for truncated or trailing-comma output."""
+    if not content or not content.strip():
+        return {}
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        cleaned = content.strip()
+        # Remove trailing comma before closing braces/brackets
+        cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # If inside unclosed string, append quote
+        quote_count = len(re.findall(r'(?<!\\)"', cleaned))
+        if quote_count % 2 != 0:
+            cleaned += '"'
+
+        # Track nesting stack of '{' and '[' outside strings
+        stack: list[str] = []
+        in_string = False
+        escaped = False
+        for char in cleaned:
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if not in_string:
+                if char in ("{", "["):
+                    stack.append(char)
+                elif char == "}" and stack and stack[-1] == "{":
+                    stack.pop()
+                elif char == "]" and stack and stack[-1] == "[":
+                    stack.pop()
+
+        # Close open elements in reverse order
+        for opener in reversed(stack):
+            if opener == "{":
+                cleaned += "}"
+            elif opener == "[":
+                cleaned += "]"
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            return {}
+
+
 async def _call_llm_extract(
     text: str,
     ticker: str,
@@ -117,11 +172,11 @@ async def _call_llm_extract(
                 },
             ],
             temperature=0.0,
-            max_tokens=1024,
+            max_tokens=4096,
             response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content or "{}"
-        return json.loads(content)
+        return _parse_json_response(content)
     except Exception as exc:
         logger.warning(f"LLM entity extraction failed (fail-open): {exc}")
         return {}

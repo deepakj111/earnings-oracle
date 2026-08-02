@@ -48,7 +48,7 @@ def bm25_path(tmp_path: Path) -> Path:
 class TestRunPipeline:
     def _run(self, transcript_dir: Path, bm25_path: Path) -> MagicMock:
         mock_qdrant = MagicMock()
-        checkpoint_path = bm25_path.parent / "pipeline_checkpoint.txt"
+        checkpoint_path = bm25_path.parent / "ingested_transcripts_checkpoint.txt"
 
         with (
             patch("ingestion.pipeline.setup_embedder"),  # FIX: was setup_genai

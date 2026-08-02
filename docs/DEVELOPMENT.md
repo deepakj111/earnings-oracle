@@ -534,7 +534,7 @@ If Qdrant and BM25 counts diverge (inspect_index.py shows a mismatch):
 
 ```bash
 # Full re-index (delete checkpoint so all files are re-processed)
-rm data/pipeline_checkpoint.txt
+rm data/ingested_transcripts_checkpoint.txt
 poetry run python -m ingestion.pipeline
 ```
 
@@ -565,7 +565,7 @@ poetry run python -m ingestion.pipeline
 Or if Qdrant storage was wiped:
 
 ```bash
-rm data/pipeline_checkpoint.txt
+rm data/ingested_transcripts_checkpoint.txt
 poetry run python -m ingestion.pipeline
 ```
 
