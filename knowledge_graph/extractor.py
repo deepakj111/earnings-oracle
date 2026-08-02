@@ -298,6 +298,19 @@ async def extract_entities_from_chunks(
         all_entities.extend(regex_entities)
         all_relationships.extend(regex_rels)
 
+    for entity in all_entities:
+        logger.debug(
+            f"  └─ [KG ENTITY] Name: '{entity.name}' | Type: {entity.entity_type} | "
+            f"Ticker: {entity.ticker} | Period: {entity.fiscal_period} | "
+            f"Chunk IDs: {entity.chunk_ids} | Properties: {entity.properties}"
+        )
+    for rel in all_relationships:
+        logger.debug(
+            f"  └─ [KG RELATIONSHIP] {rel.source} --({rel.relation})--> {rel.target} | "
+            f"Ticker: {rel.ticker} | Period: {rel.fiscal_period} | "
+            f"Chunk ID: {rel.chunk_id} | Properties: {rel.properties}"
+        )
+
     logger.info(
         f"[KG Extract] {ticker} {fiscal_period} | "
         f"{len(all_entities)} entities, {len(all_relationships)} relationships "

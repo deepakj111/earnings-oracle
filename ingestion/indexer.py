@@ -137,12 +137,11 @@ async def index_document(
     # Run heavy embedding CPU work in a thread pool
     embeddings = await asyncio.to_thread(_get_embeddings, texts)
 
+    logger.debug(
+        f"[QDRANT INDEX] Embedding and preparing {len(child_chunks)} points for {metadata.ticker} ({metadata.fiscal_period})..."
+    )
     for chunk, embedding in zip(child_chunks, embeddings, strict=False):
-        # --- FIXED: deterministic ID based on chunk_id ---
-        # uuid5 hashes chunk_id → same chunk always gets the same Qdrant point ID.
-        # upsert is then idempotent even if the checkpoint is bypassed.
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk.chunk_id))
-        # --------------------------------------------------
 
         payload = {
             "chunk_id": chunk.chunk_id,
@@ -165,6 +164,12 @@ async def index_document(
             )
         )
 
+        logger.debug(
+            f"  └─ [QDRANT POINT] Point ID: {point_id} | chunk_id: {chunk.chunk_id} | "
+            f"ticker: {metadata.ticker} | quarter: {metadata.quarter} | "
+            f"section: '{chunk.section_title}' | text preview: {chunk.text[:80]!r}"
+        )
+
         new_bm25_texts.append(chunk.text.lower().split())
         new_bm25_corpus.append(payload)
 
@@ -174,6 +179,9 @@ async def index_document(
                 collection_name=COLLECTION_NAME,
                 points=points[i : i + UPSERT_BATCH_SIZE],
             )
+        logger.debug(
+            f"[QDRANT UPSERT] Successfully upserted {len(points)} points into collection '{COLLECTION_NAME}'"
+        )
 
     # Run blocking IO Qdrant insert in a thread
     await asyncio.to_thread(_sync_upsert)

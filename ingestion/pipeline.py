@@ -89,6 +89,26 @@ def _load_existing_bm25() -> tuple[list[list[str]], list[dict]]:
         return [], []
 
 
+LOG_FILE_PATH = Path("logs/ingestion_debug.log")
+
+
+def setup_ingestion_logging() -> Path:
+    """Configure detailed debug log file for ingestion pipeline execution."""
+    LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        LOG_FILE_PATH,
+        level="DEBUG",
+        rotation="10 MB",
+        retention="7 days",
+        enqueue=True,
+        backtrace=True,
+        diagnose=True,
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{function}:{line} - {message}",
+    )
+    logger.info(f"Detailed ingestion log file active → {LOG_FILE_PATH.resolve()}")
+    return LOG_FILE_PATH
+
+
 async def _process_document(
     file_path: Path,
     qdrant: QdrantClient,
@@ -105,7 +125,28 @@ async def _process_document(
 
         metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text)
         chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
+        parent_count = sum(1 for c in chunks if c.chunk_type == "parent")
         child_count = sum(1 for c in chunks if c.chunk_type == "child")
+
+        logger.debug(
+            f"[PARSE] File: {file_path.name} | Ticker: {metadata.ticker} | "
+            f"Period: {metadata.fiscal_period} | Sections: {len(doc.sections)} | "
+            f"Raw text length: {len(doc.raw_text)} chars"
+        )
+        logger.debug(
+            f"[CHUNK SUMMARY] {file_path.name} | {parent_count} parent chunks, {child_count} child chunks"
+        )
+
+        for c in chunks:
+            text_snippet = c.text.replace("\n", " ")[:120]
+            if c.chunk_type == "parent":
+                logger.debug(
+                    f"  └─ [PARENT CHUNK] id={c.chunk_id} | section='{c.section_title}' | text='{text_snippet}...'"
+                )
+            elif c.chunk_type == "child":
+                logger.debug(
+                    f"      └─ [CHILD CHUNK] id={c.chunk_id} | parent={c.parent_id} | text='{text_snippet}...'"
+                )
 
         new_bm25_texts, new_bm25_corpus = await index_document(chunks, metadata, qdrant)
 
@@ -133,6 +174,7 @@ async def _process_document(
 
 async def run_pipeline_async() -> None:
     """Run the ingestion indexing pipeline asynchronously for pending transcript files."""
+    setup_ingestion_logging()
     setup_embedder()
     qdrant = init_qdrant(_settings.infra.qdrant_url)
 
