@@ -87,7 +87,7 @@ def _ensure_payload_indices(client: QdrantClient) -> None:
 
 def init_qdrant(url: str) -> QdrantClient:
     """Initialize Qdrant client and optionally create the target collection if missing."""
-    client = QdrantClient(url=url, timeout=60.0, check_compatibility=False)
+    client = QdrantClient(url=url, timeout=60, check_compatibility=False)
     existing = {c.name for c in client.get_collections().collections}
     if COLLECTION_NAME not in existing:
         client.create_collection(
