@@ -122,7 +122,7 @@ section("3. QDRANT VECTOR DATABASE")
 total_points: int = 0
 
 try:
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
     server_info = client.get_collections()
     all_collections = [c.name for c in server_info.collections]
     print(f"  Qdrant URL         : {QDRANT_URL}")
