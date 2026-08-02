@@ -249,16 +249,29 @@ async def extract_entities_from_chunks(
     all_relationships: list[Relationship] = []
     llm_enabled = settings.knowledge_graph.extraction_enabled
 
-    # ── LLM extraction (Concurrent) ─────────────────────────────────────────────
+    # ── LLM extraction (Batched & Concurrent) ──────────────────────────────────
     if llm_enabled:
-        tasks = []
+        # Group parent chunks into batches of up to 3500 chars to minimize LLM network overhead
+        chunk_batches: list[list] = []
+        current_batch: list = []
+        current_len = 0
         for chunk in parent_chunks:
-            tasks.append(_call_llm_extract(chunk.text, ticker, fiscal_period))
+            if current_len + len(chunk.text) > 3500 and current_batch:
+                chunk_batches.append(current_batch)
+                current_batch = [chunk]
+                current_len = len(chunk.text)
+            else:
+                current_batch.append(chunk)
+                current_len += len(chunk.text)
+        if current_batch:
+            chunk_batches.append(current_batch)
 
+        tasks = [_call_llm_extract("\n\n".join([c.text for c in batch]), ticker, fiscal_period) for batch in chunk_batches]
         raw_responses = await asyncio.gather(*tasks) if tasks else []
 
-        for chunk, raw in zip(parent_chunks, raw_responses, strict=False):
-            chunk_id = chunk.chunk_id
+        for batch, raw in zip(chunk_batches, raw_responses, strict=False):
+            batch_chunk_ids = [c.chunk_id for c in batch]
+            first_chunk_id = batch_chunk_ids[0] if batch_chunk_ids else ""
             for e_data in raw.get("entities", []):
                 try:
                     entity = Entity(
@@ -266,7 +279,7 @@ async def extract_entities_from_chunks(
                         entity_type=e_data.get("entity_type", EntityType.METRIC),
                         ticker=ticker,
                         fiscal_period=fiscal_period,
-                        chunk_ids=[chunk_id],
+                        chunk_ids=batch_chunk_ids,
                         properties=e_data.get("properties", {}),
                     )
                     if entity.name:
@@ -282,7 +295,7 @@ async def extract_entities_from_chunks(
                         relation=r_data.get("relation", RelationType.MENTIONED_WITH),
                         ticker=ticker,
                         fiscal_period=fiscal_period,
-                        chunk_id=chunk_id,
+                        chunk_id=first_chunk_id,
                         properties=r_data.get("properties", {}),
                     )
                     if rel.source and rel.target:

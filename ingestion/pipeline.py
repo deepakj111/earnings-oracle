@@ -201,13 +201,15 @@ async def run_pipeline_async() -> None:
     indexed_count: int = 0
     skipped_count: int = len(already_done)
 
-    semaphore = asyncio.Semaphore(2)
+    semaphore = asyncio.Semaphore(5)
 
     tasks = [_process_document(f, qdrant, semaphore, kg_enabled, kg_graph) for f in pending]
 
     if tasks:
         logger.info(f"Launching {len(tasks)} document ingestion tasks concurrently...")
-        results = await asyncio.gather(*tasks)
+        from tqdm.asyncio import tqdm
+
+        results = await tqdm.gather(*tasks, desc="Ingesting documents")
         existing_chunk_ids = {entry["chunk_id"] for entry in bm25_corpus if "chunk_id" in entry}
         for child_count, new_bm25_texts, new_bm25_corpus in results:
             if child_count == 0 and not new_bm25_texts:
