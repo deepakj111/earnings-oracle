@@ -256,9 +256,9 @@ SEC_USER_AGENT="Company Name ops@company.com"
 QDRANT_URL=http://qdrant:6333              # Docker service name
 
 # LLM
-RAG_GENERATION_MODEL=gpt-4.1-nano
-RAG_QUERY_TRANSFORM_MODEL=gpt-4.1-nano
-RAG_EVAL_MODEL=gpt-4.1-nano
+RAG_GENERATION_MODEL=gpt-5-mini
+RAG_QUERY_TRANSFORM_MODEL=gpt-5-mini
+RAG_EVAL_MODEL=gpt-5-mini
 
 # Retrieval tuning
 RAG_RETRIEVAL_TOP_K_DENSE=10
@@ -344,7 +344,7 @@ readinessProbe:
     },
     "pipeline": {
       "status": "ok",
-      "detail": "generation=gpt-4.1-nano | transform=gpt-4.1-nano"
+      "detail": "generation=gpt-5-mini | transform=gpt-5-mini"
     },
     "bm25_index": {
       "status": "ok",

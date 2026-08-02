@@ -85,7 +85,7 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
   ],
   "grounded": true,
   "retrieval_failed": false,
-  "model": "gpt-4.1-nano",
+  "model": "gpt-5-mini",
   "usage": {
     "prompt_tokens": 2456,
     "completion_tokens": 87,
@@ -294,7 +294,7 @@ Full dependency health check. Actively probes Qdrant connectivity, collection ex
     },
     "pipeline": {
       "status": "ok",
-      "detail": "generation=gpt-4.1-nano | transform=gpt-4.1-nano"
+      "detail": "generation=gpt-5-mini | transform=gpt-5-mini"
     },
     "bm25_index": {
       "status": "ok",

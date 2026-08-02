@@ -297,7 +297,7 @@ logger.add(sys.stdout, serialize=True)  # JSON output
 
 ### Token cost model
 
-At gpt-4.1-nano pricing (`$0.10/1M input, $0.40/1M output`):
+At `gpt-5-mini` pricing:
 
 | Operation | Avg Input Tokens | Avg Output Tokens | Cost per Call |
 |-----------|-----------------|-------------------|--------------|
@@ -315,7 +315,7 @@ At gpt-4.1-nano pricing (`$0.10/1M input, $0.40/1M output`):
 **Disable expensive components for development**:
 ```dotenv
 RAG_CRAG_ENABLED=false          # Saves 5 LLM grading calls
-RAG_QUERY_TRANSFORM_MODEL=gpt-4.1-nano  # Already cheapest tier
+RAG_QUERY_TRANSFORM_MODEL=gpt-5-mini  # Default model
 ```
 
 **Cache aggressively**:

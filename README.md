@@ -52,11 +52,11 @@ The pipeline consists of six distinct execution layers, parallelized via `asynci
 
 ## 🛠 Tech Stack
 
-- **ML Frameworks**: `fastembed` (BAAI/bge-small-en-v1.5 local embedding), `FlashRank` (ms-marco-MiniLM-L-6-v2 cross-encoder)
+- **ML Frameworks**: OpenAI Embeddings (`text-embedding-3-small`), `FlashRank` (`ms-marco-TinyBERT-L-2-v2` cross-encoder)
 - **Vector Search**: `Qdrant` (Dense), `rank-bm25` (Sparse)
-- **Generative AI**: `OpenAI SDK` (`gpt-4-turbo` for evaluation, `gpt-4.1-nano` for generation)
+- **Generative AI**: `OpenAI SDK` (`gpt-5-mini` standardized across Query Routing, Query Transformation, Generation, CRAG Grading, KG Extraction, and Evaluation)
 - **Infrastructure**: `FastAPI`, `Streamlit`, `Docker Compose`, `Prometheus`, `Grafana`
-- **Code Quality**: Strict `mypy` typing, `ruff` checks, `bandit` security scanning, `pytest` suite (~100% coverage on ingestion).
+- **Code Quality**: Strict `mypy` typing, `ruff` checks, `bandit` security scanning, `pytest` suite (883+ tests with high coverage).
 
 ---
 
@@ -122,7 +122,7 @@ poetry run python -m evaluation.harness --metrics faithfulness answer_relevancy
 ---
 
 ## 🧪 Testing & CI/CD
-This repository boasts a robust testing apparatus with **151+ parallelized unit tests** passing with excellent coverage.
+This repository boasts a robust testing apparatus with **883+ unit tests** passing with excellent coverage.
 ```bash
 poetry run pytest tests/
 ```

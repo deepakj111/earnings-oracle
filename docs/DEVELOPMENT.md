@@ -84,7 +84,7 @@ docker run -d \
 # Download SEC 8-K filings (one-time, ~5–10 min)
 poetry run python -m ingestion.download_filings
 
-# Build Qdrant + BM25 index (~20 min on CPU, ~340MB model download on first run)
+# Build Qdrant + BM25 index (computes OpenAI embeddings and constructs BM25 & KG index)
 poetry run python -m ingestion.pipeline
 ```
 
@@ -474,8 +474,8 @@ RAG_RETRIEVAL_TOP_K_DENSE=5      # Fewer Qdrant candidates
 RAG_RETRIEVAL_TOP_K_FINAL=3      # Fewer final chunks
 
 # Model selection
-RAG_GENERATION_MODEL=gpt-4.1-nano
-RAG_QUERY_TRANSFORM_MODEL=gpt-4.1-nano
+RAG_GENERATION_MODEL=gpt-5-mini
+RAG_QUERY_TRANSFORM_MODEL=gpt-5-mini
 
 # Evaluation
 RAG_EVAL_OUTPUT_DIR=data/eval_reports

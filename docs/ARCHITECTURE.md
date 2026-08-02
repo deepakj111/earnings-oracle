@@ -45,7 +45,7 @@ User Question
 GenerationResult / CRAGResult
 ```
 
-**Thread safety**: All pipeline components are stateless between calls. Internal model singletons (fastembed, BM25, FlashRank, OpenAI client) are safe for concurrent reads after first initialisation. Parallel `ask()` calls across threads are fully supported.
+**Thread safety**: All pipeline components are stateless between calls. Internal model singletons (OpenAI embedding client, BM25, FlashRank, OpenAI API client) are safe for concurrent reads after first initialisation. Parallel `ask()` calls across threads are fully supported.
 
 ---
 
@@ -75,10 +75,14 @@ DocumentMetadata {ticker, company, date, year, quarter, fiscal_period}
         ▼
 list[Chunk]  (parent + child + table chunks)
         │
-        ├──▶  index_document()  ──▶  Qdrant (child embeddings)
-        │                        ──▶  bm25_texts + bm25_corpus (in-memory)
+        ├──▶  extract_entities() ──▶ Knowledge Graph Entities (per-chunk LLM extraction)
         │
-        └──▶  _mark_done()  ──▶  ingested_transcripts_checkpoint.txt
+        ├──▶  index_document()   ──▶ Qdrant (child embeddings via text-embedding-3-small)
+        │                        ──▶ bm25_texts + bm25_corpus (in-memory)
+        │
+        ├──▶  _append_metrics()  ──▶ data/ingestion_metrics.json (incremental metrics log)
+        │
+        └──▶  _mark_done()      ──▶ ingested_transcripts_checkpoint.txt
 ```
 
 ### Chunking Architecture
@@ -157,7 +161,7 @@ user question: "What was Apple's revenue in Q4 2024?"
 
 **HyDE (Hypothetical Document Embeddings)**
 
-Generates a passage that mimics an actual 8-K exhibit in register and vocabulary. When embedded with fastembed, this synthetic passage maps into the same region of embedding space as real document chunks — closing the semantic gap at the source.
+Generates a passage that mimics an actual 8-K exhibit in register and vocabulary. When embedded with OpenAI `text-embedding-3-small`, this synthetic passage maps into the same region of embedding space as real document chunks — closing the semantic gap at the source.
 
 Temperature: `0.3` — moderate creativity to generate plausible-sounding passages without hallucinating too wildly.
 
@@ -233,9 +237,9 @@ score(chunk_id) = sum(1.0 / (k + rank_i) for rank_i in all_rankings_containing_c
 
 ### FlashRank Reranking
 
-After RRF, the top `top_k_pre_rerank=20` candidates are passed to FlashRank's `ms-marco-MiniLM-L-6-v2` cross-encoder:
+After RRF, the top `top_k_pre_rerank=20` candidates are passed to FlashRank's `ms-marco-TinyBERT-L-2-v2` cross-encoder:
 
-- **Model**: 6-layer MiniLM (~30 MB ONNX), fully local, no API cost
+- **Model**: TinyBERT cross-encoder, fully local
 - **Input**: `(query_original, parent_text_or_child_text)` pairs
 - **Output**: Relevance scores from 0–1 (higher = more relevant)
 - **Latency**: ~8–15 ms for 20 candidates on CPU
@@ -533,24 +537,22 @@ CRAGResult                 (crag/models.py)
 | Evaluation harness | `ThreadPoolExecutor(max_workers=2)` | Parallel pipeline calls |
 | BM25 search | Python GIL-protected (single thread) | No concurrency needed |
 | Qdrant search | Thread-safe (qdrant-client is thread-safe) | |
-| fastembed | Thread-safe after first init | Module-level singleton |
+| OpenAI embedding client | Thread-safe after first init | Singleton client instance |
 | FlashRank | Thread-safe after first init | Module-level singleton |
 
 ---
 
 ## Design Decisions & Trade-offs
 
-### Why fastembed + BAAI/bge-small-en-v1.5 (not OpenAI text-embedding-3)?
+### Why OpenAI text-embedding-3-small?
 
-| Concern | fastembed/bge | OpenAI embeddings |
-|---------|--------------|------------------|
-| Cost | Free (local ONNX) | ~$0.13/1M tokens |
-| Latency | CPU: ~50 ms/batch | Network: ~100–500 ms |
-| Privacy | No data leaves machine | Data sent to OpenAI |
-| Offline | Works without internet | Requires connectivity |
-| Quality | 384-dim, MTEB competitive | Excellent |
+| Concern | text-embedding-3-small | Notes |
+|---------|-----------------------|-------|
+| Dimensions | 1536-dim | Higher capacity for financial semantic nuance |
+| Latency | ~50–100 ms/batch | Parallelized async batching across chunks |
+| Integration | OpenAI SDK singleton | Shared client infrastructure across layers |
 
-For a project ingesting thousands of chunks and running frequent re-indexing, free local embeddings eliminate cost uncertainty while maintaining retrieval quality.
+`text-embedding-3-small` provides high retrieval recall and precision across 1536 dimensions, enabling dense vector search in Qdrant to capture subtle earnings metrics and management discussion context.
 
 ### Why BM25 + Dense (not dense-only)?
 
@@ -563,14 +565,9 @@ Fixed-size chunking splits financial tables and section context arbitrarily. Par
 - **Rich generation context** with large parents (512 tokens ≈ full paragraph + header)
 - **Table atomicity** — tables are never split
 
-### Why gpt-4.1-nano for all LLM calls?
+### Why gpt-5-mini for all LLM calls?
 
-At `$0.10/1M input, $0.40/1M output` tokens, nano-tier models are sufficient for all three LLM use cases in this pipeline:
-- Query transformation (short instruction-following tasks, ~120–350 input tokens)
-- Answer generation (precise financial Q&A, 2000–5000 input tokens)
-- Evaluation metrics (structured JSON scoring, ~200 input tokens)
-
-Higher-tier models would provide marginal quality gains at 5–10× cost.
+Standardizing on `gpt-5-mini` across all pipeline layers (Query Routing, Query Transformation, Answer Generation, CRAG Grading, Knowledge Graph Entity Extraction, Evaluation) ensures consistent instruction following, structured output formatting, and cost efficiency across the application.
 
 ### Why not Ragas for evaluation?
 
@@ -589,4 +586,4 @@ Naive RAG silently returns hallucinated answers when retrieval quality is poor. 
 - **Graceful degradation**: web search fallback ensures useful responses even for out-of-scope companies
 - **Diagnostic visibility**: `action`, `relevance_ratio`, `web_search_triggered` are all observable
 
-The cost is ~N additional LLM calls for grading (N = number of retrieved chunks, typically 5). At gpt-4.1-nano pricing, this adds ~$0.0005 per query — acceptable for production use.
+The cost is ~N additional LLM calls for grading (N = number of retrieved chunks, typically 5). At `gpt-5-mini` pricing, this adds minimal latency and cost per query — acceptable for production use.
