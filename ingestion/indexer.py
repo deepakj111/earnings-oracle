@@ -11,12 +11,18 @@ BM25 result indices back to chunk IDs and document metadata.
 """
 
 import asyncio
+import re
+import threading
 import time
 import uuid
+from typing import Any
 
+import tiktoken
 from loguru import logger
+from openai import RateLimitError
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, HnswConfigDiff, PointStruct, VectorParams
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from config import settings as _settings
 from config.openai_client import get_openai_client
@@ -29,6 +35,39 @@ VECTOR_DIM: int = _cfg.vector_dim
 EMBEDDING_MODEL: str = _cfg.model
 UPSERT_BATCH_SIZE: int = _cfg.upsert_batch_size
 
+_ENC = tiktoken.get_encoding("cl100k_base")
+_MAX_EMBEDDING_TOKENS = (
+    8000  # Hard ceiling for OpenAI text-embedding-3-small (8192 tokens max per item)
+)
+
+# BM25 tokenizer that preserves financial tokens like "$94.9b", "6.7%", "q4", "2024"
+# while stripping trailing punctuation that naive .split() would attach.
+_BM25_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.$%/-]*")
+
+
+def _tokenize_for_bm25(text: str) -> list[str]:
+    """Tokenize text for BM25 indexing.
+
+    Strips punctuation from word boundaries so that query tokens like
+    'revenue', '2024', and 'q4' match their counterparts in indexed text.
+    Financial patterns like '$94.9b', '6.7%', 'q4' are preserved whole.
+    """
+    return _BM25_TOKEN_RE.findall(text.lower())
+
+
+def _truncate_for_embedding(text: str, max_tokens: int = _MAX_EMBEDDING_TOKENS) -> str:
+    """Truncate text to stay strictly under OpenAI's 8192 token per-item limit.
+
+    The previous character-length heuristic (len(text) <= 24_000 → skip) was
+    unsafe: dense financial tables or CJK/multi-byte content can produce far
+    more tokens per character than ASCII prose, causing 400 errors from the
+    embeddings API. We now always tokenise and only decode-truncate when needed.
+    """
+    tokens = _ENC.encode(text, disallowed_special=())
+    if len(tokens) <= max_tokens:
+        return text
+    return _ENC.decode(tokens[:max_tokens])
+
 
 def setup_embedder(threads: int | None = None) -> None:
     """
@@ -37,17 +76,65 @@ def setup_embedder(threads: int | None = None) -> None:
     logger.info(f"OpenAI embedding model ready: {EMBEDDING_MODEL} (dim={VECTOR_DIM})")
 
 
-def _get_embeddings(texts: list[str], batch_size: int = 100) -> list[list[float]]:
+# A global lock to prevent concurrent documents from bursting OpenAI simultaneously
+_openai_rate_lock = threading.Lock()
+
+
+# Create a helper function decorated with retry logic
+@retry(
+    wait=wait_random_exponential(min=1, max=60),
+    stop=stop_after_attempt(6),
+    retry=retry_if_exception_type(RateLimitError),
+)
+def _call_openai_with_retry(client: Any, batch: list[str], model: str) -> Any:
+    """Calls OpenAI API and automatically retries if rate limited."""
+    return client.embeddings.create(input=batch, model=model)
+
+
+def _get_embeddings(
+    texts: list[str],
+    max_batch_size: int = 50,
+    max_batch_tokens: int = 50000,  # Lowered to 50k for smoother pacing
+) -> list[list[float]]:
     if not texts:
         return []
     client = get_openai_client()
     embeddings: list[list[float]] = []
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i : i + batch_size]
-        res = client.embeddings.create(input=batch, model=EMBEDDING_MODEL)
+
+    current_batch: list[str] = []
+    current_tokens = 0
+
+    for text in texts:
+        safe_text = _truncate_for_embedding(text)
+        est_tokens = max(1, len(safe_text) // 3)
+
+        if current_batch and (
+            len(current_batch) >= max_batch_size or current_tokens + est_tokens > max_batch_tokens
+        ):
+            # Enforce global pacing across ALL concurrent documents
+            with _openai_rate_lock:
+                res = _call_openai_with_retry(client, current_batch, EMBEDDING_MODEL)
+                # 50k tokens max per batch -> max 20 batches per minute to stay under 1M TPM.
+                # Sleeping 3 seconds guarantees a maximum of 20 batches/minute globally.
+                time.sleep(3.0)
+
+            for item in res.data:
+                embeddings.append(item.embedding)
+
+            current_batch = []
+            current_tokens = 0
+
+        current_batch.append(safe_text)
+        current_tokens += est_tokens
+
+    if current_batch:
+        with _openai_rate_lock:
+            res = _call_openai_with_retry(client, current_batch, EMBEDDING_MODEL)
+            time.sleep(3.0)
+
         for item in res.data:
-            vec = item.embedding
-            embeddings.append(vec)
+            embeddings.append(item.embedding)
+
     return embeddings
 
 
@@ -164,7 +251,7 @@ async def index_document(
             f"section: '{chunk.section_title}' | text preview: {chunk.text[:80]!r}"
         )
 
-        new_bm25_texts.append(chunk.text.lower().split())
+        new_bm25_texts.append(_tokenize_for_bm25(chunk.text))
         new_bm25_corpus.append(payload)
 
     def _sync_upsert() -> None:

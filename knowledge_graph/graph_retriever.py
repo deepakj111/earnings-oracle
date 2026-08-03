@@ -23,6 +23,7 @@ Design decisions:
 
 from __future__ import annotations
 
+import re
 import time
 
 from loguru import logger
@@ -37,15 +38,44 @@ from retrieval.models import SearchResult
 
 # Module-level cached graph (loaded once, reused across requests)
 _cached_graph: KnowledgeGraph | None = None
+# Pre-compiled multi-pattern regex for entity matching (rebuilt when graph is reloaded)
+_entity_pattern: re.Pattern | None = None
 
 
 def _load_graph() -> KnowledgeGraph:
     """Lazy-load the knowledge graph from disk (cached in module global)."""
-    global _cached_graph
+    global _cached_graph, _entity_pattern
     if _cached_graph is None:
         store = EntityStore()
         _cached_graph = store.load()
+        _entity_pattern = _build_entity_pattern(_cached_graph)
     return _cached_graph
+
+
+def _build_entity_pattern(graph: KnowledgeGraph) -> re.Pattern | None:
+    """
+    Build a single compiled regex that matches any entity name or alias
+    as a whole-word substring. This is evaluated once at graph load time
+    rather than per-request, giving near-O(Q) matching behavior.
+
+    Longer names are placed first so that specific matches ("iphone revenue")
+    shadow shorter ones ("revenue") when both would match.
+    """
+    names: set[str] = set()
+    for entity in graph.entities.values():
+        if entity.name:
+            names.add(re.escape(entity.name))
+        for alias in entity.aliases:
+            if alias:
+                names.add(re.escape(alias))
+
+    if not names:
+        return None
+
+    # Sort longest first so more-specific patterns shadow shorter ones
+    sorted_names = sorted(names, key=len, reverse=True)
+    pattern = "|".join(sorted_names)
+    return re.compile(pattern, re.IGNORECASE)
 
 
 def _match_entities_from_question(
@@ -55,27 +85,25 @@ def _match_entities_from_question(
     """
     Match entity names from the user's question against the knowledge graph.
 
-    Uses case-insensitive substring matching: if an entity's name
-    (or any alias) appears in the question, it's considered a match.
+    Uses a pre-compiled regex alternation pattern built at graph load time,
+    giving efficient multi-pattern matching without an O(E × Q) inner loop.
 
     Returns a list of matched entity names (normalized lowercase).
     """
+    if _entity_pattern is None:
+        return []
+
     question_lower = question.lower()
     matched: list[str] = []
     seen: set[str] = set()
 
-    for entity in graph.entities.values():
-        # Check entity name
-        if entity.name in question_lower and entity.name not in seen:
+    for m in _entity_pattern.finditer(question_lower):
+        matched_text = m.group(0).lower()
+        # Resolve alias back to canonical entity name
+        entity = graph.find_entity(matched_text)
+        if entity and entity.name not in seen:
             matched.append(entity.name)
             seen.add(entity.name)
-            continue
-        # Check aliases
-        for alias in entity.aliases:
-            if alias in question_lower and entity.name not in seen:
-                matched.append(entity.name)
-                seen.add(entity.name)
-                break
 
     return matched
 
@@ -166,6 +194,11 @@ def graph_retrieve(
     """
     Graph-fused retrieval: inject relational context from the knowledge graph.
 
+    Graph chunks are assigned a score equal to half the median rerank_score
+    (or rrf_score if reranking hasn't run yet) of the existing results.
+    This lets them participate meaningfully in downstream score-based filtering
+    rather than always ranking below retrieved results with score=0.0.
+
     Args:
         question: User's original question
         existing_results: Results from standard hybrid search + reranking
@@ -187,7 +220,7 @@ def graph_retrieve(
             span.latency_seconds = time.perf_counter() - start_t
             return [], span
 
-        # 1. Match entities from question
+        # 1. Match entities from question using pre-compiled pattern
         matched = _match_entities_from_question(question, graph)
         span.entities_matched = len(matched)
         span.matched_entity_names = matched[:10]  # cap for trace readability
@@ -206,6 +239,22 @@ def graph_retrieve(
         graph_results = _fetch_chunks_by_ids(related_chunk_ids, qdrant_client, max_chunks)
         span.chunks_injected = len(graph_results)
 
+        # 4. Assign a meaningful score to graph chunks.
+        # Use half the median rerank_score (or rrf_score) of existing results
+        # so they can be compared against retrieved results rather than always
+        # landing at the bottom with score=0.0.
+        if graph_results and existing_results:
+            scores = [
+                r.rerank_score if r.rerank_score > float("-inf") else r.rrf_score
+                for r in existing_results
+            ]
+            scores.sort()
+            median_score = scores[len(scores) // 2]
+            graph_score = max(0.0, median_score * 0.5)
+            for gr in graph_results:
+                gr.rrf_score = graph_score
+                gr.rerank_score = graph_score
+
         span.latency_seconds = time.perf_counter() - start_t
         logger.info(
             f"[GraphRAG] entities={len(matched)} | "
@@ -223,6 +272,7 @@ def graph_retrieve(
 
 
 def invalidate_cache() -> None:
-    """Clear the cached graph (e.g., after re-ingestion)."""
-    global _cached_graph
+    """Clear the cached graph and entity pattern (e.g., after re-ingestion)."""
+    global _cached_graph, _entity_pattern
     _cached_graph = None
+    _entity_pattern = None

@@ -20,6 +20,26 @@ This project is tailored to demonstrate senior-level competencies in **Applied A
 
 ---
 
+## 🗂️ Data Strategy & Scope: Controlled Domain Specialization
+
+Instead of scraping a massive, noisy assortment of random tickers, this system's ingestion pipeline is deliberately scoped to the **latest Annual Reports (SEC Form 10-K)** of two fundamentally contrasting Fortune 50 companies: **NVIDIA (NVDA)** and **Walmart (WMT)**.
+
+This represents a deliberate ML engineering choice to optimize for **pipeline depth and architectural stress-testing over dataset width.**
+
+A single SEC Form 10-K is a 150+ page behemoth of highly regulated financial prose, dense MD&A (Management's Discussion and Analysis), and complex HTML tables. Ingesting just two recent 10-Ks produces tens of thousands of tokens of high-entropy text. 
+
+This provides a rigorous stress-test to prove the efficacy of:
+*   **Parent-Child Chunking:** Ensuring complex financial tables remain atomic while maintaining tight semantic retrieval windows.
+*   **GraphRAG Entity Extraction:** Proving the LLM can map and traverse complex entity relationships across a massive single-document context.
+*   **Lost-in-the-Middle Mitigation:** Testing if the system can accurately synthesize an answer using a single risk-factor footnote buried on page 104.
+
+In production MLOps, managing compute budgets and evaluation variance is a core competency. 
+
+A tightly constrained dataset acts as a **controlled laboratory environment**. It allows the automated evaluation harness to run rigorous, repeated, and statistically significant A/B tests (e.g., paired t-tests and Wilcoxon signed-rank tests) on pipeline variants. 
+
+This proves the exact quantitative impact of adding CRAG or FlashRank to the architecture without introducing unmanageable data variance or unnecessary LLM token burn.
+
+
 ## 🏗 System Architecture
 
 The pipeline consists of six distinct execution layers, parallelized via `asyncio` to bound P95 latencies under 3 seconds.

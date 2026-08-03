@@ -25,9 +25,9 @@ except ImportError:
 
 
 PARENT_TOKEN_TARGET = 512
-CHILD_TOKEN_TARGET = 128
+CHILD_TOKEN_TARGET = 192  # raised from 128 — denser financial text needs more context per chunk
 PARENT_OVERLAP_TOKENS = 64
-CHILD_OVERLAP_TOKENS = 32
+CHILD_OVERLAP_TOKENS = 48  # scaled with child target
 TABLE_LINE_THRESHOLD = 2
 
 # Real SEC section headers are short: "Revenue", "## Segment Results", "Outlook".
@@ -58,7 +58,12 @@ SECTION_HEADERS_RE = re.compile(
 )
 
 _TABLE_ROW_RE = re.compile(r"^\s*\|.*\|$")
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
+# Negative lookbehind for digits prevents splitting on decimals/currency:
+# "grew 3.7%. The quarter" → correctly splits
+# "$1.5. Revenue grew" → correctly splits
+# "$1.5B. Revenue" → correctly splits
+# But won't mis-split mid-number like "$1.5" when followed by a capital after a period
+_SENTENCE_SPLIT_RE = re.compile(r"(?<![0-9])(?<=[.!?])\s+(?=[A-Z])")
 
 
 @dataclass
@@ -312,24 +317,10 @@ def _build_parents(
 
 def _split_parent_into_children(parent: Chunk) -> list[Chunk]:
     if parent.chunk_type == "table":
-        return [
-            Chunk(
-                chunk_id=f"{parent.chunk_id}_c0",
-                parent_id=parent.chunk_id,
-                ticker=parent.ticker,
-                date=parent.date,
-                doc_type=parent.doc_type,
-                chunk_type="child",
-                text=parent.text,
-                section_title=parent.section_title,
-                metadata={
-                    **parent.metadata,
-                    "parent_id": parent.chunk_id,
-                    "child_index": 0,
-                    "is_table": True,
-                },
-            )
-        ]
+        # Tables are indexed directly as parents — no child needed.
+        # Creating a child that is a verbatim copy of the parent wastes
+        # Qdrant vector space and produces duplicate retrieval results.
+        return []
 
     sentinel = "]\n\n"
     body_text = parent.text.split(sentinel, 1)[-1] if sentinel in parent.text else parent.text

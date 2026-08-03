@@ -18,6 +18,7 @@ Design decisions:
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
@@ -148,10 +149,37 @@ class KnowledgeGraph:
 
     Provides query methods for entity resolution and relationship traversal
     used by the graph-fused retrieval layer.
+
+    Performance design:
+      _relationship_keys : set for O(1) duplicate detection in add_relationship
+                           (replaces the previous O(n) set rebuild per call)
+      _adj               : adjacency index keyed by entity name for O(1)
+                           neighbor lookup in find_related
+                           (replaces the previous O(R) full-scan per call)
+    Both are private derived state and are NOT serialized to JSON.
     """
 
     entities: dict[str, Entity] = field(default_factory=dict)  # canonical_key → Entity
     relationships: list[Relationship] = field(default_factory=list)
+
+    # ── Private derived state (not serialized) ───────────────────────────────────────────
+    _relationship_keys: set[str] = field(default_factory=set, repr=False)
+    # entity_name → list[Relationship] (both source and target entries)
+    _adj: dict[str, list[Relationship]] = field(
+        default_factory=lambda: defaultdict(list), repr=False
+    )
+
+    def __post_init__(self) -> None:
+        """Rebuild derived indexes when constructed from deserialized data."""
+        self._rebuild_indexes()
+
+    def _rebuild_indexes(self) -> None:
+        """Rebuild _relationship_keys and _adj from self.relationships."""
+        self._relationship_keys = {r.edge_key for r in self.relationships}
+        self._adj = defaultdict(list)
+        for rel in self.relationships:
+            self._adj[rel.source].append(rel)
+            self._adj[rel.target].append(rel)
 
     # ── Mutation ───────────────────────────────────────────────────────────
 
@@ -169,10 +197,13 @@ class KnowledgeGraph:
         return entity
 
     def add_relationship(self, rel: Relationship) -> None:
-        """Add a relationship, deduplicating by edge_key."""
-        existing_keys = {r.edge_key for r in self.relationships}
-        if rel.edge_key not in existing_keys:
+        """Add a relationship, deduplicating by edge_key in O(1)."""
+        if rel.edge_key not in self._relationship_keys:
+            self._relationship_keys.add(rel.edge_key)
             self.relationships.append(rel)
+            # Maintain adjacency index incrementally
+            self._adj[rel.source].append(rel)
+            self._adj[rel.target].append(rel)
 
     # ── Query ──────────────────────────────────────────────────────────────
 
@@ -204,16 +235,19 @@ class KnowledgeGraph:
         """
         Find all entities connected to `entity_name` via relationships.
 
+        Uses the adjacency index for O(1) neighbor lookup instead of
+        scanning all relationships (was O(R) previously).
+
         Returns list of (relationship, target_entity) tuples.
         Target entity may be None if it's not in the graph (external reference).
         """
         normalized = entity_name.strip().lower()
         results: list[tuple[Relationship, Entity | None]] = []
-        for rel in self.relationships:
+        for rel in self._adj.get(normalized, []):
             if rel.source == normalized:
                 target = self.find_entity(rel.target)
                 results.append((rel, target))
-            elif rel.target == normalized:
+            else:
                 source = self.find_entity(rel.source)
                 results.append((rel, source))
         return results
@@ -275,12 +309,22 @@ class KnowledgeGraph:
 
     @classmethod
     def from_dict(cls, data: dict) -> KnowledgeGraph:
-        graph = cls()
+        # Build without triggering __post_init__ re-index prematurely;
+        # we pass entities/relationships and let __post_init__ index them.
+        graph = cls.__new__(cls)
+        graph.entities = {}
+        graph.relationships = []
+        graph._relationship_keys = set()
+        graph._adj = defaultdict(list)
+
         for e_data in data.get("entities", []):
             entity = Entity.from_dict(e_data)
             graph.entities[entity.canonical_key] = entity
         for r_data in data.get("relationships", []):
             graph.relationships.append(Relationship.from_dict(r_data))
+
+        # Build derived indexes once from the fully-loaded data
+        graph._rebuild_indexes()
         return graph
 
     def to_json(self, indent: int = 2) -> str:

@@ -248,17 +248,15 @@ class TestFetchParentTexts:
         from qdrant_client.http.models import Record
 
         client = Mock(spec=QdrantClient)
-        # scroll returns (list of points, next_page_offset)
-        client.scroll.return_value = (
-            [
-                Record(id="p1", payload={"chunk_id": "p1", "text": "parent 1 text"}),
-                Record(id="p2", payload={"chunk_id": "p2", "text": "parent 2 text"}),
-            ],
-            None,
-        )
+        # retrieve() now used instead of scroll() — returns list of Record directly
+        client.retrieve.return_value = [
+            Record(id="p1", payload={"chunk_id": "p1", "text": "parent 1 text"}),
+            Record(id="p2", payload={"chunk_id": "p2", "text": "parent 2 text"}),
+        ]
 
         with patch("retrieval.searcher.settings") as mock_settings:
             mock_settings.retrieval.parent_fetch_enabled = True
+            mock_settings.embedding.collection_name = "test_collection"
             results = [
                 SearchResult.from_payload(
                     {"chunk_id": "c1", "text": "t1", "parent_id": "p1"},
@@ -286,10 +284,11 @@ class TestFetchParentTexts:
         from qdrant_client import QdrantClient
 
         client = Mock(spec=QdrantClient)
-        client.scroll.side_effect = Exception("Network error")
+        client.retrieve.side_effect = Exception("Network error")
 
         with patch("retrieval.searcher.settings") as mock_settings:
             mock_settings.retrieval.parent_fetch_enabled = True
+            mock_settings.embedding.collection_name = "test_collection"
             results = [
                 SearchResult.from_payload(
                     {"chunk_id": "c1", "text": "text1", "parent_id": "p1"},

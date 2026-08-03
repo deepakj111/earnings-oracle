@@ -83,19 +83,20 @@ class TestGetCompanyFilings:
         ):
             return get_company_filings("0000320193", "AAPL", start_date=start, end_date=end)
 
-    def test_returns_only_10k_and_10q_forms(self) -> None:
+    def test_returns_only_10k_forms_by_default(self) -> None:
         results = self._run()
         forms = [r.get("form") for r in results]
         assert "8-K" not in forms
-        assert all(f in ("10-K", "10-Q") for f in forms)
+        assert "10-Q" not in forms
+        assert all(f == "10-K" for f in forms)
 
     def test_filters_by_date_range(self) -> None:
         results = self._run(start="2023-01-01", end="2025-12-31")
-        # 2022-12-01 and 2026-01-01 outside range
-        assert len(results) == 2
+        # Only 10-K forms returned by default; 2022-12-01 and 2026-01-01 outside range
+        # The 10-Q on 2024-08-01 is excluded because default is 10-K only
+        assert len(results) == 1
         dates = [r["date"] for r in results]
         assert "2024-10-31" in dates
-        assert "2024-08-01" in dates
 
     def test_result_contains_required_keys(self) -> None:
         results = self._run()

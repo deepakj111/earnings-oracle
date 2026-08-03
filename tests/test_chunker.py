@@ -419,26 +419,16 @@ class TestTableProtection:
             # Text parents must not contain table sentinel
             assert "__TABLE__" not in parent.text
 
-    def test_table_child_has_same_text_as_parent(self) -> None:
-        chunks = self._run_with_table()
-        table_parents = {c.chunk_id: c for c in chunks if c.chunk_type == "table"}
-        table_children = [
-            c for c in chunks if c.chunk_type == "child" and c.metadata.get("is_table")
-        ]
-        for child in table_children:
-            parent = table_parents.get(child.parent_id)
-            assert parent is not None, f"Table child {child.chunk_id} has no matching table parent"
-            assert child.text == parent.text, (
-                "Table child text should be identical to table parent text"
-            )
-
-    def test_table_produces_exactly_one_child(self) -> None:
+    def test_table_produces_no_children(self) -> None:
+        """Tables are indexed directly as parents — no child is generated to avoid
+        duplicating the same text/vector in Qdrant under both parent and child IDs."""
         chunks = self._run_with_table()
         table_parents = [c for c in chunks if c.chunk_type == "table"]
         for tp in table_parents:
             children = [c for c in chunks if c.chunk_type == "child" and c.parent_id == tp.chunk_id]
-            assert len(children) == 1, (
-                f"Table parent {tp.chunk_id} should produce exactly 1 child, got {len(children)}"
+            assert len(children) == 0, (
+                f"Table parent {tp.chunk_id} should produce 0 children (no duplicate), "
+                f"got {len(children)}"
             )
 
     def test_table_section_title_is_financial_table(self) -> None:
@@ -522,6 +512,12 @@ class TestEdgeCases:
 
     def test_table_only_input(self) -> None:
         chunks = create_parent_child_chunks(TICKER, DATE, [MARKDOWN_TABLE], DOCTYPE)
-        # Should produce at least a table chunk + its child
+        # Should produce at least one table chunk (tables are indexed directly as parents,
+        # no duplicate child is generated)
         table_chunks = [c for c in chunks if c.chunk_type == "table"]
         assert len(table_chunks) >= 1
+        # No children should be created for table chunks
+        table_children = [
+            c for c in chunks if c.chunk_type == "child" and c.metadata.get("is_table")
+        ]
+        assert len(table_children) == 0, "Table chunks should not produce children"

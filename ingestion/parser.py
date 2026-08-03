@@ -21,20 +21,26 @@ class ParsedDocument:
 
 def parse_html(file_path: Path) -> ParsedDocument | None:
     """Parse pure content and financial sections from an SEC HTML file using fast C-based lxml parser."""
-    stem_parts = file_path.stem.split("_")
+    stem = file_path.stem
+    stem_parts = stem.split("_")
     ticker = stem_parts[0]
-    date = stem_parts[1] if len(stem_parts) > 1 else "unknown"
 
-    with open(file_path, encoding="utf-8", errors="ignore") as f:
-        html = f.read()
+    date_match = re.search(r"\d{4}-\d{2}-\d{2}", stem)
+    if date_match:
+        date = date_match.group(0)
+    elif len(stem_parts) > 1:
+        date = stem_parts[1]
+    else:
+        date = "unknown"
 
-    if not html or not html.strip():
+    raw_bytes = file_path.read_bytes()
+    if not raw_bytes or not raw_bytes.strip():
         return None
 
     try:
-        # Fast C-based HTML parsing via lxml
+        # Fast C-based HTML parsing via lxml (bytes input avoids XML declaration encoding errors)
         parser = lxml.html.HTMLParser(encoding="utf-8", recover=True)
-        tree = lxml.html.fromstring(html, parser=parser)
+        tree = lxml.html.fromstring(raw_bytes, parser=parser)
         if tree is not None:
             etree.strip_elements(
                 tree, "script", "style", "nav", "header", "footer", "meta", "link", with_tail=False
@@ -46,6 +52,7 @@ def parse_html(file_path: Path) -> ParsedDocument | None:
         # Fallback to BeautifulSoup if lxml fails on edge cases
         from bs4 import BeautifulSoup
 
+        html = raw_bytes.decode("utf-8", errors="ignore")
         soup = BeautifulSoup(html, "lxml")
         for tag in soup(["script", "style", "nav", "header", "footer", "meta", "link"]):
             tag.decompose()

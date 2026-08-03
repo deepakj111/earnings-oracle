@@ -24,6 +24,8 @@ Pipeline:
 from __future__ import annotations
 
 import pickle
+import re
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -38,6 +40,16 @@ if TYPE_CHECKING:
     from query.models import TransformedQuery
 
 from config.openai_client import get_openai_client
+
+# ── BM25 tokenizer (must match ingestion/indexer._tokenize_for_bm25) ───────────
+# Both indexing and querying must use the same tokenization to ensure token match.
+_BM25_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.$%/-]*")
+
+
+def _tokenize_for_bm25(text: str) -> list[str]:
+    """Tokenize query text for BM25 — must be identical to ingestion tokenizer."""
+    return _BM25_TOKEN_RE.findall(text.lower())
+
 
 # ── BM25 index helpers ─────────────────────────────────────────────────────────
 
@@ -160,7 +172,7 @@ def _bm25_search(
     metadata_filter: MetadataFilter | None,
 ) -> list[dict]:
     bm25, corpus = _load_bm25()
-    tokens = query_text.lower().split()
+    tokens = _tokenize_for_bm25(query_text)  # use same tokenizer as indexer
     scores = bm25.get_scores(tokens)  # type: ignore[attr-defined]
 
     scored = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
@@ -236,9 +248,12 @@ def _fetch_parent_texts(
     text from Qdrant and replace parent_text with it. If child text is missing
     (e.g. lightweight BM25 corpus payload), fetch child text as well.
 
-    Parent chunks contain ~512 tokens of context vs the child's ~128 tokens.
+    Parent chunks contain ~512 tokens of context vs the child's ~192 tokens.
     This is the core of the parent/child architecture — retrieve small (child)
     for precision, read large (parent) for context in generation.
+
+    Uses client.retrieve() by deterministic point-ID (O(1)) rather than
+    scroll+MatchAny filter scan (O(n)) for efficiency.
     """
     if not settings.retrieval.parent_fetch_enabled:
         return results
@@ -250,22 +265,20 @@ def _fetch_parent_texts(
     if not ids_to_fetch:
         return results
 
-    payload_map: dict[str, str] = {}
+    # Convert logical chunk_ids → deterministic Qdrant point UUIDs
+    # (mirrors the uuid.uuid5 assignment done during ingestion/indexer.py)
+    point_id_to_chunk_id: dict[str, str] = {
+        str(uuid.uuid5(uuid.NAMESPACE_DNS, cid)): cid for cid in ids_to_fetch
+    }
+
+    payload_map: dict[str, str] = {}  # chunk_id → text
     try:
-        scroll_result, _ = client.scroll(
+        points = client.retrieve(
             collection_name=settings.embedding.collection_name,
-            scroll_filter=qmodels.Filter(
-                must=[
-                    qmodels.FieldCondition(
-                        key="chunk_id",
-                        match=qmodels.MatchAny(any=list(ids_to_fetch)),
-                    )
-                ]
-            ),
-            limit=len(ids_to_fetch) + 10,
+            ids=list(point_id_to_chunk_id.keys()),
             with_payload=True,
         )
-        for point in scroll_result:
+        for point in points:
             if point.payload:
                 cid = point.payload.get("chunk_id", "")
                 text = point.payload.get("text", "")

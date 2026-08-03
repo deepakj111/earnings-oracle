@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from knowledge_graph.graph_retriever import (
+    _build_entity_pattern,
     _collect_related_chunk_ids,
     _match_entities_from_question,
     graph_retrieve,
@@ -110,21 +111,29 @@ class TestEntityMatching:
     """Verify entity matching from question text."""
 
     def test_matches_entity_by_name(self, sample_graph: KnowledgeGraph) -> None:
-        matched = _match_entities_from_question("What was iPhone revenue?", sample_graph)
+        pattern = _build_entity_pattern(sample_graph)
+        with patch("knowledge_graph.graph_retriever._entity_pattern", pattern):
+            matched = _match_entities_from_question("What was iPhone revenue?", sample_graph)
         assert "iphone" in matched
 
     def test_matches_entity_by_alias(self, sample_graph: KnowledgeGraph) -> None:
-        matched = _match_entities_from_question(
-            "What did Mr. Cook say about revenue?", sample_graph
-        )
+        pattern = _build_entity_pattern(sample_graph)
+        with patch("knowledge_graph.graph_retriever._entity_pattern", pattern):
+            matched = _match_entities_from_question(
+                "What did Mr. Cook say about revenue?", sample_graph
+            )
         assert "tim cook" in matched
 
     def test_no_match_for_unknown_entity(self, sample_graph: KnowledgeGraph) -> None:
-        matched = _match_entities_from_question("What was Tesla's revenue?", sample_graph)
+        pattern = _build_entity_pattern(sample_graph)
+        with patch("knowledge_graph.graph_retriever._entity_pattern", pattern):
+            matched = _match_entities_from_question("What was Tesla's revenue?", sample_graph)
         assert len(matched) == 0
 
     def test_case_insensitive(self, sample_graph: KnowledgeGraph) -> None:
-        matched = _match_entities_from_question("IPHONE sales grew", sample_graph)
+        pattern = _build_entity_pattern(sample_graph)
+        with patch("knowledge_graph.graph_retriever._entity_pattern", pattern):
+            matched = _match_entities_from_question("IPHONE sales grew", sample_graph)
         assert "iphone" in matched
 
 
@@ -168,8 +177,10 @@ class TestGraphRetrieve:
         existing_result: SearchResult,
     ) -> None:
         mock_load.return_value = sample_graph
+        # Build and inject entity pattern so _match_entities_from_question works
+        entity_pattern = _build_entity_pattern(sample_graph)
 
-        # Mock Qdrant scroll to return a result
+        # Mock Qdrant scroll to return a result (used by _fetch_chunks_by_ids)
         mock_qdrant = MagicMock()
         mock_point = MagicMock()
         mock_point.payload = {
@@ -187,7 +198,10 @@ class TestGraphRetrieve:
         }
         mock_qdrant.scroll.return_value = ([mock_point], None)
 
-        with patch("knowledge_graph.graph_retriever.settings") as mock_settings:
+        with (
+            patch("knowledge_graph.graph_retriever.settings") as mock_settings,
+            patch("knowledge_graph.graph_retriever._entity_pattern", entity_pattern),
+        ):
             mock_settings.knowledge_graph.retrieval_enabled = True
             mock_settings.knowledge_graph.max_graph_chunks = 3
             mock_settings.embedding.collection_name = "test_collection"

@@ -2,11 +2,18 @@ import os
 import time
 from datetime import date
 from pathlib import Path
+from typing import TypedDict
 
 import requests
 from bs4 import BeautifulSoup
 
 from config import settings as _settings
+
+
+class FormSummary(TypedDict):
+    count: int
+    years: set[str]
+
 
 HEADERS = {
     "User-Agent": _settings.infra.sec_user_agent,
@@ -15,45 +22,63 @@ HEADERS = {
 
 COMPANIES = {
     "NVDA": "0001045810",
-    "JPM": "0000019617",
     "WMT": "0000104169",
-    "TSLA": "0001318605",
 }
 
 
 def get_company_filings(
     cik: str,
     ticker: str,
-    form_types: tuple[str, ...] = ("10-K", "10-Q"),
-    start_date: str = "2020-01-01",
+    form_types: tuple[str, ...] = ("10-K",),
+    start_date: str = "2026-01-01",
     end_date: str = date.today().strftime("%Y-%m-%d"),
 ) -> list[dict]:
-    """Fetch recent 10-K and 10-Q filings for a specific company CIK within a date range."""
+    """Fetch 10-K filings for a specific company CIK within a date range, including older files."""
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
     resp = requests.get(url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     data = resp.json()
 
-    filings = data["filings"]["recent"]
-    results = []
-    for i, form in enumerate(filings["form"]):
-        if form in form_types:
-            filing_date = filings["filingDate"][i]
-            if start_date <= filing_date <= end_date:
-                primary_doc = (
-                    filings["primaryDocument"][i] if "primaryDocument" in filings else None
-                )
-                results.append(
-                    {
-                        "ticker": ticker,
-                        "cik": cik,
-                        "form": form,
-                        "date": filing_date,
-                        "accession": filings["accessionNumber"][i],
-                        "primary_doc": primary_doc,
-                    }
-                )
-    return results
+    # Helper function to extract relevant filings from a dictionary of lists
+    def extract_filings(filing_dict: dict) -> list[dict]:
+        results = []
+        for i, form in enumerate(filing_dict["form"]):
+            if form in form_types:
+                filing_date = filing_dict["filingDate"][i]
+                if start_date <= filing_date <= end_date:
+                    primary_doc = (
+                        filing_dict["primaryDocument"][i]
+                        if "primaryDocument" in filing_dict
+                        else None
+                    )
+                    results.append(
+                        {
+                            "ticker": ticker,
+                            "cik": cik,
+                            "form": form,
+                            "date": filing_date,
+                            "accession": filing_dict["accessionNumber"][i],
+                            "primary_doc": primary_doc,
+                        }
+                    )
+        return results
+
+    # 1. Get recent filings (usually the last ~1000 filings)
+    all_results = extract_filings(data["filings"]["recent"])
+
+    # 2. Fetch older filing archives if they overlap with our start_date
+    if "files" in data["filings"]:
+        for archive in data["filings"]["files"]:
+            # If the archive's latest filing (filingTo) is >= our start_date, it might contain what we need
+            if archive["filingTo"] >= start_date:
+                archive_url = f"https://data.sec.gov/submissions/{archive['name']}"
+                archive_resp = requests.get(archive_url, headers=HEADERS, timeout=30)
+                if archive_resp.status_code == 200:
+                    archive_data = archive_resp.json()
+                    all_results.extend(extract_filings(archive_data))
+                time.sleep(0.15)  # SEC rate limit padding
+
+    return all_results
 
 
 def get_filing_documents(cik: str, accession: str) -> list[dict]:
@@ -159,13 +184,24 @@ def main() -> None:
         print(f"Fetching 10-K, 10-Q filing lists for {ticker}...")
         filings = get_company_filings(cik, ticker)
         all_filings.extend(filings)
-        time.sleep(0.2)
+        time.sleep(0.15)
 
-    print(f"\nTotal filings found across NVDA, JPM, WMT, TSLA: {len(all_filings)}")
+    print(f"\nTotal filings found across {', '.join(COMPANIES.keys())}: {len(all_filings)}")
     print("Fetching document indexes and downloading reports...\n")
+
+    # Data structure to hold summary info
+    # ticker -> form_type -> {"count": int, "years": set}
+    summary: dict[str, dict[str, FormSummary]] = {
+        ticker: {"10-K": {"count": 0, "years": set()}, "10-Q": {"count": 0, "years": set()}}
+        for ticker in COMPANIES
+    }
 
     success, skipped = 0, 0
     for filing in all_filings:
+        ticker = filing["ticker"]
+        form = filing["form"]
+        year = filing["date"][:4]  # Extract the year from YYYY-MM-DD
+
         documents = get_filing_documents(filing["cik"], filing["accession"])
         time.sleep(0.15)
 
@@ -175,22 +211,44 @@ def main() -> None:
 
         best_doc = pick_best_document(
             documents,
-            form_type=filing.get("form", "10-K"),
+            form_type=form,
             primary_doc=filing.get("primary_doc"),
         )
         if not best_doc:
-            print(f"  No report found: {filing['ticker']} {filing['form']} {filing['date']}")
+            print(f"  No report found: {ticker} {form} {filing['date']}")
             skipped += 1
             continue
 
         result = download_document(
             filing["cik"], filing["accession"], best_doc, filing, "data/company_filings"
         )
-        success += 1 if result else 0
-        skipped += 0 if result else 1
+
+        if result:
+            success += 1
+            summary[ticker][form]["count"] += 1
+            summary[ticker][form]["years"].add(year)
+        else:
+            skipped += 1
+
         time.sleep(0.15)
 
     print(f"\nDone: {success} downloaded, {skipped} skipped")
+
+    # --- Print Summary ---
+    print("\n" + "=" * 50)
+    print("DOWNLOAD SUMMARY".center(50))
+    print("=" * 50)
+    for ticker, forms in summary.items():
+        print(f"\n{ticker}:")
+        for form_type, data in forms.items():
+            count = data["count"]
+            years = sorted(data["years"])
+            if count > 0:
+                years_str = f"{years[0]}-{years[-1]}" if len(years) > 1 else str(years[0])
+                print(f"  - {form_type}: {count} files downloaded (Covering: {years_str})")
+            else:
+                print(f"  - {form_type}: 0 files downloaded")
+    print("\n" + "=" * 50)
 
 
 if __name__ == "__main__":

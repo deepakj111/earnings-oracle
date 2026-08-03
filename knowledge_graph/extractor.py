@@ -20,10 +20,23 @@ import json
 import re
 from typing import Any
 
+import tiktoken
 from loguru import logger
 
 from config import settings
 from knowledge_graph.models import Entity, EntityType, Relationship, RelationType
+
+_ENC = tiktoken.get_encoding("cl100k_base")
+_KG_MAX_TOKENS = 3500  # safe budget for extraction LLM context
+
+
+def _truncate_to_tokens(text: str, max_tokens: int = _KG_MAX_TOKENS) -> str:
+    """Truncate text to max_tokens using tiktoken, preserving whole tokens."""
+    tokens = _ENC.encode(text, disallowed_special=())
+    if len(tokens) <= max_tokens:
+        return text
+    return _ENC.decode(tokens[:max_tokens])
+
 
 # ── LLM extraction prompt ─────────────────────────────────────────────────────
 
@@ -57,6 +70,65 @@ Rules:
 - Keep entity names canonical, normalized, and concise (e.g., "revenue", "cloud segment", "tim cook").
 - Only extract entities explicitly mentioned in the text.
 - Return empty lists if no entities or relationships are present.
+
+---
+EXAMPLES
+
+Example 1 — Table section:
+Text: "| Segment | Q4 2024 Revenue | YoY Growth | \n| Services | $26.3B | +12% | \n| Products | $70.4B | +5% |"
+Output:
+{
+  "entities": [
+    {"name": "services", "entity_type": "SEGMENT", "properties": {"value": "$26.3B"}},
+    {"name": "products", "entity_type": "SEGMENT", "properties": {"value": "$70.4B"}},
+    {"name": "services revenue", "entity_type": "METRIC", "properties": {"value": "$26.3B", "growth": "+12%"}},
+    {"name": "products revenue", "entity_type": "METRIC", "properties": {"value": "$70.4B", "growth": "+5%"}}
+  ],
+  "relationships": [
+    {"source": "services revenue", "target": "services", "relation": "REPORTS", "properties": {}},
+    {"source": "products revenue", "target": "products", "relation": "REPORTS", "properties": {}}
+  ]
+}
+
+Example 2 — Executive commentary:
+Text: "CEO Tim Cook said Services revenue reached a new all-time high of $26.3 billion, driven by the App Store and Apple Music. CFO Luca Maestri noted that diluted EPS grew 12% year over year to $2.18."
+Output:
+{
+  "entities": [
+    {"name": "tim cook", "entity_type": "PERSON", "properties": {"role": "CEO"}},
+    {"name": "luca maestri", "entity_type": "PERSON", "properties": {"role": "CFO"}},
+    {"name": "services", "entity_type": "SEGMENT", "properties": {"value": "$26.3B"}},
+    {"name": "services revenue", "entity_type": "METRIC", "properties": {"value": "$26.3 billion"}},
+    {"name": "diluted eps", "entity_type": "METRIC", "properties": {"value": "$2.18", "growth": "12%"}},
+    {"name": "app store", "entity_type": "PRODUCT", "properties": {}},
+    {"name": "apple music", "entity_type": "PRODUCT", "properties": {}}
+  ],
+  "relationships": [
+    {"source": "tim cook", "target": "services", "relation": "LEADS", "properties": {}},
+    {"source": "app store", "target": "services", "relation": "PART_OF", "properties": {}},
+    {"source": "apple music", "target": "services", "relation": "PART_OF", "properties": {}},
+    {"source": "services revenue", "target": "services", "relation": "REPORTS", "properties": {}}
+  ]
+}
+
+Example 3 — Risk factor:
+Text: "The macroeconomic environment, including foreign exchange headwinds, poses risks to our international revenue. Increased competition from Google and Samsung in the smartphone market may pressure iPhone margins."
+Output:
+{
+  "entities": [
+    {"name": "foreign exchange headwinds", "entity_type": "RISK", "properties": {}},
+    {"name": "international revenue", "entity_type": "METRIC", "properties": {}},
+    {"name": "google", "entity_type": "COMPETITOR", "properties": {}},
+    {"name": "samsung", "entity_type": "COMPETITOR", "properties": {}},
+    {"name": "iphone", "entity_type": "PRODUCT", "properties": {}},
+    {"name": "iphone margins", "entity_type": "METRIC", "properties": {}}
+  ],
+  "relationships": [
+    {"source": "foreign exchange headwinds", "target": "international revenue", "relation": "RISK_TO", "properties": {}},
+    {"source": "google", "target": "iphone", "relation": "COMPETES_WITH", "properties": {}},
+    {"source": "samsung", "target": "iphone", "relation": "COMPETES_WITH", "properties": {}}
+  ]
+}
 """
 
 EXTRACTION_USER_TEMPLATE = """\
@@ -136,23 +208,55 @@ async def _call_llm_extract(
         from config.openai_client import get_async_openai_client
 
         client = get_async_openai_client()
-        response = await client.chat.completions.create(
-            model=settings.knowledge_graph.extraction_model,
-            messages=[
-                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": EXTRACTION_USER_TEMPLATE.format(
-                        ticker=ticker,
-                        fiscal_period=fiscal_period,
-                        text=text[:4000],
-                    ),
-                },
-            ],
-            temperature=settings.knowledge_graph.extraction_temperature,
-            max_tokens=settings.knowledge_graph.extraction_max_tokens,
-            response_format={"type": "json_object"},
-        )
+        # Token-level truncation prevents mid-sentence cuts that character
+        # slicing (text[:4000]) could produce on multibyte or BPE-split content.
+        truncated_text = _truncate_to_tokens(text)
+        messages = [
+            {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": EXTRACTION_USER_TEMPLATE.format(
+                    ticker=ticker,
+                    fiscal_period=fiscal_period,
+                    text=truncated_text,
+                ),
+            },
+        ]
+        kwargs: dict[str, Any] = {
+            "model": settings.knowledge_graph.extraction_model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+        }
+
+        # Attempt 1: Try max_completion_tokens + temperature
+        call_kwargs = dict(kwargs)
+        call_kwargs["max_completion_tokens"] = settings.knowledge_graph.extraction_max_tokens
+        if settings.knowledge_graph.extraction_temperature != 1.0:
+            call_kwargs["temperature"] = settings.knowledge_graph.extraction_temperature
+
+        try:
+            response = await client.chat.completions.create(**call_kwargs)
+        except Exception as exc:
+            err_msg = str(exc)
+            retry_kwargs = dict(kwargs)
+
+            # Include temperature only if temperature wasn't the failing parameter
+            if (
+                "temperature" not in err_msg
+                and settings.knowledge_graph.extraction_temperature != 1.0
+            ):
+                retry_kwargs["temperature"] = settings.knowledge_graph.extraction_temperature
+
+            # Alternate token limit parameter if max_completion_tokens failed
+            if "max_completion_tokens" in err_msg or "unsupported_parameter" in err_msg:
+                retry_kwargs["max_tokens"] = settings.knowledge_graph.extraction_max_tokens
+            else:
+                retry_kwargs["max_completion_tokens"] = (
+                    settings.knowledge_graph.extraction_max_tokens
+                )
+
+            response = await client.chat.completions.create(**retry_kwargs)
+
         content = response.choices[0].message.content or "{}"
         return _parse_json_response(content)
     except Exception as exc:
