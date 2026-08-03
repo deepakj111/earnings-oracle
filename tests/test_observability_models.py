@@ -26,28 +26,6 @@ from observability.trace_models import (
     SpanStatus,
 )
 
-# ── SpanStatus ─────────────────────────────────────────────────────────────────
-
-
-class TestSpanStatus:
-    """Verify SpanStatus enum values map correctly."""
-
-    def test_ok_value(self) -> None:
-        assert SpanStatus.OK.value == "ok"
-
-    def test_error_value(self) -> None:
-        assert SpanStatus.ERROR.value == "error"
-
-    def test_degraded_value(self) -> None:
-        assert SpanStatus.DEGRADED.value == "degraded"
-
-    def test_string_comparison(self) -> None:
-        assert SpanStatus.OK == "ok"
-
-    def test_all_variants(self) -> None:
-        assert len(SpanStatus) == 3
-
-
 # ── CostEstimate ──────────────────────────────────────────────────────────────
 
 

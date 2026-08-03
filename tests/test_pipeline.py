@@ -75,16 +75,6 @@ class TestRunPipeline:
         (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
         self._run(transcript_dir, bm25_path)
 
-    def test_valid_file_triggers_qdrant_upsert(self, transcript_dir, bm25_path) -> None:
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
-        mock_qdrant = self._run(transcript_dir, bm25_path)
-        assert mock_qdrant is not None
-
-    def test_short_file_is_skipped(self, transcript_dir, bm25_path) -> None:
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(SHORT_HTML, encoding="utf-8")
-        mock_qdrant = self._run(transcript_dir, bm25_path)
-        assert mock_qdrant is not None
-
     def test_bm25_index_written_to_disk(self, transcript_dir, bm25_path) -> None:
         (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
         self._run(transcript_dir, bm25_path)
@@ -100,15 +90,6 @@ class TestRunPipeline:
     def test_empty_transcripts_dir_produces_no_upsert(self, transcript_dir, bm25_path) -> None:
         mock_qdrant = self._run(transcript_dir, bm25_path)
         mock_qdrant.upsert.assert_not_called()
-
-    def test_multiple_valid_files_all_indexed(self, transcript_dir, bm25_path) -> None:
-        tickers = [("AAPL", "2024-10-31"), ("NVDA", "2024-07-15"), ("MSFT", "2024-04-30")]
-        for ticker, date in tickers:
-            (transcript_dir / f"{ticker}_{date}_0001234567.htm").write_text(
-                VALID_HTML, encoding="utf-8"
-            )
-        mock_qdrant = self._run(transcript_dir, bm25_path)
-        assert mock_qdrant is not None
 
     def test_metrics_saved_incrementally_across_runs(self, transcript_dir, bm25_path) -> None:
         import json

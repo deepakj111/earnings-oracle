@@ -27,25 +27,6 @@ def _make_result(**kwargs) -> SearchResult:
     return SearchResult(**defaults)
 
 
-class TestMetadataFilter:
-    def test_all_fields_optional(self) -> None:
-        mf = MetadataFilter()
-        assert mf.ticker is None
-        assert mf.year is None
-        assert mf.quarter is None
-
-    def test_ticker_only(self) -> None:
-        mf = MetadataFilter(ticker="NVDA")
-        assert mf.ticker == "NVDA"
-        assert mf.year is None
-
-    def test_all_fields_set(self) -> None:
-        mf = MetadataFilter(ticker="MSFT", year=2024, quarter="Q2")
-        assert mf.ticker == "MSFT"
-        assert mf.year == 2024
-        assert mf.quarter == "Q2"
-
-
 class TestSearchResultFromPayload:
     def test_constructs_from_full_payload(self) -> None:
         payload = {

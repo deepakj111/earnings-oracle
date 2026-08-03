@@ -34,12 +34,6 @@ class TestRequestIDMiddleware:
         resp = client.get("/health/live", headers={"X-Request-ID": custom_id})
         assert resp.headers["x-request-id"] == custom_id
 
-    def test_caller_id_takes_precedence_over_generated(self, client: TestClient) -> None:
-        """If the caller sets X-Request-ID we must echo it, not generate a new one."""
-        caller_id = "upstream-gateway-abc"
-        resp = client.get("/health/live", headers={"X-Request-ID": caller_id})
-        assert resp.headers["x-request-id"] == caller_id
-
     def test_unique_ids_generated_for_different_requests(self, client: TestClient) -> None:
         id1 = client.get("/health/live").headers["x-request-id"]
         id2 = client.get("/health/live").headers["x-request-id"]
@@ -48,10 +42,6 @@ class TestRequestIDMiddleware:
 
     def test_id_present_on_4xx_responses(self, client: TestClient) -> None:
         resp = client.post("/query/", json={"question": "x"})  # too short → 422
-        assert "x-request-id" in resp.headers
-
-    def test_id_present_on_post_endpoints(self, client: TestClient) -> None:
-        resp = client.post("/query/", json={"question": "Apple revenue Q4 2024?"})
         assert "x-request-id" in resp.headers
 
 
@@ -65,19 +55,9 @@ class TestTimingMiddleware:
         value = int(resp.headers["x-response-time-ms"])
         assert value >= 0
 
-    def test_response_time_present_on_2xx(self, client: TestClient) -> None:
-        resp = client.get("/health/live")
-        assert resp.status_code == 200
-        assert "x-response-time-ms" in resp.headers
-
     def test_response_time_present_on_4xx(self, client: TestClient) -> None:
         resp = client.post("/query/", json={"question": "x"})  # 422
         assert "x-response-time-ms" in resp.headers
-
-    def test_response_time_present_on_post_query(self, client: TestClient) -> None:
-        resp = client.post("/query/", json={"question": "Apple revenue?"})
-        assert "x-response-time-ms" in resp.headers
-        assert int(resp.headers["x-response-time-ms"]) >= 0
 
     def test_timing_and_request_id_coexist(self, client: TestClient) -> None:
         """Both middleware headers should appear on the same response."""

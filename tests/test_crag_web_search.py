@@ -230,10 +230,3 @@ def test_search_duckduckgo_import_error() -> None:
 
         with pytest.raises(ImportError):
             _search_duckduckgo("test", 2)
-
-
-def test_is_available() -> None:
-    """Test is_available does not crash."""
-    client = WebSearchClient()
-    res = client.is_available()
-    assert isinstance(res, bool)

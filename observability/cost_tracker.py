@@ -9,16 +9,33 @@ from loguru import logger
 
 from observability.trace_models import CostEstimate
 
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "gpt-4.1-nano": (0.10 / 1_000_000, 0.40 / 1_000_000),
+    "gpt-4.1": (2.50 / 1_000_000, 10.00 / 1_000_000),
+}
+
 
 def estimate_cost(
     model: str,
     prompt_tokens: int,
     completion_tokens: int,
 ) -> CostEstimate:
-    """Calculate USD cost estimate for an LLM call via litellm."""
-    import litellm
+    """Calculate USD cost estimate for an LLM call."""
+    if model in MODEL_PRICING:
+        prompt_rate, completion_rate = MODEL_PRICING[model]
+        prompt_cost = prompt_tokens * prompt_rate
+        completion_cost = completion_tokens * completion_rate
+        return CostEstimate(
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            prompt_cost_usd=prompt_cost,
+            completion_cost_usd=completion_cost,
+        )
 
     try:
+        import litellm
+
         prompt_cost, completion_cost = litellm.cost_calculator.cost_per_token(
             model=model,
             prompt_tokens=prompt_tokens,

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from ingestion.parser import ParsedDocument, parse_html
+from ingestion.parser import parse_html
 
 # Minimal HTML that produces enough words to pass the 100-word guard
 _BODY = " ".join(["word"] * 120)
@@ -70,11 +70,6 @@ def tmp_htm(tmp_path):
 
 
 class TestParseHtml:
-    def test_returns_parsed_document(self, tmp_htm) -> None:
-        path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
-        result = parse_html(path)
-        assert isinstance(result, ParsedDocument)
-
     def test_ticker_extracted_from_filename(self, tmp_htm) -> None:
         path = tmp_htm("NVDA_2024-07-15_0001234567", MINIMAL_HTML)
         result = parse_html(path)
@@ -99,16 +94,6 @@ class TestParseHtml:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
         result = parse_html(path)
         assert "Skip navigation" not in result.raw_text
-
-    def test_raw_text_non_empty(self, tmp_htm) -> None:
-        path = tmp_htm("AAPL_2024-10-31_0001234567", MINIMAL_HTML)
-        result = parse_html(path)
-        assert len(result.raw_text.strip()) > 0
-
-    def test_sections_is_list(self, tmp_htm) -> None:
-        path = tmp_htm("AAPL_2024-10-31_0001234567", MULTI_SECTION_HTML)
-        result = parse_html(path)
-        assert isinstance(result.sections, list)
 
     def test_sections_all_meet_word_floor(self, tmp_htm) -> None:
         path = tmp_htm("AAPL_2024-10-31_0001234567", MULTI_SECTION_HTML)

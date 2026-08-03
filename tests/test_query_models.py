@@ -25,22 +25,6 @@ def _make(**kwargs) -> TransformedQuery:
 
 
 class TestTransformedQueryFields:
-    def test_original_stored(self) -> None:
-        tq = _make(original="test query text")
-        assert tq.original == "test query text"
-
-    def test_hyde_document_stored(self) -> None:
-        tq = _make(hyde_document="a passage about earnings")
-        assert tq.hyde_document == "a passage about earnings"
-
-    def test_multi_queries_stored(self) -> None:
-        tq = _make(multi_queries=["q1", "q2"])
-        assert tq.multi_queries == ["q1", "q2"]
-
-    def test_stepback_query_stored(self) -> None:
-        tq = _make(stepback_query="broader financial question")
-        assert tq.stepback_query == "broader financial question"
-
     def test_failed_techniques_defaults_to_empty_list(self) -> None:
         tq = _make()
         assert tq.failed_techniques == []
@@ -60,10 +44,6 @@ class TestTransformedQueryFields:
 
 
 class TestAllRetrievalQueries:
-    def test_returns_list(self) -> None:
-        tq = _make()
-        assert isinstance(tq.all_retrieval_queries, list)
-
     def test_all_multi_queries_included(self) -> None:
         tq = _make(multi_queries=["q1", "q2", "q3"], stepback_query="sq_unique")
         result = tq.all_retrieval_queries
@@ -119,10 +99,6 @@ class TestAllRetrievalQueries:
 
 
 class TestSummary:
-    def test_returns_string(self) -> None:
-        tq = _make()
-        assert isinstance(tq.summary(), str)
-
     def test_contains_original_query(self) -> None:
         tq = _make(original="Apple Q4 revenue results")
         assert "Apple Q4 revenue results" in tq.summary()

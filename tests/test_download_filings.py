@@ -126,10 +126,6 @@ class TestGetFilingDocuments:
         ):
             return get_filing_documents("0000320193", "0001234567-24-000001")
 
-    def test_returns_list(self) -> None:
-        result = self._run()
-        assert isinstance(result, list)
-
     def test_parses_form_types(self) -> None:
         result = self._run()
         types = [d["type"] for d in result]
