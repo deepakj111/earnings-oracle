@@ -228,7 +228,7 @@ async def _call_llm_extract(
             "response_format": {"type": "json_object"},
         }
 
-        # Attempt 1: Try max_completion_tokens + temperature
+        # Attempt 1: Try max_completion_tokens; only add temperature if model supports it
         call_kwargs = dict(kwargs)
         call_kwargs["max_completion_tokens"] = settings.knowledge_graph.extraction_max_tokens
         if settings.knowledge_graph.extraction_temperature != 1.0:
@@ -236,16 +236,20 @@ async def _call_llm_extract(
 
         try:
             response = await client.chat.completions.create(**call_kwargs)
-        except Exception as exc:
-            err_msg = str(exc)
+        except Exception as first_exc:
+            err_msg = str(first_exc)
+            logger.debug(
+                f"KG LLM Attempt 1 failed ({err_msg[:120]}), retrying with fallback params"
+            )
             retry_kwargs = dict(kwargs)
 
-            # Include temperature only if temperature wasn't the failing parameter
+            # Explicitly skip temperature if it caused the first failure
             if (
                 "temperature" not in err_msg
                 and settings.knowledge_graph.extraction_temperature != 1.0
             ):
                 retry_kwargs["temperature"] = settings.knowledge_graph.extraction_temperature
+            # else: temperature is omitted entirely so the model uses its default (1.0)
 
             # Alternate token limit parameter if max_completion_tokens failed
             if "max_completion_tokens" in err_msg or "unsupported_parameter" in err_msg:
@@ -269,6 +273,8 @@ async def _extract_single_chunk(
     ticker: str,
     fiscal_period: str,
     semaphore: asyncio.Semaphore,
+    chunk_index: int = 0,
+    total_chunks: int = 0,
 ) -> tuple[list[Entity], list[Relationship]]:
     """Extract entities and relationships from a single chunk using OpenAI LLM."""
     async with semaphore:
@@ -309,6 +315,10 @@ async def _extract_single_chunk(
             except Exception as exc:
                 logger.debug(f"Skipping malformed relationship: {exc}")
 
+        logger.info(
+            f"[KG chunk {chunk_index}/{total_chunks}] {ticker} | "
+            f"{len(entities)}e {len(relationships)}r | id={chunk_id[:20] if chunk_id else 'n/a'}"
+        )
         return entities, relationships
 
 
@@ -338,20 +348,38 @@ async def extract_entities_from_chunks(
 
     all_entities: list[Entity] = []
     all_relationships: list[Relationship] = []
+    total = len(parent_chunks)
+
+    logger.info(f"[KG Extract] {ticker} {fiscal_period} | starting {total} chunks (concurrency=5)")
 
     semaphore = asyncio.Semaphore(5)
     tasks = [
-        _extract_single_chunk(chunk, ticker, fiscal_period, semaphore) for chunk in parent_chunks
+        _extract_single_chunk(chunk, ticker, fiscal_period, semaphore, idx + 1, total)
+        for idx, chunk in enumerate(parent_chunks)
     ]
-    results = await asyncio.gather(*tasks)
 
-    for chunk_entities, chunk_rels in results:
+    # Use as_completed so each chunk logs immediately when done (not after all gather)
+    completed = 0
+    running_entities = 0
+    running_rels = 0
+    for coro in asyncio.as_completed(tasks):
+        chunk_entities, chunk_rels = await coro
         all_entities.extend(chunk_entities)
         all_relationships.extend(chunk_rels)
+        completed += 1
+        running_entities += len(chunk_entities)
+        running_rels += len(chunk_rels)
+        # Progress summary every 10 chunks
+        if completed % 10 == 0 or completed == total:
+            logger.info(
+                f"[KG Progress] {ticker} {fiscal_period} | "
+                f"{completed}/{total} chunks done | "
+                f"running total: {running_entities} entities, {running_rels} relationships"
+            )
 
     logger.info(
-        f"[KG Extract] {ticker} {fiscal_period} | "
+        f"[KG Extract] {ticker} {fiscal_period} | DONE | "
         f"{len(all_entities)} entities, {len(all_relationships)} relationships "
-        f"extracted from {len(parent_chunks)} parent chunks (pure LLM)"
+        f"from {total} parent chunks"
     )
     return all_entities, all_relationships

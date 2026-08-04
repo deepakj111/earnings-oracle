@@ -60,14 +60,14 @@ _bm25_index: object | None = None
 _bm25_corpus: list[dict] | None = None
 
 
-def _load_bm25() -> tuple[object, list[dict]]:
+def _load_bm25(force_reload: bool = False) -> tuple[object, list[dict]]:
     """
     Lazy-load the BM25 index and corpus from disk.
     Called once on first BM25 search; results are cached in module globals.
     Raises FileNotFoundError with a clear message if ingestion has not been run.
     """
     global _bm25_index, _bm25_corpus
-    if _bm25_index is not None and _bm25_corpus is not None:
+    if not force_reload and _bm25_index is not None and _bm25_corpus is not None:
         return _bm25_index, _bm25_corpus
 
     if not _BM25_INDEX_PATH.exists():
@@ -155,7 +155,7 @@ def _qdrant_search(
 
     hits = client.query_points(
         collection_name=settings.embedding.collection_name,
-        query=vector,  # <-- Changed from query_vector to query
+        query=vector,
         limit=top_k,
         query_filter=qdrant_filter,
         with_payload=True,
@@ -403,6 +403,6 @@ def warmup_embed_client() -> None:
     logger.info("OpenAI embedding client initialised for retrieval.")
 
 
-def warmup_bm25() -> None:
+def warmup_bm25(force_reload: bool = False) -> None:
     """Pre-load the BM25 index from disk into memory. Safe to call multiple times."""
-    _load_bm25()
+    _load_bm25(force_reload=force_reload)

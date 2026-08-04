@@ -21,6 +21,7 @@ BM25_INDEX_PATH = Path("data/bm25_index.pkl")
 BM25_CORPUS_PATH = Path("data/bm25_corpus.pkl")
 CHECKPOINT_PATH = Path("data/ingested_filings_checkpoint.txt")
 INGESTION_METRICS_PATH = Path("data/ingestion_metrics.json")
+KG_GRAPH_PATH = Path("data/knowledge_graph.json")
 
 
 def _load_checkpoint() -> set[str]:
@@ -312,12 +313,70 @@ async def _process_document(
         return 0, [], [], None
 
 
+async def _run_kg_only_async(threads_override: int | None = None) -> None:
+    """Re-run KG extraction only on all checkpointed (already-indexed) files.
+
+    Use this to recover a blank knowledge graph without re-embedding documents.
+    Parses and chunks each file then calls the LLM extractor and saves the result.
+    """
+    from knowledge_graph.entity_store import EntityStore
+    from knowledge_graph.extractor import extract_entities_from_chunks
+
+    setup_ingestion_logging()
+    setup_embedder(threads=threads_override)
+
+    already_done = _load_checkpoint()
+    if not already_done:
+        logger.warning("No checkpointed files found — nothing to re-extract KG from.")
+        return
+
+    transcript_files = sorted(TRANSCRIPTS_DIR.glob("*.htm"))
+    target_files = [f for f in transcript_files if f.name in already_done]
+    logger.info(f"KG-only mode: re-extracting from {len(target_files)} already-indexed file(s)")
+
+    kg_store = EntityStore()
+    kg_graph = kg_store.load()
+    kg_lock = asyncio.Lock()
+
+    for file_path in target_files:
+
+        doc = parse_html(file_path)
+        if doc is None:
+            logger.debug(f"Skipped (not earnings content): {file_path.name}")
+            continue
+        metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text)
+        chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
+        parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
+        logger.info(
+            f"[KG-only] {file_path.name} | {len(parent_chunks)} parent chunks | "
+            f"ticker={metadata.ticker} period={metadata.fiscal_period}"
+        )
+        try:
+            entities, relationships = await extract_entities_from_chunks(
+                parent_chunks, metadata.ticker, metadata.fiscal_period
+            )
+            async with kg_lock:
+                for entity in entities:
+                    kg_graph.add_entity(entity)
+                for rel in relationships:
+                    kg_graph.add_relationship(rel)
+        except Exception as exc:
+            logger.warning(f"KG extraction failed for {file_path.name}: {exc}")
+
+    kg_store.save(kg_graph)
+    logger.info(f"KG-only extraction complete. {kg_graph.summary()}")
+
+
 async def run_pipeline_async(
     fast: bool = False,
     concurrency_override: int | None = None,
     threads_override: int | None = None,
+    kg_only: bool = False,
 ) -> None:
     """Run the ingestion indexing pipeline asynchronously for pending transcript files."""
+    if kg_only:
+        await _run_kg_only_async(threads_override=threads_override)
+        return
     pipeline_start_time = time.perf_counter()
     setup_ingestion_logging()
     setup_embedder(threads=threads_override)
@@ -428,11 +487,19 @@ async def run_pipeline_async(
 
 
 def run_pipeline(
-    fast: bool = False, concurrency: int | None = None, threads: int | None = None
+    fast: bool = False,
+    concurrency: int | None = None,
+    threads: int | None = None,
+    kg_only: bool = False,
 ) -> None:
     """Synchronous entry point to run the ingestion pipeline."""
     asyncio.run(
-        run_pipeline_async(fast=fast, concurrency_override=concurrency, threads_override=threads)
+        run_pipeline_async(
+            fast=fast,
+            concurrency_override=concurrency,
+            threads_override=threads,
+            kg_only=kg_only,
+        )
     )
 
 
@@ -458,5 +525,18 @@ if __name__ == "__main__":
         default=None,
         help="Override embedding model ONNX CPU thread count (0 for auto multi-threading)",
     )
+    parser.add_argument(
+        "--kg-only",
+        action="store_true",
+        help=(
+            "Re-run KG extraction only on already-indexed files without re-embedding. "
+            "Use to recover a blank knowledge graph after a failed extraction."
+        ),
+    )
     args = parser.parse_args()
-    run_pipeline(fast=args.fast, concurrency=args.concurrency, threads=args.threads)
+    run_pipeline(
+        fast=args.fast,
+        concurrency=args.concurrency,
+        threads=args.threads,
+        kg_only=args.kg_only,
+    )

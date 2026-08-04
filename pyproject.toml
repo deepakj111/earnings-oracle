@@ -67,10 +67,14 @@ types-cachetools = "^6.2.0.20260408"
 
 [tool.poetry.scripts]
 # Convenience CLI shortcuts
-serve      = "scripts.entrypoints:serve_dev"
-serve-prod = "scripts.entrypoints:serve_prod"
-ui         = "scripts.entrypoints:run_ui"
-experiment = "experiments.retrieval_experiment:_cli_main"
+serve        = "scripts.entrypoints:serve_dev"
+serve-prod   = "scripts.entrypoints:serve_prod"
+ui           = "scripts.entrypoints:run_ui"
+inspect-data = "scripts.entrypoints:inspect_data"
+export-qdrant = "scripts.entrypoints:export_qdrant"
+experiment   = "experiments.retrieval_experiment:_cli_main"
+
+
 
 [build-system]
 requires = ["poetry-core"]
