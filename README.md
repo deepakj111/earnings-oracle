@@ -116,19 +116,12 @@ poetry run serve-prod
 Query the API via `curl` (use `-L` or trailing slash `/query/` to follow HTTP 307 redirects and pipe to `json.tool` for formatted output):
 
 ```bash
-# Option A: Follow redirects (-L)
-curl -L -s -X POST http://localhost:8000/query \
+curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "What was NVIDIA total revenue in 2026?"
+    "question": "What was WALMART U.S. net sales and global total revenue for the fiscal year ended January 31, 2026?"
   }' | python3 -m json.tool
 
-# Option B: Direct request with trailing slash (/query/)
-curl -s -X POST http://localhost:8000/query/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What was WALMART total revenue in 2026?"
-  }' | python3 -m json.tool
 ```
 
 ### 5. Run E2E Evaluation Suite

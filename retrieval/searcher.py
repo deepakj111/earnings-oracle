@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import pickle
 import re
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -244,60 +243,71 @@ def _fetch_parent_texts(
     results: list[SearchResult],
 ) -> list[SearchResult]:
     """
-    For each SearchResult that has a parent_id, fetch the full parent chunk
-    text from Qdrant and replace parent_text with it. If child text is missing
-    (e.g. lightweight BM25 corpus payload), fetch child text as well.
-
-    Parent chunks contain ~512 tokens of context vs the child's ~192 tokens.
-    This is the core of the parent/child architecture — retrieve small (child)
-    for precision, read large (parent) for context in generation.
-
-    Uses client.retrieve() by deterministic point-ID (O(1)) rather than
-    scroll+MatchAny filter scan (O(n)) for efficiency.
+    For each SearchResult that has a parent_id, fetch all sibling child chunks
+    sharing the same parent_id from Qdrant, sort them by chunk_id, and reconstruct
+    the full parent text (~512 tokens) to replace parent_text.
     """
     if not settings.retrieval.parent_fetch_enabled:
         return results
 
     parent_ids_needed = {r.parent_id for r in results if r.parent_id is not None}
-    missing_child_ids = {r.chunk_id for r in results if not r.text}
-    ids_to_fetch = parent_ids_needed | missing_child_ids
-
-    if not ids_to_fetch:
+    if not parent_ids_needed:
         return results
 
-    # Convert logical chunk_ids → deterministic Qdrant point UUIDs
-    # (mirrors the uuid.uuid5 assignment done during ingestion/indexer.py)
-    point_id_to_chunk_id: dict[str, str] = {
-        str(uuid.uuid5(uuid.NAMESPACE_DNS, cid)): cid for cid in ids_to_fetch
-    }
-
-    payload_map: dict[str, str] = {}  # chunk_id → text
     try:
-        points = client.retrieve(
+        scroll_res, _ = client.scroll(
             collection_name=settings.embedding.collection_name,
-            ids=list(point_id_to_chunk_id.keys()),
+            scroll_filter=qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="parent_id",
+                        match=qmodels.MatchAny(any=list(parent_ids_needed)),
+                    )
+                ]
+            ),
+            limit=len(parent_ids_needed) * 10,
             with_payload=True,
         )
-        for point in points:
-            if point.payload:
-                cid = point.payload.get("chunk_id", "")
-                text = point.payload.get("text", "")
-                if cid:
-                    payload_map[cid] = text
+
+        parent_chunks_map: dict[str, list[dict]] = {}
+        for pt in scroll_res:
+            if pt.payload:
+                pid = pt.payload.get("parent_id")
+                if pid:
+                    parent_chunks_map.setdefault(pid, []).append(pt.payload)
+
+        parent_text_map: dict[str, str] = {}
+        for pid, payloads in parent_chunks_map.items():
+            payloads.sort(key=lambda p: p.get("chunk_id", ""))
+            first_payload = payloads[0]
+            header = (
+                f"[Context: {first_payload.get('ticker')} | "
+                f"{first_payload.get('fiscal_period') or 'filing'} | "
+                f"{first_payload.get('date')}]\n\n"
+            )
+            texts: list[str] = []
+            for p in payloads:
+                t = p.get("text", "")
+                if "\n\n" in t and t.startswith("[Context:"):
+                    _, content = t.split("\n\n", 1)
+                    texts.append(content)
+                else:
+                    texts.append(t)
+            parent_text_map[pid] = header + "\n".join(texts)
+
+        fetched = 0
+        for r in results:
+            if r.parent_id and r.parent_id in parent_text_map:
+                r.parent_text = parent_text_map[r.parent_id]
+                fetched += 1
+            elif not r.parent_text:
+                r.parent_text = r.text
+
+        logger.debug(f"Parent fetch: {fetched}/{len(results)} chunks upgraded to parent context.")
     except Exception as e:
         logger.warning(f"Parent fetch failed (using child text as fallback): {e}")
         return results
 
-    for r in results:
-        if not r.text and r.chunk_id in payload_map:
-            r.text = payload_map[r.chunk_id]
-            if not r.parent_id:
-                r.parent_text = payload_map[r.chunk_id]
-        if r.parent_id and r.parent_id in payload_map:
-            r.parent_text = payload_map[r.parent_id]
-
-    fetched = sum(1 for r in results if r.parent_id and r.parent_id in payload_map)
-    logger.debug(f"Parent fetch: {fetched}/{len(results)} chunks upgraded to parent context.")
     return results
 
 

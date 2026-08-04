@@ -339,7 +339,6 @@ async def _run_kg_only_async(threads_override: int | None = None) -> None:
     kg_lock = asyncio.Lock()
 
     for file_path in target_files:
-
         doc = parse_html(file_path)
         if doc is None:
             logger.debug(f"Skipped (not earnings content): {file_path.name}")

@@ -159,11 +159,15 @@ def _fetch_chunks_by_ids(
         scroll_result, _ = qdrant_client.scroll(
             collection_name=settings.embedding.collection_name,
             scroll_filter=qmodels.Filter(
-                must=[
+                should=[
                     qmodels.FieldCondition(
                         key="chunk_id",
                         match=qmodels.MatchAny(any=target_ids),
-                    )
+                    ),
+                    qmodels.FieldCondition(
+                        key="parent_id",
+                        match=qmodels.MatchAny(any=target_ids),
+                    ),
                 ]
             ),
             limit=max_chunks,
