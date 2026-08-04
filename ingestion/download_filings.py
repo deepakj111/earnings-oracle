@@ -20,9 +20,11 @@ HEADERS = {
     "Accept-Encoding": "gzip, deflate",
 }
 
+# Added diverse popular companies across different sectors
 COMPANIES = {
-    "NVDA": "0001045810",
-    "WMT": "0000104169",
+    "NVDA": "0001045810",  # Technology / Semiconductors
+    "WMT": "0000104169",  # Consumer Discretionary / Retail
+    "UNH": "0000731766",  # Healthcare / Managed Care
 }
 
 
@@ -196,6 +198,9 @@ def main() -> None:
         for ticker in COMPANIES
     }
 
+    # Tracking list to hold (file_name, size_in_bytes)
+    downloaded_files_info: list[tuple[str, int]] = []
+
     success, skipped = 0, 0
     for filing in all_filings:
         ticker = filing["ticker"]
@@ -227,6 +232,10 @@ def main() -> None:
             success += 1
             summary[ticker][form]["count"] += 1
             summary[ticker][form]["years"].add(year)
+
+            # Record the file name and size
+            file_size = os.path.getsize(result)
+            downloaded_files_info.append((Path(result).name, file_size))
         else:
             skipped += 1
 
@@ -248,6 +257,18 @@ def main() -> None:
                 print(f"  - {form_type}: {count} files downloaded (Covering: {years_str})")
             else:
                 print(f"  - {form_type}: 0 files downloaded")
+
+    # --- Print Sorted File Sizes ---
+    if downloaded_files_info:
+        # Sort descending by file size (index 1 is the size in bytes)
+        downloaded_files_info.sort(key=lambda x: x[1], reverse=True)
+
+        print("\n" + "=" * 50)
+        print("DOWNLOADED FILES BY SIZE (Descending)".center(50))
+        print("=" * 50)
+        for file_name, file_size in downloaded_files_info:
+            size_mb = file_size / (1024 * 1024)
+            print(f"{size_mb:>6.2f} MB | {file_name}")
     print("\n" + "=" * 50)
 
 

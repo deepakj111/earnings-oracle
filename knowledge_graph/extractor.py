@@ -346,8 +346,6 @@ async def extract_entities_from_chunks(
     if not llm_enabled or not parent_chunks:
         return [], []
 
-    all_entities: list[Entity] = []
-    all_relationships: list[Relationship] = []
     total = len(parent_chunks)
 
     logger.info(f"[KG Extract] {ticker} {fiscal_period} | starting {total} chunks (concurrency=5)")
@@ -358,24 +356,13 @@ async def extract_entities_from_chunks(
         for idx, chunk in enumerate(parent_chunks)
     ]
 
-    # Use as_completed so each chunk logs immediately when done (not after all gather)
-    completed = 0
-    running_entities = 0
-    running_rels = 0
-    for coro in asyncio.as_completed(tasks):
-        chunk_entities, chunk_rels = await coro
+    results = await asyncio.gather(*tasks)
+
+    all_entities: list[Entity] = []
+    all_relationships: list[Relationship] = []
+    for chunk_entities, chunk_rels in results:
         all_entities.extend(chunk_entities)
         all_relationships.extend(chunk_rels)
-        completed += 1
-        running_entities += len(chunk_entities)
-        running_rels += len(chunk_rels)
-        # Progress summary every 10 chunks
-        if completed % 10 == 0 or completed == total:
-            logger.info(
-                f"[KG Progress] {ticker} {fiscal_period} | "
-                f"{completed}/{total} chunks done | "
-                f"running total: {running_entities} entities, {running_rels} relationships"
-            )
 
     logger.info(
         f"[KG Extract] {ticker} {fiscal_period} | DONE | "

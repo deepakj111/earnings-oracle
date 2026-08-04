@@ -255,45 +255,18 @@ def _fetch_parent_texts(
         return results
 
     try:
-        scroll_res, _ = client.scroll(
+        records = client.retrieve(
             collection_name=settings.embedding.collection_name,
-            scroll_filter=qmodels.Filter(
-                must=[
-                    qmodels.FieldCondition(
-                        key="parent_id",
-                        match=qmodels.MatchAny(any=list(parent_ids_needed)),
-                    )
-                ]
-            ),
-            limit=len(parent_ids_needed) * 10,
+            ids=list(parent_ids_needed),
             with_payload=True,
         )
 
-        parent_chunks_map: dict[str, list[dict]] = {}
-        for pt in scroll_res:
-            if pt.payload:
-                pid = pt.payload.get("parent_id")
-                if pid:
-                    parent_chunks_map.setdefault(pid, []).append(pt.payload)
-
         parent_text_map: dict[str, str] = {}
-        for pid, payloads in parent_chunks_map.items():
-            payloads.sort(key=lambda p: p.get("chunk_id", ""))
-            first_payload = payloads[0]
-            header = (
-                f"[Context: {first_payload.get('ticker')} | "
-                f"{first_payload.get('fiscal_period') or 'filing'} | "
-                f"{first_payload.get('date')}]\n\n"
-            )
-            texts: list[str] = []
-            for p in payloads:
-                t = p.get("text", "")
-                if "\n\n" in t and t.startswith("[Context:"):
-                    _, content = t.split("\n\n", 1)
-                    texts.append(content)
-                else:
-                    texts.append(t)
-            parent_text_map[pid] = header + "\n".join(texts)
+        for record in records:
+            if record.payload:
+                pid = record.payload.get("chunk_id", "")
+                if pid:
+                    parent_text_map[pid] = record.payload.get("text", "")
 
         fetched = 0
         for r in results:

@@ -129,9 +129,10 @@ class CostTracker:
 
     def summary(self) -> str:
         with self._lock:
+            total_tokens = self._total_prompt_tokens + self._total_completion_tokens
             return (
                 f"Session: {self._total_calls} calls | "
-                f"{self.total_tokens:,} tokens | "
+                f"{total_tokens:,} tokens | "
                 f"${self._total_cost_usd:.4f}"
             )
 
@@ -141,7 +142,7 @@ class CostTracker:
                 "total_calls": self._total_calls,
                 "total_prompt_tokens": self._total_prompt_tokens,
                 "total_completion_tokens": self._total_completion_tokens,
-                "total_tokens": self.total_tokens,
+                "total_tokens": self._total_prompt_tokens + self._total_completion_tokens,
                 "total_cost_usd": round(self._total_cost_usd, 6),
                 "alert_per_request_usd": self._alert_per_request,
                 "alert_per_session_usd": self._alert_per_session,
