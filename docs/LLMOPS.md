@@ -281,8 +281,8 @@ For full transparency, debugging, and offline auditability, every query executed
 data/audit_logs/
 ├── audit.jsonl                       # Global append-only log (one summary line per request)
 └── YYYY-MM-DD/                       # Daily rotating subdirectories
-    ├── trace_134501_a1b2c3d4.json    # Full per-query trace JSON
-    └── trace_134512_e5f6g7h8.json
+    ├── trace_134501_e74f5de1-9012-4abc-8def-1234567890ab.json  # Full per-query trace JSON
+    └── trace_134512_f85a6b7c-1234-5678-9abc-def012345678.json
 ```
 
 #### What Each Format Contains

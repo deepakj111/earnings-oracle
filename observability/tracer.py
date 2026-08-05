@@ -454,7 +454,7 @@ class RAGTracer:
         try:
             self._output_dir.mkdir(parents=True, exist_ok=True)
             ts = trace.timestamp.replace(":", "-").replace("+", "").split(".")[0]
-            filename = f"trace_{ts}_{trace.trace_id[:8]}.json"
+            filename = f"trace_{ts}_{trace.trace_id}.json"
             path = self._output_dir / filename
             path.write_text(trace.to_json(), encoding="utf-8")
             logger.debug(f"Trace persisted → {path}")

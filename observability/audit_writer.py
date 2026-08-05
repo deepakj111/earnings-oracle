@@ -5,7 +5,7 @@ Thread-safe query audit writer for the Financial RAG system.
 Every completed pipeline request is persisted in two complementary formats:
 
 1. Per-trace JSON
-   Path : data/audit_logs/YYYY-MM-DD/trace_<timestamp>_<id8>.json
+   Path : data/audit_logs/YYYY-MM-DD/trace_<timestamp>_<trace_id>.json
    Size : full detail — HyDE doc, all multi-queries, per-chunk scores, answer text
    Use  : deep inspection of a single request
 
@@ -110,7 +110,7 @@ class AuditWriter:
         except (ValueError, TypeError):
             ts_str = datetime.now(timezone.utc).strftime("%H%M%S")
 
-        filename = f"trace_{ts_str}_{trace.trace_id[:8]}.json"
+        filename = f"trace_{ts_str}_{trace.trace_id}.json"
         path = day_dir / filename
 
         path.write_text(trace.to_json(indent=2), encoding="utf-8")
