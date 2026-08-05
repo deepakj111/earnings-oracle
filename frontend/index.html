@@ -568,6 +568,76 @@
       background: rgba(239,68,68,0.05);
     }
 
+    /* Pipeline activity card & background logs */
+    .pipeline-logs-card {
+      margin-bottom: 12px;
+      background: rgba(13, 21, 35, 0.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      font-size: 12px;
+    }
+
+    .pipeline-logs-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      cursor: pointer;
+      user-select: none;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+    .pipeline-logs-header:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+    .pipeline-logs-header .chevron {
+      margin-left: auto;
+      transition: transform 0.2s ease;
+    }
+    .pipeline-logs-card.open .pipeline-logs-header .chevron {
+      transform: rotate(180deg);
+    }
+
+    .pipeline-logs-body {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-panel);
+    }
+    .pipeline-logs-card.open .pipeline-logs-body {
+      display: flex;
+    }
+
+    .log-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .log-step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+    .log-step-dot.active {
+      background: var(--warning);
+      box-shadow: 0 0 6px var(--warning);
+      animation: blink 1s ease infinite;
+    }
+    .log-step-dot.done {
+      background: var(--success);
+    }
+
     /* Stats row */
     .message-stats {
       display: flex;
@@ -1019,7 +1089,7 @@
           onkeydown="handleKeyDown(event)"
           oninput="autoResize(this)"
         ></textarea>
-        <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled title="Send (Enter)">
+        <button class="send-btn" id="send-btn" type="button" onclick="sendMessage()" disabled title="Send (Enter)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"></line>
             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -1039,17 +1109,41 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
-// ── Config ───────────────────────────────────────────────────────────────────
-const API_BASE = window.location.origin;      // same origin (FastAPI serves this)
-const STORAGE_KEY = 'earnings_oracle_v1';
+// ── Global constants & state ─────────────────────────────────────────────────
+// API_BASE: same origin (the FastAPI server serves both /app and /query)
+const API_BASE = '';   // empty string → relative URLs → same origin
 
-// ── State ────────────────────────────────────────────────────────────────────
-let state = {
-  conversations: [],        // [{id, title, messages:[{role,content,meta,ts}], ts}]
-  activeId: null,           // current conversation id
-  isStreaming: false,       // is a request in-flight?
-  healthData: null,
+// localStorage key for persisting chat history
+const STORAGE_KEY = 'earningsoracle_v1';
+
+// Application state — single source of truth
+const state = {
+  conversations: [],  // [{id, title, messages:[{role,content,logs,meta,ts}], ts}]
+  activeId: null,     // currently selected conversation id (null = welcome screen)
+  isStreaming: false, // true while a query is in flight
+  healthData: {},     // last health check response
 };
+
+// ── Helper: Welcome / Homepage HTML ─────────────────────────────────────────
+function getWelcomeHtml() {
+  return `
+    <div class="welcome-state" id="welcome-state" style="display: flex;">
+      <div class="welcome-icon">📈</div>
+      <h2 class="welcome-title">Ask About Earnings</h2>
+      <p class="welcome-sub">
+        Query SEC 8-K filings from 10 major public companies — Apple, NVIDIA, Microsoft, Amazon, Meta,
+        JPMorgan, ExxonMobil, UnitedHealth, Tesla & Walmart.
+      </p>
+      <div class="example-chips">
+        <div class="example-chip" onclick="askExample(this)">What was Apple's revenue in Q4 2024?</div>
+        <div class="example-chip" onclick="askExample(this)">Compare NVIDIA and AMD GPU revenue growth</div>
+        <div class="example-chip" onclick="askExample(this)">What was Walmart's net sales for fiscal year 2026?</div>
+        <div class="example-chip" onclick="askExample(this)">What is Microsoft's cloud revenue trend?</div>
+        <div class="example-chip" onclick="askExample(this)">JPMorgan net income and EPS for Q1 2025?</div>
+        <div class="example-chip" onclick="askExample(this)">Tesla vehicle delivery guidance for 2025?</div>
+      </div>
+    </div>`;
+}
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 function saveState() {
@@ -1066,8 +1160,11 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
-    state.conversations = saved.conversations || [];
+    state.conversations = (saved.conversations || []).filter(c => c.messages && c.messages.length > 0);
     state.activeId = saved.activeId || null;
+    if (state.activeId && !state.conversations.some(c => c.id === state.activeId)) {
+      state.activeId = state.conversations[0]?.id || null;
+    }
   } catch(e) {
     state.conversations = [];
     state.activeId = null;
@@ -1079,14 +1176,25 @@ function activeConversation() {
   return state.conversations.find(c => c.id === state.activeId) || null;
 }
 
-function newConversation() {
+function newConversation(clearInput = true) {
+  // Prune any empty conversations
+  state.conversations = state.conversations.filter(c => c.messages && c.messages.length > 0);
+
   const id = 'conv_' + Date.now();
   const conv = { id, title: 'New Conversation', messages: [], ts: Date.now() };
   state.conversations.unshift(conv);
   state.activeId = id;
   saveState();
   renderAll();
-  document.getElementById('chat-input').focus();
+
+  if (clearInput) {
+    const input = document.getElementById('chat-input');
+    if (input) {
+      input.value = '';
+      autoResize(input);
+      input.focus();
+    }
+  }
 }
 
 function switchConversation(id) {
@@ -1121,6 +1229,16 @@ function escapeHtml(text) {
     .replace(/</g,'&lt;')
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;');
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  let escaped = escapeHtml(text);
+  // Bold **text**
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Inline code `code`
+  escaped = escaped.replace(/`([^`]+)`/g, '<code style="background:rgba(59,130,246,0.1);padding:2px 6px;border-radius:4px;font-family:JetBrains Mono,monospace;font-size:12px;">$1</code>');
+  return escaped;
 }
 
 function formatTime(ts) {
@@ -1225,6 +1343,37 @@ function sourcePill(source) {
   return `<span class="source-pill ${cls}">${escapeHtml(label)}</span>`;
 }
 
+// ── Pipeline activity logs card ───────────────────────────────────────────────
+function renderPipelineLogs(logs, msgId, streaming = false) {
+  if (!logs || logs.length === 0) return '';
+  const id = `logs-${msgId}`;
+  const steps = logs.map((log, i) => {
+    // While streaming: last step blinks as 'active'; all others green 'done'.
+    // After streaming completes: every step is 'done' (no more blinking).
+    const dotClass = (streaming && i === logs.length - 1) ? 'active' : 'done';
+    return `
+    <div class="log-step">
+      <span class="log-step-dot ${dotClass}"></span>
+      <span class="log-text">${escapeHtml(log.text)}</span>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="pipeline-logs-card open" id="${id}">
+      <div class="pipeline-logs-header" onclick="toggleLogs('${id}')">
+        <span>⚡</span>
+        <span>Pipeline Activity (${logs.length} step${logs.length !== 1 ? 's' : ''})</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="pipeline-logs-body">${steps}</div>
+    </div>`;
+}
+
+function toggleLogs(id) {
+  const card = document.getElementById(id);
+  if (card) card.classList.toggle('open');
+}
+
 // ── Render citation cards ─────────────────────────────────────────────────────
 function renderCitations(citations, msgId) {
   if (!citations || citations.length === 0) return '';
@@ -1284,8 +1433,9 @@ function renderMessage(msg, idx) {
   const msgId  = `msg-${state.activeId}-${idx}`;
 
   const contentClass = msg.isError ? 'message-content error-content' : 'message-content';
-  const contentHtml  = `<div class="${contentClass}">${escapeHtml(msg.content)}</div>`;
+  const contentHtml  = `<div class="${contentClass}">${formatMarkdown(msg.content)}</div>`;
 
+  const logsHtml     = !isUser && msg.logs && msg.logs.length > 0 ? renderPipelineLogs(msg.logs, msgId, !!msg._streaming) : '';
   const statsHtml    = !isUser ? renderStats(msg.meta) : '';
   const citHtml      = !isUser && msg.meta?.citations ? renderCitations(msg.meta.citations, msgId) : '';
 
@@ -1294,6 +1444,7 @@ function renderMessage(msg, idx) {
       <div class="message-avatar">${avatar}</div>
       <div class="message-body">
         <div class="message-meta">${who} · ${ts}</div>
+        ${logsHtml}
         ${contentHtml}
         ${statsHtml}
         ${citHtml}
@@ -1305,21 +1456,17 @@ function renderMessage(msg, idx) {
 function renderChat() {
   const area     = document.getElementById('chat-area');
   const conv     = activeConversation();
-  const welcome  = document.getElementById('welcome-state');
   const title    = document.getElementById('chat-title');
   const subtitle = document.getElementById('chat-subtitle');
 
   if (!conv || conv.messages.length === 0) {
-    // Show welcome
-    area.innerHTML = '';
-    area.appendChild(welcome);
-    welcome.style.display = 'flex';
+    // Show welcome homepage cleanly
+    area.innerHTML = getWelcomeHtml();
     title.textContent    = 'New Conversation';
     subtitle.textContent = 'Ask a financial question to get started';
     return;
   }
 
-  welcome.style.display = 'none';
   area.innerHTML = conv.messages.map((m,i) => renderMessage(m,i)).join('');
   title.textContent    = conv.title;
   subtitle.textContent = `${conv.messages.length} message${conv.messages.length!==1?'s':''}`;
@@ -1329,18 +1476,18 @@ function renderChat() {
 
 // ── Render history sidebar ────────────────────────────────────────────────────
 function renderHistory() {
-  const list    = document.getElementById('history-list');
-  const noHist  = document.getElementById('no-history');
+  const list = document.getElementById('history-list');
 
-  if (state.conversations.length === 0) {
-    list.innerHTML = '';
-    list.appendChild(noHist);
-    noHist.style.display = 'block';
+  const activeConvs = state.conversations.filter(c => c.messages && c.messages.length > 0);
+
+  if (activeConvs.length === 0) {
+    // Always write the placeholder inline — never rely on getElementById after
+    // the first list.innerHTML replacement which removes the original element.
+    list.innerHTML = '<div class="no-history" id="no-history">No conversations yet</div>';
     return;
   }
-  noHist.style.display = 'none';
 
-  list.innerHTML = state.conversations.map(c => {
+  list.innerHTML = activeConvs.map(c => {
     const active = c.id === state.activeId ? 'active' : '';
     const msgCount = c.messages.length;
     return `
@@ -1406,8 +1553,10 @@ async function sendMessage() {
 
   hideError();
 
-  // Ensure we have an active conversation
-  if (!state.activeId) newConversation();
+  // Ensure we have an active conversation without wiping input
+  if (!state.activeId || !activeConversation()) {
+    newConversation(false);
+  }
   const conv = activeConversation();
 
   // Add user message
@@ -1444,11 +1593,10 @@ async function doStreamingQuery(conv, question, filter) {
   state.isStreaming = true;
   state.activeId = conv.id;
 
-  // Add placeholder AI message
-  const aiMsg = { role: 'assistant', content: '', meta: {}, ts: Date.now(), _streaming: true };
+  // Add placeholder AI message with logs array
+  const aiMsg = { role: 'assistant', content: '', logs: [], meta: {}, ts: Date.now(), _streaming: true };
   conv.messages.push(aiMsg);
   const msgIdx = conv.messages.length - 1;
-  renderAll();
 
   // Get the message element for live update
   const msgId = `msg-${conv.id}-${msgIdx}`;
@@ -1458,13 +1606,16 @@ async function doStreamingQuery(conv, question, filter) {
     return el ? el.querySelector('.message-content') : null;
   }
 
-  // Show typing indicator first
-  const contentEl = getContentEl();
-  if (contentEl) {
-    contentEl.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
-  }
-
   try {
+    // Render inside try so any crash resets isStreaming via finally
+    renderAll();
+
+    // Show typing indicator
+    const contentEl = getContentEl();
+    if (contentEl) {
+      contentEl.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+    }
+
     const payload = { question };
     if (filter) payload.filter = filter;
 
@@ -1506,12 +1657,12 @@ async function doStreamingQuery(conv, question, filter) {
           if (!started) {
             started = true;
             const el = getContentEl();
-            if (el) el.textContent = '';
+            if (el) el.innerHTML = '';
           }
           fullAnswer += event.token;
           const el = getContentEl();
           if (el) {
-            el.textContent = fullAnswer;
+            el.innerHTML = formatMarkdown(fullAnswer);
             // Add cursor
             const cursor = document.createElement('span');
             cursor.className = 'stream-cursor';
@@ -1519,14 +1670,35 @@ async function doStreamingQuery(conv, question, filter) {
             document.getElementById('chat-area').scrollTop = 99999;
           }
         } else if (event.log !== undefined) {
-          const el = getContentEl();
-          if (el && !started) {
-            el.innerHTML = `
-              <div class="typing-indicator" style="display:flex; align-items:center; gap:8px;">
-                <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
-                <span style="font-size:12px; color:var(--text-muted); margin-left:4px;">${escapeHtml(event.log)}</span>
-              </div>`;
+          aiMsg.logs.push({ text: event.log, ts: Date.now() });
+          // Live update pipeline activity log panel
+          const msgEl = document.getElementById(msgId);
+          if (msgEl) {
+            const bodyEl = msgEl.querySelector('.message-body');
+            if (bodyEl) {
+              let logsCard = bodyEl.querySelector('.pipeline-logs-card');
+              if (!logsCard) {
+                const logsContainer = document.createElement('div');
+                logsContainer.innerHTML = renderPipelineLogs(aiMsg.logs, msgId);
+                bodyEl.insertBefore(logsContainer.firstElementChild, bodyEl.querySelector('.message-content'));
+              } else {
+                const logsBody = logsCard.querySelector('.pipeline-logs-body');
+                if (logsBody) {
+                  logsBody.innerHTML = aiMsg.logs.map((log, i) => `
+                    <div class="log-step">
+                      <span class="log-step-dot ${i === aiMsg.logs.length - 1 ? 'active' : 'done'}"></span>
+                      <span class="log-text">${escapeHtml(log.text)}</span>
+                    </div>
+                  `).join('');
+                }
+                const logsHeaderTitle = logsCard.querySelector('.pipeline-logs-header span:nth-child(2)');
+                if (logsHeaderTitle) {
+                  logsHeaderTitle.textContent = `Pipeline Activity (${aiMsg.logs.length} step${aiMsg.logs.length !== 1 ? 's' : ''})`;
+                }
+              }
+            }
           }
+          document.getElementById('chat-area').scrollTop = 99999;
         } else if (event.error !== undefined) {
           throw new Error(event.error);
         }
@@ -1537,7 +1709,7 @@ async function doStreamingQuery(conv, question, filter) {
     aiMsg.content = fullAnswer || '(No response received)';
     aiMsg._streaming = false;
     const el = getContentEl();
-    if (el) el.textContent = aiMsg.content;
+    if (el) el.innerHTML = formatMarkdown(aiMsg.content);
 
   } catch(e) {
     const msg = e.message || String(e);
@@ -1560,10 +1732,9 @@ async function doStructuredQuery(conv, question, filter, verbose) {
   state.activeId = conv.id;
 
   // Add placeholder
-  const aiMsg = { role: 'assistant', content: '', meta: {}, ts: Date.now(), _streaming: true };
+  const aiMsg = { role: 'assistant', content: '', logs: [], meta: {}, ts: Date.now(), _streaming: true };
   conv.messages.push(aiMsg);
   const msgIdx = conv.messages.length - 1;
-  renderAll();
 
   const msgId = `msg-${conv.id}-${msgIdx}`;
   function getContentEl() {
@@ -1571,12 +1742,15 @@ async function doStructuredQuery(conv, question, filter, verbose) {
     return el ? el.querySelector('.message-content') : null;
   }
 
-  const contentEl = getContentEl();
-  if (contentEl) {
-    contentEl.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
-  }
-
   try {
+    // Render inside try so any crash resets isStreaming via finally
+    renderAll();
+
+    const contentEl = getContentEl();
+    if (contentEl) {
+      contentEl.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+    }
+
     const payload = { question, verbose };
     if (filter) payload.filter = filter;
 
@@ -1638,6 +1812,9 @@ document.getElementById('chat-input').addEventListener('input', function() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadState();
+// Always start on the welcome/home screen regardless of previous session.
+// The conversation history is still loaded and visible in the sidebar.
+state.activeId = null;
 renderAll();
 checkHealth();
 setInterval(checkHealth, 30000); // refresh health every 30s
