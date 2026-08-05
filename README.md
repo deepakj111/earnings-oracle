@@ -16,7 +16,7 @@ This project is tailored to demonstrate senior-level competencies in **Applied A
 - **Rigorous LLM Evaluation**: Uses an automated LLM-as-a-judge harness to measure *Faithfulness* and *Context Relevancy*. Employs **Bootstrap Resampling (95% CIs)** and paired **Wilcoxon signed-rank tests** to prove architectural improvements are statistically significant, avoiding "vibe checks".
 - **Corrective RAG (CRAG)**: An autonomous meta-model grades chunk relevance. If local context is inadequate (e.g. data outside the 8-K corpus), it falls back to a web search aggregator (Tavily/DDG).
 - **Advanced Context Engineering**: Mitigates the *Lost-in-the-Middle* phenomenon via U-shaped "valley reordering" of contexts. Utilizes token-aware parent-child chunking to guarantee bounded NLP context limits.
-- **Production Observability**: Full asynchronous FastAPI deployment equipped with custom **Prometheus** endpoints (`RAG_REGISTRY`). Tracks LLM token usage, cost-in-USD, latency-by-layer, and cross-encoder RRF drift.
+- **Production Observability & Audit Trail**: Asynchronous FastAPI deployment with custom **Prometheus** metrics and an always-on **Per-Query Audit Log** (`data/audit_logs/`). Writes detailed trace JSONs (HyDE text, query variants, chunk scores/excerpts, LLM model/tokens/cost, answer) in daily subdirectories alongside a compact append-only `audit.jsonl`. See [LLMOps Guide](docs/LLMOPS.md#per-query-audit-trail-dataaudit_logs) for details.
 
 ---
 

@@ -272,6 +272,57 @@ Recommended panels:
 - **Token Burn Rate** — rate of rag_llm_tokens_total by token_type
 - **Per-Layer Latency** — stacked bar of L2/L3/L4 p95
 
+### 🔍 Per-Query Audit Trail (`data/audit_logs/`)
+
+For full transparency, debugging, and offline auditability, every query executed through `/query` or `/query/stream` is automatically recorded into structured log files on disk (controlled by `RAG_AUDIT_ENABLED=true` and `RAG_AUDIT_LOG_DIR=data/audit_logs`).
+
+#### Output Directory Structure
+```
+data/audit_logs/
+├── audit.jsonl                       # Global append-only log (one summary line per request)
+└── YYYY-MM-DD/                       # Daily rotating subdirectories
+    ├── trace_134501_a1b2c3d4.json    # Full per-query trace JSON
+    └── trace_134512_e5f6g7h8.json
+```
+
+#### What Each Format Contains
+
+1. **Global `audit.jsonl` (Append-Only Summary)**:
+   - One line per query execution.
+   - Contains request context (`trace_id`, `request_id`, `endpoint`, `received_at`, `question`, `filter`), total latency & layer timing breakdown, token counts (`prompt_tokens`, `completion_tokens`, `total_tokens`), cost estimate (`total_cost_usd`), L2 techniques status, L3 candidate/results summary, and L4 model metadata.
+   - Ideal for instant command-line analysis using `grep`, `jq`, or `pandas.read_json("data/audit_logs/audit.jsonl", lines=True)`.
+
+2. **Per-Trace JSON (`data/audit_logs/YYYY-MM-DD/trace_<time>_<id>.json`)**:
+   - **Full Detail Audit Record** containing:
+     - `schema_version`: `"1.0"`
+     - `request`: Full question, API endpoint, timestamp, `request_id`, user-supplied filter.
+     - `query_transform`: Latency, techniques used/failed, `original_question`, full **`hyde_document`** text, all **`multi_queries`** variants, and the **`stepback_query`**.
+     - `retrieval`: Reranker model, latency, total candidates, and **per-chunk audit records (`chunks`)** containing:
+       - `rank`: 1-based final rank
+       - `chunk_id` & `parent_id`
+       - Filing metadata (`ticker`, `company`, `date`, `fiscal_period`, `section_title`, `doc_type`)
+       - Search source (`dense`, `bm25`, `both`)
+       - `rrf_score` & `rerank_score`
+       - `text_excerpt` (first 300 chars of chunk) and `parent_text_excerpt`
+     - `generation`: Latency, model used, prompt/completion/total tokens, `context_chunks_used`, `grounded` status, `citation_count`, and the full **`answer`** text.
+     - `llm_calls`: Granular breakdown of every single LLM call (HyDE, Multi-Query, Step-Back, Generation) with model, token counts, latency, and cost in USD.
+
+#### Helpful Audit Inspection Commands
+
+```bash
+# View recent summary entries in JSONL
+tail -n 5 data/audit_logs/audit.jsonl | jq .
+
+# Search for queries containing 'Walmart' in audit log
+grep -i "Walmart" data/audit_logs/audit.jsonl | jq '{question, total_latency_seconds, total_cost_usd}'
+
+# Find all queries where reranking score was low
+jq 'select(.retrieval.top_rerank_score < 0.5) | {question, top_rerank: .retrieval.top_rerank_score}' data/audit_logs/audit.jsonl
+
+# Load and analyze in Pandas
+python -c "import pandas as pd; df = pd.read_json('data/audit_logs/audit.jsonl', lines=True); print(df[['received_at', 'question', 'total_latency_seconds', 'total_cost_usd']])"
+```
+
 ### Structured logging
 
 loguru outputs structured log lines that can be forwarded to log aggregators (Loki, Elasticsearch, CloudWatch):
