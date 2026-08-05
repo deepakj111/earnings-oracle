@@ -345,7 +345,7 @@ class TestTracePersistence:
         # Verify content is valid JSON
         with open(files[0]) as f:
             data = json.load(f)
-        assert data["question"] == "test question"
+        assert data["request"]["question"] == "test question"
         assert data["total_llm_calls"] == 1
 
     def test_get_persisted_traces(self, tracer: RAGTracer) -> None:
@@ -495,3 +495,105 @@ class TestFullPipelineTraceSimulation:
         parsed = json.loads(json_str)
         assert parsed["total_llm_calls"] == 4
         assert "cost_breakdown" in parsed
+
+
+# ── AuditWriter Tests ─────────────────────────────────────────────────────────
+
+
+class TestAuditWriter:
+    """Verify AuditWriter creates daily trace JSON and appends to audit.jsonl."""
+
+    def test_audit_writer_output(self, tmp_path: Path) -> None:
+        from observability.audit_writer import AuditWriter
+
+        audit_dir = tmp_path / "audit_logs"
+        writer = AuditWriter(output_dir=str(audit_dir))
+
+        tracer = RAGTracer(enabled=True, audit_writer=writer)
+        trace = tracer.start_trace("What is Apple revenue?")
+        trace.request_id = "req-12345"
+        trace.endpoint = "/query"
+
+        # L2
+        qt_span = RAGTracer.build_query_transform_span(
+            latency=0.5,
+            cache_hit=False,
+            multi_query_count=3,
+            hyde_generated=True,
+            stepback_generated=True,
+            failed_techniques=[],
+            original_question="What is Apple revenue?",
+            hyde_document="Apple reported Q4 revenue of $94.9B...",
+            multi_queries=["What is Apple revenue?", "AAPL Q4 revenue", "Apple net sales"],
+            stepback_query="What are Apple financial results?",
+        )
+        tracer.record_query_transform(trace, qt_span)
+
+        # L3
+        class MockResult:
+            chunk_id = "c1"
+            parent_id = "p1"
+            text = "Apple Q4 revenue was $94.9B."
+            parent_text = "Full parent text of Apple Q4 filing..."
+            ticker = "AAPL"
+            company = "Apple Inc."
+            date = "2024-11-01"
+            fiscal_period = "Q4 2024"
+            section_title = "Revenue"
+            doc_type = "8-K"
+            source = "dense"
+            rrf_score = 0.033
+            rerank_score = 0.98
+
+        ret_span = RAGTracer.build_retrieval_span(
+            latency=0.3,
+            total_candidates=10,
+            final_count=1,
+            reranked=True,
+            reranker_model="ms-marco-TinyBERT-L-2-v2",
+            results=[MockResult()],
+        )
+        tracer.record_retrieval(trace, ret_span)
+
+        # L4
+        gen_span = RAGTracer.build_generation_span(
+            latency=1.1,
+            model="gpt-5-mini",
+            prompt_tokens=500,
+            completion_tokens=100,
+            context_chunks=1,
+            context_tokens=300,
+            citation_count=1,
+            grounded=True,
+            retrieval_failed=False,
+            answer="Apple's revenue was $94.9B [1].",
+            mode="structured",
+        )
+        tracer.record_generation(trace, gen_span)
+
+        # End trace
+        tracer.end_trace(trace, total_latency=1.9)
+
+        # 1. Check audit.jsonl was created and contains 1 line
+        jsonl_file = audit_dir / "audit.jsonl"
+        assert jsonl_file.exists()
+        lines = jsonl_file.read_text().strip().split("\n")
+        assert len(lines) == 1
+        summary = json.loads(lines[0])
+        assert summary["request_id"] == "req-12345"
+        assert summary["question"] == "What is Apple revenue?"
+        assert summary["retrieval"]["final_chunk_count"] == 1
+
+        # 2. Check trace JSON file was created in daily subdir
+        day_dirs = [d for d in audit_dir.iterdir() if d.is_dir()]
+        assert len(day_dirs) == 1
+        json_files = list(day_dirs[0].glob("trace_*.json"))
+        assert len(json_files) == 1
+
+        detail = json.loads(json_files[0].read_text())
+        assert detail["request"]["request_id"] == "req-12345"
+        assert detail["query_transform"]["hyde_document"].startswith("Apple reported")
+        assert len(detail["retrieval"]["chunks"]) == 1
+        assert detail["retrieval"]["chunks"][0]["rerank_score"] == 0.98
+        assert detail["generation"]["answer"] == "Apple's revenue was $94.9B [1]."
+

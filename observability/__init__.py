@@ -19,8 +19,10 @@ Usage:
     print(trace.to_json())
 """
 
+from observability.audit_writer import AuditWriter
 from observability.cost_tracker import CostTracker
 from observability.trace_models import (
+    ChunkAuditRecord,
     CostEstimate,
     CRAGSpan,
     GenerationSpan,
@@ -33,6 +35,7 @@ from observability.tracer import RAGTracer
 
 __all__ = [
     "RAGTracer",
+    "AuditWriter",
     "CostTracker",
     "PipelineTrace",
     "QueryTransformSpan",
@@ -41,4 +44,5 @@ __all__ = [
     "CRAGSpan",
     "LLMCallSpan",
     "CostEstimate",
+    "ChunkAuditRecord",
 ]

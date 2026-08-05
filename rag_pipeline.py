@@ -69,6 +69,7 @@ from qdrant_client import QdrantClient
 from config import settings as _settings
 from generation import Generator
 from generation.models import GenerationResult
+from observability.audit_writer import AuditWriter
 from observability.tracer import RAGTracer
 from query import QueryTransformer
 from query.router import QueryRouter
@@ -109,14 +110,21 @@ class FinancialRAGPipeline:
         self._corrector: CRAGCorrector | None = None  # lazy-init in ask_with_crag()
         self._warmup_complete = threading.Event()
 
-        # ── Observability: structured per-request tracing ──────────────────
+        # ── Observability: structured per-request tracing + audit ─────────────
         obs_cfg = _settings.observability
+
+        # AuditWriter: always-on structured audit log for every query
+        audit_writer: AuditWriter | None = None
+        if obs_cfg.audit_enabled:
+            audit_writer = AuditWriter(output_dir=obs_cfg.audit_log_dir)
+
         self._tracer = RAGTracer(
             enabled=obs_cfg.tracing_enabled,
             output_dir=obs_cfg.trace_output_dir,
             persist_traces=obs_cfg.persist_traces,
             cost_alert_per_request_usd=obs_cfg.cost_alert_per_request_usd,
             cost_alert_per_session_usd=obs_cfg.cost_alert_per_session_usd,
+            audit_writer=audit_writer,
         )
 
         if async_warmup:
@@ -130,7 +138,8 @@ class FinancialRAGPipeline:
             f"transform_model={_settings.query_transform.model} | "
             f"generation_model={_settings.generation.model} | "
             f"reranker={'enabled' if _settings.reranker.enabled else 'disabled'} | "
-            f"tracing={'enabled' if obs_cfg.tracing_enabled else 'disabled'}"
+            f"tracing={'enabled' if obs_cfg.tracing_enabled else 'disabled'} | "
+            f"audit={'enabled' if obs_cfg.audit_enabled else 'disabled'}"
         )
 
     def _preload_models(self) -> None:
@@ -164,6 +173,8 @@ class FinancialRAGPipeline:
         question: str,
         metadata_filter: MetadataFilter | None = None,
         enable_routing: bool = True,
+        request_id: str = "",
+        endpoint: str = "/query",
     ) -> GenerationResult:
         pipeline_start = time.perf_counter()
         question = question.strip()
@@ -175,6 +186,15 @@ class FinancialRAGPipeline:
 
         # ── Start trace ───────────────────────────────────────────────────────
         trace = self._tracer.start_trace(question=question)
+        # Attach request-level context for correlation with API logs
+        trace.request_id = request_id
+        trace.endpoint = endpoint
+        if metadata_filter:
+            trace.applied_filter = {
+                "ticker": metadata_filter.ticker,
+                "year": metadata_filter.year,
+                "quarter": metadata_filter.quarter,
+            }
 
         if enable_routing:
             routing = self._router.route(question)
@@ -217,7 +237,7 @@ class FinancialRAGPipeline:
             f"degraded={transformed.failed_techniques} | {t2_elapsed:.2f}s"
         )
 
-        # Record L2 span
+        # Record L2 span — with full query variant texts for audit
         self._tracer.record_query_transform(
             trace,
             self._tracer.build_query_transform_span(
@@ -227,6 +247,10 @@ class FinancialRAGPipeline:
                 hyde_generated=(transformed.hyde_document != question),
                 stepback_generated=(transformed.stepback_query != question),
                 failed_techniques=list(transformed.failed_techniques),
+                original_question=question,
+                hyde_document=transformed.hyde_document,
+                multi_queries=transformed.multi_queries,
+                stepback_query=transformed.stepback_query,
             ),
         )
 
@@ -244,7 +268,11 @@ class FinancialRAGPipeline:
             f"reranked={retrieval_result.reranked} | {t3_elapsed:.2f}s"
         )
 
-        # Record L3 span
+        # Record L3 span — with per-chunk detail and filter for audit
+        _filter_dict = (
+            {"ticker": metadata_filter.ticker, "year": metadata_filter.year, "quarter": metadata_filter.quarter}
+            if metadata_filter else None
+        )
         self._tracer.record_retrieval(
             trace,
             self._tracer.build_retrieval_span(
@@ -254,6 +282,7 @@ class FinancialRAGPipeline:
                 reranked=retrieval_result.reranked,
                 reranker_model=(_settings.reranker.model if _settings.reranker.enabled else ""),
                 results=retrieval_result.results,
+                metadata_filter=_filter_dict,
             ),
         )
 
@@ -265,7 +294,7 @@ class FinancialRAGPipeline:
         )
         t4_elapsed = time.perf_counter() - t4
 
-        # Record L4 span
+        # Record L4 span — with full answer text for audit
         gen_span = self._tracer.build_generation_span(
             latency=t4_elapsed,
             model=result.model,
@@ -276,6 +305,8 @@ class FinancialRAGPipeline:
             citation_count=len(result.citations),
             grounded=result.grounded,
             retrieval_failed=result.retrieval_failed,
+            answer=result.answer,
+            mode="structured",
         )
         self._tracer.record_generation(trace, gen_span)
 
@@ -311,6 +342,8 @@ class FinancialRAGPipeline:
         self,
         question: str,
         metadata_filter: MetadataFilter | None = None,
+        request_id: str = "",
+        endpoint: str = "/query/stream",
     ) -> Iterator[str | dict[str, str]]:
         """
         Streaming pipeline: run L2 + L3 synchronously, then stream L4 tokens.
@@ -319,9 +352,15 @@ class FinancialRAGPipeline:
         No structured GenerationResult is returned — use ask() when you need
         citation extraction, token counts, or the grounding flag.
 
+        The pipeline is fully audited: L2 + L3 spans are recorded exactly as
+        in ask(). The L4 span records mode='streaming' with answer=None since
+        tokens are not accumulated (use /query for structured output with counts).
+
         Args:
             question       : natural language question
             metadata_filter: optional ticker/year/quarter scoping
+            request_id     : X-Request-ID from middleware (for log correlation)
+            endpoint       : API endpoint for audit record
 
         Yields:
             str | dict: raw text delta tokens from the LLM response, or progress log dicts
@@ -338,23 +377,110 @@ class FinancialRAGPipeline:
             raise ValueError("question must not be empty.")
 
         logger.info(f"Pipeline.ask_streaming | {question!r:.80}")
+        pipeline_start = time.perf_counter()
 
-        yield {"log": "Transforming query using HyDE and multi-query..."}
-        transformed = self._transformer.transform(question)
-        yield {"log": f"Generated {len(transformed.multi_queries)} query variants."}
+        # ── Start trace (same as ask()) ───────────────────────────────────────
+        trace = self._tracer.start_trace(question=question)
+        trace.request_id = request_id
+        trace.endpoint = endpoint
+        if metadata_filter:
+            trace.applied_filter = {
+                "ticker": metadata_filter.ticker,
+                "year": metadata_filter.year,
+                "quarter": metadata_filter.quarter,
+            }
 
-        yield {"log": "Retrieving documents from dense and sparse indexes..."}
-        retrieval_result = retrieve(
-            query=transformed,
-            qdrant_client=self.qdrant_client,
-            metadata_filter=metadata_filter,
-        )
-        yield {"log": f"Retrieved and reranked {len(retrieval_result.results)} document chunks."}
+        try:
+            # ── Layer 2: Query Transformation ─────────────────────────────────
+            yield {"log": "Transforming query using HyDE and multi-query..."}
+            t2 = time.perf_counter()
+            transformed = self._transformer.transform(question)
+            t2_elapsed = time.perf_counter() - t2
 
-        yield {"log": "Synthesizing answer..."}
-        yield from self._generator.generate_streaming(
-            question=question,
-            retrieval_result=retrieval_result,
+            self._tracer.record_query_transform(
+                trace,
+                self._tracer.build_query_transform_span(
+                    latency=t2_elapsed,
+                    cache_hit=False,
+                    multi_query_count=len(transformed.multi_queries),
+                    hyde_generated=(transformed.hyde_document != question),
+                    stepback_generated=(transformed.stepback_query != question),
+                    failed_techniques=list(transformed.failed_techniques),
+                    original_question=question,
+                    hyde_document=transformed.hyde_document,
+                    multi_queries=transformed.multi_queries,
+                    stepback_query=transformed.stepback_query,
+                ),
+            )
+            yield {"log": f"Generated {len(transformed.multi_queries)} query variants."}
+
+            # ── Layer 3: Hybrid Retrieval ──────────────────────────────────────
+            yield {"log": "Retrieving documents from dense and sparse indexes..."}
+            t3 = time.perf_counter()
+            retrieval_result = retrieve(
+                query=transformed,
+                qdrant_client=self.qdrant_client,
+                metadata_filter=metadata_filter,
+            )
+            t3_elapsed = time.perf_counter() - t3
+
+            _filter_dict = (
+                {"ticker": metadata_filter.ticker, "year": metadata_filter.year, "quarter": metadata_filter.quarter}
+                if metadata_filter else None
+            )
+            self._tracer.record_retrieval(
+                trace,
+                self._tracer.build_retrieval_span(
+                    latency=t3_elapsed,
+                    total_candidates=retrieval_result.total_candidates,
+                    final_count=len(retrieval_result.results),
+                    reranked=retrieval_result.reranked,
+                    reranker_model=(_settings.reranker.model if _settings.reranker.enabled else ""),
+                    results=retrieval_result.results,
+                    metadata_filter=_filter_dict,
+                ),
+            )
+            yield {"log": f"Retrieved and reranked {len(retrieval_result.results)} document chunks."}
+
+            # ── Layer 4: Streaming generation (no token counts available) ──────
+            yield {"log": "Synthesizing answer..."}
+            t4 = time.perf_counter()
+            yield from self._generator.generate_streaming(
+                question=question,
+                retrieval_result=retrieval_result,
+            )
+            t4_elapsed = time.perf_counter() - t4
+
+            # Record L4 span in streaming mode (no token counts)
+            gen_span = self._tracer.build_generation_span(
+                latency=t4_elapsed,
+                model=_settings.generation.model,
+                prompt_tokens=0,   # not available in streaming mode
+                completion_tokens=0,
+                context_chunks=len(retrieval_result.results),
+                context_tokens=0,
+                citation_count=0,
+                grounded=True,     # assume grounded; no post-processing in streaming
+                retrieval_failed=retrieval_result.is_empty,
+                mode="streaming",
+            )
+            self._tracer.record_generation(trace, gen_span)
+
+        except Exception as exc:
+            from observability.trace_models import SpanStatus
+            self._tracer.end_trace(
+                trace,
+                total_latency=time.perf_counter() - pipeline_start,
+                status=SpanStatus.ERROR,
+                error_message=str(exc),
+            )
+            raise
+
+        # ── Finalize trace ─────────────────────────────────────────────────────
+        total = time.perf_counter() - pipeline_start
+        self._tracer.end_trace(trace, total_latency=total)
+        logger.info(
+            f"Pipeline.ask_streaming complete | trace={trace.trace_id[:8]} | total={total:.2f}s"
         )
 
     # ── Verbose diagnostic variant ────────────────────────────────────────────

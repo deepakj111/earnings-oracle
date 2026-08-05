@@ -231,6 +231,8 @@ async def ask(
             return pipeline.ask(
                 question=body.question,
                 metadata_filter=metadata_filter,
+                request_id=rid,
+                endpoint="/query",
             )
 
         result = await loop.run_in_executor(_THREAD_POOL, _run)
@@ -313,6 +315,8 @@ async def ask_stream(
             for item in pipeline.ask_streaming(
                 question=body.question,
                 metadata_filter=metadata_filter,
+                request_id=rid,
+                endpoint="/query/stream",
             ):
                 if isinstance(item, dict):
                     payload = json.dumps(item)

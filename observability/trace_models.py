@@ -26,6 +26,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 
+# Bump this when the audit schema changes in a breaking way.
+SCHEMA_VERSION = "1.0"
+
 
 class SpanStatus(str, Enum):
     """Status of a trace span."""
@@ -33,6 +36,49 @@ class SpanStatus(str, Enum):
     OK = "ok"
     ERROR = "error"
     DEGRADED = "degraded"  # partial failure (e.g., one LLM technique failed)
+
+
+@dataclass
+class ChunkAuditRecord:
+    """
+    Full audit record for one retrieved chunk — written into RetrievalSpan.chunks.
+
+    Captures every ranking signal so a human auditor can trace exactly which
+    documents fed the LLM and why they ranked where they did.
+    """
+
+    rank: int                    # 1-based final rank after reranking
+    chunk_id: str = ""
+    parent_id: str | None = None
+    ticker: str = ""
+    company: str = ""
+    date: str = ""
+    fiscal_period: str = ""
+    section_title: str = ""
+    doc_type: str = ""
+    source: str = ""             # "dense" | "bm25" | "both" | "knowledge_graph"
+    rrf_score: float = 0.0
+    rerank_score: float = 0.0
+    text_excerpt: str = ""       # first 300 chars of child chunk text
+    parent_text_excerpt: str = "" # first 300 chars of parent chunk text
+
+    def to_dict(self) -> dict:
+        return {
+            "rank": self.rank,
+            "chunk_id": self.chunk_id,
+            "parent_id": self.parent_id,
+            "ticker": self.ticker,
+            "company": self.company,
+            "date": self.date,
+            "fiscal_period": self.fiscal_period,
+            "section_title": self.section_title,
+            "doc_type": self.doc_type,
+            "source": self.source,
+            "rrf_score": round(self.rrf_score, 6),
+            "rerank_score": round(self.rerank_score, 4),
+            "text_excerpt": self.text_excerpt,
+            "parent_text_excerpt": self.parent_text_excerpt,
+        }
 
 
 @dataclass
@@ -111,7 +157,8 @@ class QueryTransformSpan:
     Trace span for Layer 2 — Query Transformation.
 
     Records which techniques ran, which degraded, cache behavior,
-    and the resulting query variant counts.
+    the resulting query variant counts, and the FULL TEXT of each variant
+    so auditors can inspect exactly what was sent to retrieval.
     """
 
     latency_seconds: float = 0.0
@@ -122,6 +169,12 @@ class QueryTransformSpan:
     hyde_generated: bool = False
     stepback_generated: bool = False
     status: SpanStatus = SpanStatus.OK
+
+    # Full text of each generated variant — key for audit traceability
+    original_question: str = ""
+    hyde_document: str = ""         # full hypothetical passage text
+    multi_queries: list[str] = field(default_factory=list)  # all rephrasings incl. original
+    stepback_query: str = ""        # abstract step-back question
 
     @property
     def is_degraded(self) -> bool:
@@ -138,6 +191,11 @@ class QueryTransformSpan:
             "stepback_generated": self.stepback_generated,
             "status": self.status.value,
             "is_degraded": self.is_degraded,
+            # Audit text fields
+            "original_question": self.original_question,
+            "hyde_document": self.hyde_document,
+            "multi_queries": self.multi_queries,
+            "stepback_query": self.stepback_query,
         }
 
 
@@ -146,8 +204,9 @@ class RetrievalSpan:
     """
     Trace span for Layer 3 — Hybrid Retrieval.
 
-    Records candidate pool sizes, reranking behavior, parent fetch
-    outcomes, and the final chunk quality diagnostics.
+    Records candidate pool sizes, reranking behavior, parent fetch outcomes,
+    the final chunk quality diagnostics, AND full per-chunk detail so auditors
+    can inspect exactly which documents were ranked and why.
     """
 
     latency_seconds: float = 0.0
@@ -164,6 +223,11 @@ class RetrievalSpan:
     source_distribution: dict[str, int] = field(default_factory=dict)
     status: SpanStatus = SpanStatus.OK
 
+    # Full per-chunk audit records (rank, scores, text excerpts)
+    chunks: list[ChunkAuditRecord] = field(default_factory=list)
+    # Applied metadata filter (if any)
+    metadata_filter: dict | None = None
+
     def to_dict(self) -> dict:
         return {
             "latency_seconds": round(self.latency_seconds, 4),
@@ -179,6 +243,8 @@ class RetrievalSpan:
             "top_rerank_score": round(self.top_rerank_score, 4),
             "source_distribution": self.source_distribution,
             "status": self.status.value,
+            "metadata_filter": self.metadata_filter,
+            "chunks": [c.to_dict() for c in self.chunks],
         }
 
 
@@ -188,7 +254,7 @@ class GenerationSpan:
     Trace span for Layer 4 — Answer Generation.
 
     Records context window construction, token usage, grounding status,
-    citation extraction, and cost.
+    citation extraction, cost, and the full answer text for auditability.
     """
 
     latency_seconds: float = 0.0
@@ -203,6 +269,11 @@ class GenerationSpan:
     cost: CostEstimate | None = None
     status: SpanStatus = SpanStatus.OK
 
+    # Full answer text — key for audit traceability
+    answer: str = ""
+    # Mode: "structured" or "streaming" (streaming has no token counts)
+    mode: str = "structured"
+
     @property
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
@@ -211,6 +282,7 @@ class GenerationSpan:
         return {
             "latency_seconds": round(self.latency_seconds, 4),
             "model": self.model,
+            "mode": self.mode,
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
@@ -221,6 +293,7 @@ class GenerationSpan:
             "retrieval_failed": self.retrieval_failed,
             "cost": self.cost.to_dict() if self.cost else None,
             "status": self.status.value,
+            "answer": self.answer,
         }
 
 
@@ -319,6 +392,11 @@ class PipelineTrace:
     error_message: str = ""
     metadata: dict = field(default_factory=dict)
 
+    # Request-level context (set by API layer before end_trace)
+    request_id: str = ""           # X-Request-ID from middleware
+    endpoint: str = ""             # "/query" or "/query/stream"
+    applied_filter: dict | None = None  # metadata filter if provided by user
+
     # ── Derived properties ────────────────────────────────────────────────
 
     @property
@@ -388,9 +466,15 @@ class PipelineTrace:
 
     def to_dict(self) -> dict:
         return {
+            "schema_version": SCHEMA_VERSION,
             "trace_id": self.trace_id,
-            "question": self.question,
-            "timestamp": self.timestamp,
+            "request": {
+                "received_at": self.timestamp,
+                "question": self.question,
+                "request_id": self.request_id,
+                "endpoint": self.endpoint,
+                "filter": self.applied_filter,
+            },
             "total_latency_seconds": round(self.total_latency_seconds, 4),
             "total_prompt_tokens": self.total_prompt_tokens,
             "total_completion_tokens": self.total_completion_tokens,

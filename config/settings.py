@@ -286,6 +286,14 @@ class ObservabilityConfig:
     cost_alert_per_session_usd: float = field(
         default_factory=lambda: _env_float("RAG_COST_ALERT_PER_SESSION", 5.00)
     )
+    # Audit log — always-on structured JSON/JSONL output for every query
+    audit_enabled: bool = field(default_factory=lambda: _env_bool("RAG_AUDIT_ENABLED", True))
+    audit_log_dir: str = field(
+        default_factory=lambda: _env_str(
+            "RAG_AUDIT_LOG_DIR",
+            os.path.join(os.path.dirname(__file__), "..", "data", "audit_logs"),
+        )
+    )
 
 
 # ── Knowledge Graph ────────────────────────────────────────────────────────────

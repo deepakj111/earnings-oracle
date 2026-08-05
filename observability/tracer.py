@@ -44,8 +44,10 @@ from pathlib import Path
 
 from loguru import logger
 
+from observability.audit_writer import AuditWriter
 from observability.cost_tracker import CostTracker, estimate_cost
 from observability.trace_models import (
+    ChunkAuditRecord,
     CRAGSpan,
     GenerationSpan,
     GraphRetrievalSpan,
@@ -79,10 +81,12 @@ class RAGTracer:
         persist_traces: bool = True,
         cost_alert_per_request_usd: float = 0.10,
         cost_alert_per_session_usd: float = 5.00,
+        audit_writer: AuditWriter | None = None,
     ) -> None:
         self.enabled = enabled
         self._output_dir = Path(output_dir)
         self._persist = persist_traces
+        self._audit_writer = audit_writer
         self._cost_tracker = CostTracker(
             alert_per_request_usd=cost_alert_per_request_usd,
             alert_per_session_usd=cost_alert_per_session_usd,
@@ -92,6 +96,7 @@ class RAGTracer:
             logger.info(
                 f"RAGTracer ready | persist={persist_traces} | "
                 f"output_dir={output_dir} | "
+                f"audit={'enabled' if audit_writer else 'disabled'} | "
                 f"cost_alerts=($"
                 f"{cost_alert_per_request_usd:.2f}/req, "
                 f"${cost_alert_per_session_usd:.2f}/session)"
@@ -154,9 +159,13 @@ class RAGTracer:
 
         logger.info(f"Trace complete | {trace.summary()}")
 
-        # Persist to disk
+        # Persist to legacy traces dir (optional)
         if self._persist:
             self._persist_trace(trace)
+
+        # Always write to audit log if writer is configured
+        if self._audit_writer:
+            self._audit_writer.write(trace)
 
         return trace
 
@@ -277,6 +286,11 @@ class RAGTracer:
         hyde_generated: bool,
         stepback_generated: bool,
         failed_techniques: list[str],
+        # Audit text fields (optional — populated when available)
+        original_question: str = "",
+        hyde_document: str = "",
+        multi_queries: list[str] | None = None,
+        stepback_query: str = "",
     ) -> QueryTransformSpan:
         """Build a QueryTransformSpan from pipeline layer outputs."""
         techniques = ["multi_query", "stepback"]
@@ -296,6 +310,10 @@ class RAGTracer:
             hyde_generated=hyde_generated,
             stepback_generated=stepback_generated,
             status=status,
+            original_question=original_question,
+            hyde_document=hyde_document,
+            multi_queries=multi_queries or [],
+            stepback_query=stepback_query,
         )
 
     @staticmethod
@@ -306,9 +324,10 @@ class RAGTracer:
         reranked: bool,
         reranker_model: str,
         results: list,
+        metadata_filter: dict | None = None,
     ) -> RetrievalSpan:
-        """Build a RetrievalSpan from retrieval layer outputs."""
-        # Compute source distribution
+        """Build a RetrievalSpan from retrieval layer outputs, including per-chunk audit records."""
+        # Compute aggregate scoring stats
         source_dist: dict[str, int] = {}
         top_rrf = 0.0
         top_rerank = 0.0
@@ -323,6 +342,30 @@ class RAGTracer:
             if rerank > top_rerank:
                 top_rerank = rerank
 
+        # Build per-chunk audit records
+        chunk_records: list[ChunkAuditRecord] = []
+        for rank, r in enumerate(results, start=1):
+            text = getattr(r, "text", "") or ""
+            parent_text = getattr(r, "parent_text", "") or text
+            chunk_records.append(
+                ChunkAuditRecord(
+                    rank=rank,
+                    chunk_id=getattr(r, "chunk_id", ""),
+                    parent_id=getattr(r, "parent_id", None),
+                    ticker=getattr(r, "ticker", ""),
+                    company=getattr(r, "company", ""),
+                    date=getattr(r, "date", ""),
+                    fiscal_period=getattr(r, "fiscal_period", ""),
+                    section_title=getattr(r, "section_title", ""),
+                    doc_type=getattr(r, "doc_type", ""),
+                    source=getattr(r, "source", ""),
+                    rrf_score=getattr(r, "rrf_score", 0.0),
+                    rerank_score=getattr(r, "rerank_score", 0.0),
+                    text_excerpt=text[:300].strip(),
+                    parent_text_excerpt=parent_text[:300].strip(),
+                )
+            )
+
         return RetrievalSpan(
             latency_seconds=latency,
             total_unique_candidates=total_candidates,
@@ -333,6 +376,8 @@ class RAGTracer:
             top_rrf_score=top_rrf,
             top_rerank_score=top_rerank,
             source_distribution=source_dist,
+            chunks=chunk_records,
+            metadata_filter=metadata_filter,
         )
 
     @staticmethod
@@ -346,6 +391,8 @@ class RAGTracer:
         citation_count: int,
         grounded: bool,
         retrieval_failed: bool,
+        answer: str = "",
+        mode: str = "structured",
     ) -> GenerationSpan:
         """Build a GenerationSpan from generation layer outputs."""
         cost = estimate_cost(model, prompt_tokens, completion_tokens)
@@ -360,6 +407,8 @@ class RAGTracer:
             grounded=grounded,
             retrieval_failed=retrieval_failed,
             cost=cost,
+            answer=answer,
+            mode=mode,
         )
 
     @staticmethod
