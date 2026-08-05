@@ -43,20 +43,23 @@ def retrieve(
     metadata_filter: MetadataFilter | None = None,
 ) -> RetrievalResult:
     """Perform hybrid retrieval, cross-encoder reranking, and fetch context parent chunks."""
-    # 3a — Hybrid search + RRF (Returns small child chunks)
+    # 3a — Hybrid search + RRF (BM25 + Qdrant)
     candidates: list[SearchResult] = search(
         query=query,
         qdrant_client=qdrant_client,
         metadata_filter=metadata_filter,
     )
 
-    # 3b — Cross-encoder reranking (Fast because it's only reading 128-token chunks)
+    # 3b — Fetch parent texts so cross-encoder evaluates full table context
+    candidates_with_parents = _fetch_parent_texts(qdrant_client, candidates)
+
+    # 3c — Cross-encoder reranking (evaluates full table text)
     top_children: list[SearchResult] = rerank(
         query=query.original,
-        candidates=candidates,
+        candidates=candidates_with_parents,
     )
 
-    # 3c — Knowledge Graph context injection (GraphRAG)
+    # 3d — Knowledge Graph context injection (GraphRAG)
     try:
         from knowledge_graph.graph_retriever import graph_retrieve as _graph_retrieve
 
@@ -70,12 +73,9 @@ def retrieve(
     except Exception as exc:
         logger.debug(f"Graph retrieval skipped (fail-open): {exc}")  # nosec B110
 
-    # 3d — Late Parent Fetch (Only fetching the final 5 parent chunks for the LLM)
-    final_parents = _fetch_parent_texts(qdrant_client, top_children)
-
     return RetrievalResult(
         query=query.original,
-        results=final_parents,
+        results=top_children,
         reranked=True,
         total_candidates=len(candidates),
         metadata_filter=metadata_filter,

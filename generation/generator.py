@@ -160,19 +160,26 @@ def _call_llm(prompt_messages: list[Any]) -> tuple[str, int, int]:
         (answer_text, prompt_tokens, completion_tokens)
     """
     client = get_openai_client()
+    kwargs: dict[str, Any] = {
+        "model": _cfg.model,
+        "messages": prompt_messages,
+        "max_completion_tokens": _cfg.max_tokens,
+    }
+    if _cfg.temperature != 1.0 and not _cfg.model.startswith(("gpt-5", "o1", "o3")):
+        kwargs["temperature"] = _cfg.temperature
+
     try:
-        response = client.chat.completions.create(
-            model=_cfg.model,
-            messages=prompt_messages,
-            temperature=_cfg.temperature,
-            max_completion_tokens=_cfg.max_tokens,
-        )
+        response = client.chat.completions.create(**kwargs)
     except APIError as exc:
-        # Retry on 5xx server errors; propagate on 4xx client errors immediately
-        status = getattr(exc, "status_code", None)
-        if status is not None and status < 500:
+        if "temperature" in str(exc).lower() and "temperature" in kwargs:
+            logger.info("Retrying chat completion without temperature parameter...")
+            kwargs.pop("temperature")
+            response = client.chat.completions.create(**kwargs)
+        else:
+            status = getattr(exc, "status_code", None)
+            if status is not None and status < 500:
+                raise
             raise
-        raise  # tenacity will decide whether to retry based on exception type
 
     answer = (response.choices[0].message.content or "").strip()
     usage = response.usage
@@ -359,13 +366,23 @@ class Generator:
         ]
 
         client = get_openai_client()
-        stream = client.chat.completions.create(
-            model=_cfg.model,
-            messages=prompt_messages,  # type: ignore[arg-type]
-            temperature=_cfg.temperature,
-            max_completion_tokens=_cfg.max_tokens,
-            stream=True,
-        )
+        kwargs: dict[str, Any] = {
+            "model": _cfg.model,
+            "messages": prompt_messages,  # type: ignore[arg-type]
+            "max_completion_tokens": _cfg.max_tokens,
+            "stream": True,
+        }
+        if _cfg.temperature != 1.0 and not _cfg.model.startswith(("gpt-5", "o1", "o3")):
+            kwargs["temperature"] = _cfg.temperature
+
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except APIError as exc:
+            if "temperature" in str(exc).lower() and "temperature" in kwargs:
+                kwargs.pop("temperature")
+                stream = client.chat.completions.create(**kwargs)
+            else:
+                raise
         from openai.types.chat import ChatCompletionChunk
 
         for chunk in stream:

@@ -78,7 +78,7 @@ from generation.models import GenerationResult
 from rag_pipeline import FinancialRAGPipeline
 from retrieval.models import MetadataFilter
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 
 
 # ── Thread pool for blocking pipeline calls ────────────────────────────────────

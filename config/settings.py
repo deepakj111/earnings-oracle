@@ -189,7 +189,7 @@ class RetrievalConfig:
 
     top_k_dense: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_DENSE", 25))
     top_k_bm25: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_BM25", 25))
-    top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 5))
+    top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 8))
     rrf_k_constant: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_RRF_K", 60))
     parent_fetch_enabled: bool = field(
         default_factory=lambda: _env_bool("RAG_RETRIEVAL_PARENT_FETCH", True)

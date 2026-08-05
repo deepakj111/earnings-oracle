@@ -138,7 +138,7 @@ def fetch_structured(
     Raises:
         requests.HTTPError — on non-2xx responses
     """
-    url = f"{base_url.rstrip('/')}/query/"
+    url = f"{base_url.rstrip('/')}/query"
     payload: dict[str, Any] = {
         "question": question,
         "verbose": verbose,

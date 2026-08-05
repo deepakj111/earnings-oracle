@@ -34,6 +34,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from loguru import logger
 
@@ -301,16 +302,28 @@ class QueryRouter:
         import json
 
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
+            kwargs: dict[str, Any] = {
+                "model": self._model,
+                "messages": [
                     {"role": "system", "content": _ROUTER_SYSTEM_PROMPT},
                     {"role": "user", "content": question},
                 ],
-                temperature=_settings.query_router.temperature,
-                max_tokens=_settings.query_router.max_tokens,
-                response_format={"type": "json_object"},
-            )
+                "max_tokens": _settings.query_router.max_tokens,
+                "response_format": {"type": "json_object"},
+            }
+            if _settings.query_router.temperature != 1.0 and not self._model.startswith(
+                ("gpt-5", "o1", "o3")
+            ):
+                kwargs["temperature"] = _settings.query_router.temperature
+
+            try:
+                response = self._client.chat.completions.create(**kwargs)
+            except Exception as exc:
+                if "temperature" in str(exc).lower() and "temperature" in kwargs:
+                    kwargs.pop("temperature")
+                    response = self._client.chat.completions.create(**kwargs)
+                else:
+                    raise
             raw = response.choices[0].message.content or "{}"
             return json.loads(raw)
         except Exception as exc:

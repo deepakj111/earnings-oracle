@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 from loguru import logger
 
@@ -107,9 +108,9 @@ def _grade_one(question: str, chunk: SearchResult) -> RelevanceGrade:
     chunk_text = ((chunk.parent_text or chunk.text) or "")[:800].strip()
 
     try:
-        resp = get_openai_client().chat.completions.create(
-            model=_settings.crag.grader_model,
-            messages=[
+        kwargs: dict[str, Any] = {
+            "model": _settings.crag.grader_model,
+            "messages": [
                 {
                     "role": "user",
                     "content": _GRADER_PROMPT.format(
@@ -118,9 +119,21 @@ def _grade_one(question: str, chunk: SearchResult) -> RelevanceGrade:
                     ),
                 }
             ],
-            temperature=_settings.crag.grader_temperature,
-            max_completion_tokens=_settings.crag.grader_max_tokens,
-        )
+            "max_completion_tokens": _settings.crag.grader_max_tokens,
+        }
+        if _settings.crag.grader_temperature != 1.0 and not _settings.crag.grader_model.startswith(
+            ("gpt-5", "o1", "o3")
+        ):
+            kwargs["temperature"] = _settings.crag.grader_temperature
+
+        try:
+            resp = get_openai_client().chat.completions.create(**kwargs)
+        except Exception as exc:
+            if "temperature" in str(exc).lower() and "temperature" in kwargs:
+                kwargs.pop("temperature")
+                resp = get_openai_client().chat.completions.create(**kwargs)
+            else:
+                raise
         raw = (resp.choices[0].message.content or "").strip()
         relevant, score, reasoning = _parse_response(raw, chunk.chunk_id)
     except Exception as exc:

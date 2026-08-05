@@ -58,7 +58,7 @@ def rerank(
         return candidates[:top_k_final]
 
     passages = [
-        {"id": i, "text": (r.text or r.parent_text)[:400]} for i, r in enumerate(candidates)
+        {"id": i, "text": (r.parent_text or r.text)[:1200]} for i, r in enumerate(candidates)
     ]
 
     try:

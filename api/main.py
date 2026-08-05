@@ -50,9 +50,12 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from qdrant_client import QdrantClient
 
@@ -214,7 +217,24 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(query.router, prefix="/query", tags=["Query"])
     app.include_router(health.router, prefix="/health", tags=["Health"])
-    app.include_router(metrics_route.router)  # ← NEW: mounts GET /metrics
+    app.include_router(metrics_route.router)  # mounts GET /metrics
+
+    # ── Frontend static files ─────────────────────────────────────────────────
+    # Serve the single-page HTML frontend from /app.
+    # The frontend/ dir sits next to api/ in the project root.
+    _frontend_dir = Path(__file__).parent.parent / "frontend"
+    if _frontend_dir.is_dir():
+        app.mount("/app", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
+
+        @app.get("/", include_in_schema=False)
+        async def _root_redirect() -> RedirectResponse:
+            """Redirect bare root to the frontend SPA."""
+            return RedirectResponse(url="/app")
+    else:
+
+        @app.get("/", include_in_schema=False)
+        async def _root_info() -> dict:  # type: ignore[return]
+            return {"message": "Financial RAG API", "docs": "/docs", "health": "/health"}
 
     return app
 

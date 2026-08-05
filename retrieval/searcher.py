@@ -255,14 +255,21 @@ def _fetch_parent_texts(
         return results
 
     try:
-        records = client.retrieve(
+        conditions = [
+            qmodels.FieldCondition(
+                key="chunk_id",
+                match=qmodels.MatchAny(any=list(parent_ids_needed)),
+            )
+        ]
+        scroll_res, _ = client.scroll(
             collection_name=settings.embedding.collection_name,
-            ids=list(parent_ids_needed),
+            scroll_filter=qmodels.Filter(must=conditions),
+            limit=len(parent_ids_needed),
             with_payload=True,
         )
 
         parent_text_map: dict[str, str] = {}
-        for record in records:
+        for record in scroll_res:
             if record.payload:
                 pid = record.payload.get("chunk_id", "")
                 if pid:

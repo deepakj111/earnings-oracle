@@ -107,13 +107,29 @@ poetry run python -m ingestion.download_filings
 poetry run python -m ingestion.pipeline
 ```
 
-### 4. Serve API & Query Endpoints
-Launch the production Uvicorn server:
+### 4. Serve API & Frontend Endpoints
+
+#### Option A: Production Server (Multi-Worker)
+Launch the production Uvicorn server with 4 worker processes:
 ```bash
 poetry run serve-prod
 ```
 
-Query the API via `curl` (use `-L` or trailing slash `/query/` to follow HTTP 307 redirects and pipe to `json.tool` for formatted output):
+#### Option B: Development Server (Auto-Reload)
+Launch the single-worker development server with auto-reload:
+```bash
+poetry run serve
+```
+
+> **Note on Docker vs Local Port 8000**: Both `poetry run serve-prod` and Docker's `api` container bind host port `8000`. If you run `docker compose up -d` while running local `serve-prod`, stop the Docker API container (`docker stop rag_api`) to prevent port conflicts. Qdrant (`6333`), Prometheus (`9090`), and Grafana (`3000`) can remain running in Docker.
+
+#### Access the Modern Web Frontend
+When `serve-prod` or `serve` is running, access the single-page HTML chat interface with stateful conversation history, filter controls, and citation cards:
+- **Web App**: [http://localhost:8000/app](http://localhost:8000/app) (or bare root `http://localhost:8000/`)
+- **Streamlit UI** (Optional): `poetry run ui` (accessible at `http://localhost:8501`)
+
+#### Query the API via `curl`
+The endpoint directly accepts `POST /query` without redirects:
 
 ```bash
 curl -s -X POST http://localhost:8000/query \
@@ -121,7 +137,6 @@ curl -s -X POST http://localhost:8000/query \
   -d '{
     "question": "What was WALMART U.S. net sales and global total revenue for the fiscal year ended January 31, 2026?"
   }' | python3 -m json.tool
-
 ```
 
 ### 5. Run E2E Evaluation Suite

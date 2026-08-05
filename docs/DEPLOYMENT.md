@@ -283,20 +283,18 @@ RAG_GENERATION_MAX_TOKENS=4096
 
 ### uvicorn production command
 
-The docker-compose `api` service uses:
+The `poetry run serve-prod` entrypoint and Docker container use:
 
 ```bash
 uvicorn api.main:app \
   --host 0.0.0.0 \
   --port 8000 \
-  --workers 2 \
-  --loop uvloop \
-  --http httptools
+  --workers 4
 ```
 
-**Worker count**: Keep `--workers 2` or match CPU cores. Do not exceed 4 without verifying BM25 index memory behaviour — each worker process loads its own BM25 index copy.
+**Worker count**: Set `--workers 4` or match CPU cores. Do not exceed 4 without verifying BM25 index memory behaviour — each worker process loads its own BM25 index copy.
 
-**uvloop + httptools**: Both ship with `uvicorn[standard]`. They replace asyncio's default event loop and HTTP protocol with faster C implementations.
+**Multi-worker compatibility**: `--workers >1` uses multiprocessing. Custom event loop flags (`--loop`/`--http`) are omitted as Uvicorn automatically selects the optimal event loop per worker process based on installed `uvicorn[standard]` extras.
 
 ---
 

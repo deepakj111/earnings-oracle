@@ -98,21 +98,27 @@ def _call_llm(
     Propagates on: AuthenticationError, InvalidRequestError (unrecoverable), and APIError (5xx/4xx context).
     """
     client = get_openai_client()
+    kwargs: dict[str, Any] = {
+        "model": QUERY_TRANSFORM_MODEL,
+        "messages": [
+            {"role": "user", "content": f"{system}\n\n{user}"},
+        ],
+        "max_completion_tokens": max_tokens,
+    }
+    if temperature != 1.0 and not QUERY_TRANSFORM_MODEL.startswith(("gpt-5", "o1", "o3")):
+        kwargs["temperature"] = temperature
+
     try:
-        response = client.chat.completions.create(
-            model=QUERY_TRANSFORM_MODEL,
-            messages=[
-                # Merge system and user into a single user message
-                {"role": "user", "content": f"{system}\n\n{user}"},
-            ],
-            temperature=temperature,
-            max_completion_tokens=max_tokens,
-        )
+        response = client.chat.completions.create(**kwargs)
     except APIError as exc:
-        status = getattr(exc, "status_code", None)
-        if status is not None and status < 500:
+        if "temperature" in str(exc).lower() and "temperature" in kwargs:
+            kwargs.pop("temperature")
+            response = client.chat.completions.create(**kwargs)
+        else:
+            status = getattr(exc, "status_code", None)
+            if status is not None and status < 500:
+                raise
             raise
-        raise
 
     text = response.choices[0].message.content or ""
     text = text.strip()

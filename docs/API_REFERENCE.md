@@ -22,9 +22,9 @@ All responses include:
 
 ### Query
 
-#### `POST /query/`
+#### `POST /query`
 
-Run the full four-layer RAG pipeline and return a structured JSON response with inline citations, token usage, and grounding diagnostics.
+Run the full four-layer RAG pipeline and return a structured JSON response with inline citations, token usage, and grounding diagnostics. Accepts requests directly without trailing slash redirects.
 
 **Pipeline layers executed**: L2 Query Transform → L3 Hybrid Retrieval → L4 Answer Generation
 
@@ -347,29 +347,29 @@ Not included in OpenAPI schema (`include_in_schema=False`) to keep the Swagger U
 ### Basic question (no filter)
 
 ```bash
-curl -s -X POST http://localhost:8000/query/ \
+curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "What was NVIDIA revenue in Q3 2024?"}'
+  -d '{"question": "What was NVIDIA revenue in Q3 2024?"}' | python3 -m json.tool
 ```
 
 ### Scoped to a specific company and quarter
 
 ```bash
-curl -s -X POST http://localhost:8000/query/ \
+curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What was the gross margin?",
     "filter": {"ticker": "AAPL", "year": 2024, "quarter": "Q4"}
-  }'
+  }' | python3 -m json.tool
 ```
 
 ### With verbose diagnostics (debugging)
 
 ```bash
-curl -s -X POST http://localhost:8000/query/ \
+curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"question": "What guidance did Apple give for Q1 2025?", "verbose": true}' \
-  | python -m json.tool
+  | python3 -m json.tool
 ```
 
 ### Streaming with correlation ID
