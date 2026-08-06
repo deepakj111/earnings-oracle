@@ -263,7 +263,7 @@ def _fetch_parent_texts(
         ]
         scroll_res, _ = client.scroll(
             collection_name=settings.embedding.collection_name,
-            scroll_filter=qmodels.Filter(must=conditions),
+            scroll_filter=qmodels.Filter(must=conditions),  # type: ignore[arg-type]
             limit=len(parent_ids_needed),
             with_payload=True,
         )

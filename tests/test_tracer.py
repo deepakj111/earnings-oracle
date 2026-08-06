@@ -596,4 +596,3 @@ class TestAuditWriter:
         assert len(detail["retrieval"]["chunks"]) == 1
         assert detail["retrieval"]["chunks"][0]["rerank_score"] == 0.98
         assert detail["generation"]["answer"] == "Apple's revenue was $94.9B [1]."
-

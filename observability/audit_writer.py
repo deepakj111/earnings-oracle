@@ -130,7 +130,7 @@ class AuditWriter:
                 reverse=True,  # newest first
             )
             if len(files) > self._max_per_day:
-                for old in files[self._max_per_day:]:
+                for old in files[self._max_per_day :]:
                     try:
                         old.unlink()
                     except OSError:
@@ -180,9 +180,7 @@ class AuditWriter:
             "error_message": trace.error_message,
             # Timing
             "total_latency_seconds": round(trace.total_latency_seconds, 3),
-            "latency_breakdown": {
-                k: round(v, 3) for k, v in trace.latency_breakdown.items()
-            },
+            "latency_breakdown": {k: round(v, 3) for k, v in trace.latency_breakdown.items()},
             # Tokens & cost
             "total_tokens": trace.total_tokens,
             "total_prompt_tokens": trace.total_prompt_tokens,
@@ -197,7 +195,9 @@ class AuditWriter:
                 "multi_query_count": qt.multi_query_count if qt else 0,
                 "hyde_generated": qt.hyde_generated if qt else False,
                 "stepback_generated": qt.stepback_generated if qt else False,
-            } if qt else None,
+            }
+            if qt
+            else None,
             "retrieval": {
                 "total_candidates": ret.total_unique_candidates if ret else 0,
                 "final_chunk_count": ret.final_chunk_count if ret else 0,
@@ -205,7 +205,9 @@ class AuditWriter:
                 "reranker_model": ret.reranker_model if ret else "",
                 "top_rerank_score": round(ret.top_rerank_score, 4) if ret else 0.0,
                 "source_distribution": ret.source_distribution if ret else {},
-            } if ret else None,
+            }
+            if ret
+            else None,
             "generation": {
                 "model": gen.model if gen else "",
                 "mode": gen.mode if gen else "structured",
@@ -215,5 +217,7 @@ class AuditWriter:
                 "citation_count": gen.citation_count if gen else 0,
                 "grounded": gen.grounded if gen else True,
                 "latency_seconds": round(gen.latency_seconds, 3) if gen else 0.0,
-            } if gen else None,
+            }
+            if gen
+            else None,
         }

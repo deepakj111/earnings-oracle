@@ -270,8 +270,13 @@ class FinancialRAGPipeline:
 
         # Record L3 span — with per-chunk detail and filter for audit
         _filter_dict = (
-            {"ticker": metadata_filter.ticker, "year": metadata_filter.year, "quarter": metadata_filter.quarter}
-            if metadata_filter else None
+            {
+                "ticker": metadata_filter.ticker,
+                "year": metadata_filter.year,
+                "quarter": metadata_filter.quarter,
+            }
+            if metadata_filter
+            else None
         )
         self._tracer.record_retrieval(
             trace,
@@ -425,8 +430,13 @@ class FinancialRAGPipeline:
             t3_elapsed = time.perf_counter() - t3
 
             _filter_dict = (
-                {"ticker": metadata_filter.ticker, "year": metadata_filter.year, "quarter": metadata_filter.quarter}
-                if metadata_filter else None
+                {
+                    "ticker": metadata_filter.ticker,
+                    "year": metadata_filter.year,
+                    "quarter": metadata_filter.quarter,
+                }
+                if metadata_filter
+                else None
             )
             self._tracer.record_retrieval(
                 trace,
@@ -440,7 +450,9 @@ class FinancialRAGPipeline:
                     metadata_filter=_filter_dict,
                 ),
             )
-            yield {"log": f"Retrieved and reranked {len(retrieval_result.results)} document chunks."}
+            yield {
+                "log": f"Retrieved and reranked {len(retrieval_result.results)} document chunks."
+            }
 
             # ── Layer 4: Streaming generation (no token counts available) ──────
             yield {"log": "Synthesizing answer..."}
@@ -455,12 +467,12 @@ class FinancialRAGPipeline:
             gen_span = self._tracer.build_generation_span(
                 latency=t4_elapsed,
                 model=_settings.generation.model,
-                prompt_tokens=0,   # not available in streaming mode
+                prompt_tokens=0,  # not available in streaming mode
                 completion_tokens=0,
                 context_chunks=len(retrieval_result.results),
                 context_tokens=0,
                 citation_count=0,
-                grounded=True,     # assume grounded; no post-processing in streaming
+                grounded=True,  # assume grounded; no post-processing in streaming
                 retrieval_failed=retrieval_result.is_empty,
                 mode="streaming",
             )
@@ -468,6 +480,7 @@ class FinancialRAGPipeline:
 
         except Exception as exc:
             from observability.trace_models import SpanStatus
+
             self._tracer.end_trace(
                 trace,
                 total_latency=time.perf_counter() - pipeline_start,

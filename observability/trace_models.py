@@ -47,7 +47,7 @@ class ChunkAuditRecord:
     documents fed the LLM and why they ranked where they did.
     """
 
-    rank: int                    # 1-based final rank after reranking
+    rank: int  # 1-based final rank after reranking
     chunk_id: str = ""
     parent_id: str | None = None
     ticker: str = ""
@@ -56,11 +56,11 @@ class ChunkAuditRecord:
     fiscal_period: str = ""
     section_title: str = ""
     doc_type: str = ""
-    source: str = ""             # "dense" | "bm25" | "both" | "knowledge_graph"
+    source: str = ""  # "dense" | "bm25" | "both" | "knowledge_graph"
     rrf_score: float = 0.0
     rerank_score: float = 0.0
-    text_excerpt: str = ""       # first 300 chars of child chunk text
-    parent_text_excerpt: str = "" # first 300 chars of parent chunk text
+    text_excerpt: str = ""  # first 300 chars of child chunk text
+    parent_text_excerpt: str = ""  # first 300 chars of parent chunk text
 
     def to_dict(self) -> dict:
         return {
@@ -172,9 +172,9 @@ class QueryTransformSpan:
 
     # Full text of each generated variant — key for audit traceability
     original_question: str = ""
-    hyde_document: str = ""         # full hypothetical passage text
+    hyde_document: str = ""  # full hypothetical passage text
     multi_queries: list[str] = field(default_factory=list)  # all rephrasings incl. original
-    stepback_query: str = ""        # abstract step-back question
+    stepback_query: str = ""  # abstract step-back question
 
     @property
     def is_degraded(self) -> bool:
@@ -393,8 +393,8 @@ class PipelineTrace:
     metadata: dict = field(default_factory=dict)
 
     # Request-level context (set by API layer before end_trace)
-    request_id: str = ""           # X-Request-ID from middleware
-    endpoint: str = ""             # "/query" or "/query/stream"
+    request_id: str = ""  # X-Request-ID from middleware
+    endpoint: str = ""  # "/query" or "/query/stream"
     applied_filter: dict | None = None  # metadata filter if provided by user
 
     # ── Derived properties ────────────────────────────────────────────────
@@ -468,6 +468,7 @@ class PipelineTrace:
         return {
             "schema_version": SCHEMA_VERSION,
             "trace_id": self.trace_id,
+            "question": self.question,
             "request": {
                 "received_at": self.timestamp,
                 "question": self.question,

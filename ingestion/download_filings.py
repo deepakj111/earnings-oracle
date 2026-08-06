@@ -37,7 +37,7 @@ def get_company_filings(
     cik: str,
     ticker: str,
     form_types: tuple[str, ...] = ("10-K",),
-    start_date: str = "2026-01-01",
+    start_date: str = "2025-01-01",
     end_date: str = date.today().strftime("%Y-%m-%d"),
 ) -> list[dict]:
     """Fetch 10-K filings for a specific company CIK within a date range, including older files."""
