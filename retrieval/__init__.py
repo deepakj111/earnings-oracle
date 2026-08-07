@@ -67,6 +67,7 @@ def retrieve(
             question=query.original,
             existing_results=top_children,
             qdrant_client=qdrant_client,
+            metadata_filter=metadata_filter,
         )
         if graph_chunks:
             top_children = top_children + graph_chunks

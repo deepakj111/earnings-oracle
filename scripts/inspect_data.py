@@ -201,11 +201,11 @@ def inspect_qdrant(verbose: bool = False) -> dict:
         print(f"  {key:<45} {cnt:>8,}")
         filing_summary.append({"key": key, "chunks": cnt})
     print()
-    ok(f"Tickers: {dict(sorted(tickers.items()))}")
-    ok(f"Years:   {dict(sorted(years.items()))}")
+    ok(f"Tickers: {dict(sorted(tickers.items(), key=lambda x: str(x[0])))}")
+    ok(f"Years:   {dict(sorted(years.items(), key=lambda x: str(x[0])))}")
 
     if verbose:
-        ok(f"Dates:   {dict(sorted(dates.items()))}")
+        ok(f"Dates:   {dict(sorted(dates.items(), key=lambda x: str(x[0])))}")
 
     # Parent/child breakdown
     parents = sum(1 for pt in all_pts if pt.payload and not pt.payload.get("parent_id"))
@@ -271,10 +271,10 @@ def inspect_bm25(verbose: bool = False) -> dict:
     for key in sorted(by_filing):
         print(f"  {key:<35} {by_filing[key]:>8,}")
     print()
-    ok(f"Tickers: {dict(sorted(tickers.items()))}")
-    ok(f"Years:   {dict(sorted(years.items()))}")
+    ok(f"Tickers: {dict(sorted(tickers.items(), key=lambda x: str(x[0])))}")
+    ok(f"Years:   {dict(sorted(years.items(), key=lambda x: str(x[0])))}")
     if verbose:
-        ok(f"Dates:   {dict(sorted(dates.items()))}")
+        ok(f"Dates:   {dict(sorted(dates.items(), key=lambda x: str(x[0])))}")
 
     size_index = BM25_INDEX_PATH.stat().st_size // 1024
     size_corpus = BM25_CORPUS_PATH.stat().st_size // 1024
@@ -350,9 +350,9 @@ def inspect_knowledge_graph() -> dict:
             print(f"    {etype:<25} {cnt:>6,}")
 
     if entity_tickers:
-        ok(f"Tickers referenced: {dict(sorted(entity_tickers.items()))}")
+        ok(f"Tickers referenced: {dict(sorted(entity_tickers.items(), key=lambda x: str(x[0])))}")
     if entity_years:
-        ok(f"Years referenced:   {dict(sorted(entity_years.items()))}")
+        ok(f"Years referenced:   {dict(sorted(entity_years.items(), key=lambda x: str(x[0])))}")
 
     # Relationship types
     rel_types: Counter = Counter(
@@ -422,18 +422,20 @@ def cross_check(qdrant_result: dict, bm25_result: dict, source_result: dict) -> 
     q_tickers = set(qdrant_result.get("tickers", {}).keys())
     b_tickers = set(bm25_result.get("tickers", {}).keys())
     if q_tickers == b_tickers:
-        ok(f"Tickers match: {sorted(q_tickers)}")
+        ok(f"Tickers match: {sorted(q_tickers, key=str)}")
     else:
-        err(f"Ticker MISMATCH — Qdrant: {sorted(q_tickers)}, BM25: {sorted(b_tickers)}")
+        err(
+            f"Ticker MISMATCH — Qdrant: {sorted(q_tickers, key=str)}, BM25: {sorted(b_tickers, key=str)}"
+        )
         issues_found = True
 
     # ── Year consistency ──────────────────────────────────────────────────────
     q_years = set(qdrant_result.get("years", {}).keys())
     b_years = set(bm25_result.get("years", {}).keys())
     if q_years == b_years:
-        ok(f"Years match: {sorted(q_years)}")
+        ok(f"Years match: {sorted(q_years, key=str)}")
     else:
-        err(f"Year MISMATCH — Qdrant: {sorted(q_years)}, BM25: {sorted(b_years)}")
+        err(f"Year MISMATCH — Qdrant: {sorted(q_years, key=str)}, BM25: {sorted(b_years, key=str)}")
         issues_found = True
 
     # ── Source files vs checkpoint ────────────────────────────────────────────

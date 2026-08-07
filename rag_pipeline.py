@@ -206,9 +206,8 @@ class FinancialRAGPipeline:
                 return GenerationResult(
                     question=question,
                     answer=(
-                        "I can only answer questions about SEC 8-K earnings filings "
-                        "for AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, and WMT. "
-                        "Please ask a financial question about one of these companies."
+                        "I can only answer financial questions about companies in SEC filings. "
+                        "Please ask a financial question about a supported company."
                     ),
                     citations=[],
                     grounded=False,
@@ -221,6 +220,12 @@ class FinancialRAGPipeline:
                     context_tokens_used=0,
                     context_chunks_used=0,
                 )
+
+            if routing.detected_ticker:
+                if metadata_filter is None:
+                    metadata_filter = MetadataFilter(ticker=routing.detected_ticker)
+                elif not metadata_filter.ticker:
+                    metadata_filter.ticker = routing.detected_ticker
         else:
             routing = None
 
@@ -347,35 +352,12 @@ class FinancialRAGPipeline:
         self,
         question: str,
         metadata_filter: MetadataFilter | None = None,
+        enable_routing: bool = True,
         request_id: str = "",
         endpoint: str = "/query/stream",
     ) -> Iterator[str | dict[str, str]]:
         """
         Streaming pipeline: run L2 + L3 synchronously, then stream L4 tokens.
-
-        Designed for UI layers (Streamlit, Gradio, FastAPI Server-Sent Events).
-        No structured GenerationResult is returned — use ask() when you need
-        citation extraction, token counts, or the grounding flag.
-
-        The pipeline is fully audited: L2 + L3 spans are recorded exactly as
-        in ask(). The L4 span records mode='streaming' with answer=None since
-        tokens are not accumulated (use /query for structured output with counts).
-
-        Args:
-            question       : natural language question
-            metadata_filter: optional ticker/year/quarter scoping
-            request_id     : X-Request-ID from middleware (for log correlation)
-            endpoint       : API endpoint for audit record
-
-        Yields:
-            str | dict: raw text delta tokens from the LLM response, or progress log dicts
-
-        Usage:
-            for item in pipeline.ask_streaming("What was Apple's Q4 revenue?"):
-                if isinstance(item, dict):
-                    print("Log:", item["log"])
-                else:
-                    print(item, end="", flush=True)
         """
         question = question.strip()
         if not question:
@@ -383,6 +365,24 @@ class FinancialRAGPipeline:
 
         logger.info(f"Pipeline.ask_streaming | {question!r:.80}")
         pipeline_start = time.perf_counter()
+
+        routing = None
+        if enable_routing:
+            routing = self._router.route(question)
+            logger.info(f"[Router] {routing.summary()}")
+
+            if routing.should_refuse:
+                yield (
+                    "I can only answer financial questions about companies in SEC filings. "
+                    "Please ask a financial question about a supported company."
+                )
+                return
+
+            if routing.detected_ticker:
+                if metadata_filter is None:
+                    metadata_filter = MetadataFilter(ticker=routing.detected_ticker)
+                elif not metadata_filter.ticker:
+                    metadata_filter.ticker = routing.detected_ticker
 
         # ── Start trace (same as ask()) ───────────────────────────────────────
         trace = self._tracer.start_trace(question=question)
@@ -399,7 +399,10 @@ class FinancialRAGPipeline:
             # ── Layer 2: Query Transformation ─────────────────────────────────
             yield {"log": "Transforming query using HyDE and multi-query..."}
             t2 = time.perf_counter()
-            transformed = self._transformer.transform(question)
+            transformed = self._transformer.transform(
+                question,
+                skip_hyde=(routing.skip_hyde if routing else False),
+            )
             t2_elapsed = time.perf_counter() - t2
 
             self._tracer.record_query_transform(

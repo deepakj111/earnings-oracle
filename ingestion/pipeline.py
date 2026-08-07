@@ -204,7 +204,12 @@ async def _process_document(
                 return 0, [], [], None
 
             t0 = time.perf_counter()
-            metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text)
+            # Derive form_type from filename pattern: {TICKER}_{FORM}_{DATE}_{CIK}.htm
+            # e.g. "NFLX_10-K_2025-01-27_0001065280" → form_type="10-K"
+            stem_parts = file_path.stem.split("_")
+            # stem_parts[0]=ticker, stem_parts[1]=form, rest=date+cik
+            form_type = stem_parts[1] if len(stem_parts) >= 2 else "unknown"
+            metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text, form_type=form_type)
             t1 = time.perf_counter()
             doc_timings["extract_metadata"] = round(t1 - t0, 4)
 
@@ -343,7 +348,14 @@ async def _run_kg_only_async(threads_override: int | None = None) -> None:
         if doc is None:
             logger.debug(f"Skipped (not earnings content): {file_path.name}")
             continue
-        metadata = extract_metadata(doc.ticker, doc.date, doc.raw_text)
+        metadata = extract_metadata(
+            doc.ticker,
+            doc.date,
+            doc.raw_text,
+            form_type=file_path.stem.split("_")[1]
+            if len(file_path.stem.split("_")) >= 2
+            else "unknown",
+        )
         chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
         parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
         logger.info(

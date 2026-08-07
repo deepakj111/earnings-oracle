@@ -385,6 +385,7 @@ class Generator:
                 raise
         from openai.types.chat import ChatCompletionChunk
 
+        total_content = ""
         for chunk in stream:
             # chunk may be a ChatCompletionChunk or other variant in stubs
             # We use cast for mypy while keeping hasattr for runtime flexibility (and tests)
@@ -392,4 +393,11 @@ class Generator:
                 c = cast(ChatCompletionChunk, chunk)
                 delta = c.choices[0].delta.content
                 if delta:
+                    total_content += delta
                     yield delta
+
+        if not total_content:
+            logger.warning(
+                "Streaming generation returned empty content — yielding no-context fallback answer."
+            )
+            yield _NO_CONTEXT_ANSWER

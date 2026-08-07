@@ -43,7 +43,7 @@ Rules:
 2. Vary vocabulary deliberately across the 3 versions:
    - Version 1: Formal analyst language (guidance → forward outlook, revenue → net revenue)
    - Version 2: Management commentary style (what did management say about X)
-   - Version 3: Short keyword-style query (ticker + metric + period)
+   - Version 3: SEC filing table & period style (if asking about quarterly metrics or growth, include terms like "Three Months Ended", "interim quarterly results", or "quarterly breakdown")
 3. Output ONLY the 3 questions, one per line, no numbering, bullets, or labels
 4. No blank lines between questions
 """

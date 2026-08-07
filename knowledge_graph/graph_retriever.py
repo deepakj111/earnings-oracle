@@ -34,7 +34,7 @@ from config import settings
 from knowledge_graph.entity_store import EntityStore
 from knowledge_graph.models import KnowledgeGraph
 from observability.trace_models import GraphRetrievalSpan, SpanStatus
-from retrieval.models import SearchResult
+from retrieval.models import MetadataFilter, SearchResult
 
 # Module-level cached graph (loaded once, reused across requests)
 _cached_graph: KnowledgeGraph | None = None
@@ -194,6 +194,7 @@ def graph_retrieve(
     question: str,
     existing_results: list[SearchResult],
     qdrant_client: QdrantClient,
+    metadata_filter: MetadataFilter | None = None,
 ) -> tuple[list[SearchResult], GraphRetrievalSpan]:
     """
     Graph-fused retrieval: inject relational context from the knowledge graph.
@@ -241,6 +242,19 @@ def graph_retrieve(
         # 3. Fetch chunks from Qdrant
         max_chunks = settings.knowledge_graph.max_graph_chunks
         graph_results = _fetch_chunks_by_ids(related_chunk_ids, qdrant_client, max_chunks)
+
+        if metadata_filter and settings.retrieval.metadata_filter_enabled:
+            filtered_graph_results = []
+            for gr in graph_results:
+                if metadata_filter.ticker and gr.ticker != metadata_filter.ticker:
+                    continue
+                if metadata_filter.year and gr.year != metadata_filter.year:
+                    continue
+                if metadata_filter.quarter and gr.quarter != metadata_filter.quarter:
+                    continue
+                filtered_graph_results.append(gr)
+            graph_results = filtered_graph_results
+
         span.chunks_injected = len(graph_results)
 
         # 4. Assign a meaningful score to graph chunks.

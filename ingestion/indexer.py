@@ -234,6 +234,7 @@ async def index_document(
             "year": metadata.year,
             "quarter": metadata.quarter,
             "fiscal_period": metadata.fiscal_period,
+            "form_type": metadata.form_type,
             "section_title": chunk.section_title,
         }
 

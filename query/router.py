@@ -41,11 +41,38 @@ from loguru import logger
 from config import settings as _settings
 from config.openai_client import get_openai_client
 
-_TICKER_PATTERN = re.compile(
-    r"\b(AAPL|NVDA|MSFT|AMZN|META|JPM|XOM|UNH|TSLA|WMT|"
-    r"Apple|NVIDIA|Microsoft|Amazon|Meta|JPMorgan|ExxonMobil|UnitedHealth|Tesla|Walmart)\b",
-    re.IGNORECASE,
-)
+
+def _build_ticker_resolver() -> tuple[re.Pattern, dict[str, str]]:
+    """
+    Dynamically build ticker matching pattern and normalization mapping
+    from registered companies in COMPANY_MAP.
+    """
+    from ingestion.metadata_extractor import COMPANY_MAP
+
+    mapping: dict[str, str] = {}
+    patterns: set[str] = set()
+
+    for ticker, company_name in COMPANY_MAP.items():
+        t_upper = ticker.upper()
+        mapping[t_upper] = t_upper
+        patterns.add(re.escape(t_upper))
+
+        c_upper = company_name.upper()
+        mapping[c_upper] = t_upper
+        patterns.add(re.escape(company_name))
+
+        first_word = company_name.split()[0]
+        if len(first_word) >= 3:
+            fw_upper = first_word.upper()
+            if fw_upper not in mapping:
+                mapping[fw_upper] = t_upper
+            patterns.add(re.escape(first_word))
+
+    sorted_patterns = sorted(patterns, key=len, reverse=True)
+    combined = "|".join(sorted_patterns)
+    regex = re.compile(r"\b(" + combined + r")\b", re.IGNORECASE)
+    return regex, mapping
+
 
 _FINANCIAL_KEYWORDS = frozenset(
     [
@@ -84,8 +111,7 @@ _FINANCIAL_KEYWORDS = frozenset(
 )
 
 _ROUTER_SYSTEM_PROMPT = """You are a query intent classifier for a financial RAG system that
-answers questions about SEC 8-K earnings filings for 10 companies:
-AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, WMT.
+answers questions about SEC earnings filings.
 
 Classify the user query into one of these intents:
 
@@ -105,7 +131,7 @@ Respond ONLY with valid JSON:
 {
   "intent": "FINANCIAL_SPECIFIC" | "FINANCIAL_GENERAL" | "OUT_OF_SCOPE" | "AMBIGUOUS",
   "confidence": float between 0.0 and 1.0,
-  "detected_ticker": "AAPL" | null,
+  "detected_ticker": "TICKER_SYMBOL" | null,
   "reasoning": "one sentence explanation"
 }"""
 
@@ -271,23 +297,13 @@ class QueryRouter:
         if any(lower.startswith(p) for p in greeting_patterns) and len(words) < 6:
             return QueryIntent.OUT_OF_SCOPE, 0.95, None, "Greeting or small talk detected"
 
-        ticker_match = _TICKER_PATTERN.search(question)
+        ticker_pattern, ticker_map = _build_ticker_resolver()
+        ticker_match = ticker_pattern.search(question)
         has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
 
         if ticker_match and has_financial_kw:
-            raw_ticker = ticker_match.group(0).upper()
-            ticker_map = {
-                "APPLE": "AAPL",
-                "NVIDIA": "NVDA",
-                "MICROSOFT": "MSFT",
-                "AMAZON": "AMZN",
-                "JPMORGAN": "JPM",
-                "EXXONMOBIL": "XOM",
-                "UNITEDHEALTH": "UNH",
-                "TESLA": "TSLA",
-                "WALMART": "WMT",
-            }
-            canonical = ticker_map.get(raw_ticker, raw_ticker)
+            raw_match = ticker_match.group(0).upper()
+            canonical = ticker_map.get(raw_match, raw_match)
             return (
                 QueryIntent.FINANCIAL_SPECIFIC,
                 0.92,
