@@ -241,6 +241,9 @@ async def _call_llm_extract(
             logger.debug(
                 f"KG LLM Attempt 1 failed ({err_msg[:120]}), retrying with fallback params"
             )
+            if "429" in err_msg or "rate limit" in err_msg.lower():
+                await asyncio.sleep(2.0)
+
             retry_kwargs = dict(kwargs)
 
             # Explicitly skip temperature if it caused the first failure
@@ -259,7 +262,15 @@ async def _call_llm_extract(
                     settings.knowledge_graph.extraction_max_tokens
                 )
 
-            response = await client.chat.completions.create(**retry_kwargs)
+            try:
+                response = await client.chat.completions.create(**retry_kwargs)
+            except Exception as second_exc:
+                second_err = str(second_exc)
+                if "429" in second_err or "rate limit" in second_err.lower():
+                    await asyncio.sleep(4.0)
+                    response = await client.chat.completions.create(**retry_kwargs)
+                else:
+                    raise
 
         content = response.choices[0].message.content or "{}"
         return _parse_json_response(content)

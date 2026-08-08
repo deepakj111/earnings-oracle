@@ -11,6 +11,8 @@ from observability.trace_models import CostEstimate
 
 MODEL_PRICING: dict[str, tuple[float, float]] = {
     "gpt-4.1-nano": (0.10 / 1_000_000, 0.40 / 1_000_000),
+    "gpt-4.1-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
+    "gpt-5-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
     "gpt-4.1": (2.50 / 1_000_000, 10.00 / 1_000_000),
 }
 

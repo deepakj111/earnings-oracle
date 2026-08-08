@@ -37,7 +37,7 @@ def get_company_filings(
     cik: str,
     ticker: str,
     form_types: tuple[str, ...] = ("10-K",),
-    start_date: str = "2025-01-01",
+    start_date: str = "2023-01-01",
     end_date: str = date.today().strftime("%Y-%m-%d"),
 ) -> list[dict]:
     """Fetch 10-K filings for a specific company CIK within a date range, including older files."""
@@ -189,7 +189,9 @@ def main() -> None:
     all_filings = []
     for ticker, cik in COMPANIES.items():
         print(f"Fetching 10-K, 10-Q filing lists for {ticker}...")
-        filings = get_company_filings(cik, ticker)
+        filings = get_company_filings(
+            cik, ticker, form_types=("10-K", "10-Q"), start_date="2025-09-01"
+        )
         all_filings.extend(filings)
         time.sleep(0.15)
 

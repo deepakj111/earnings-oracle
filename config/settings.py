@@ -60,7 +60,7 @@ def _env_bool(key: str, default: bool) -> bool:
 class QueryRouterConfig:
     """Configuration for query/router.py (Layer 1 — query intent classification)."""
 
-    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_ROUTER_MODEL", "gpt-4.1-mini"))
+    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_ROUTER_MODEL", "gpt-5-mini"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_QUERY_ROUTER_TEMP", 0.0))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_QUERY_ROUTER_MAX_TOKENS", 150))
 
@@ -72,9 +72,7 @@ class QueryRouterConfig:
 class QueryTransformConfig:
     """Configuration for query/transformer.py (Layer 2 — HyDE + Multi-Query + Step-Back)."""
 
-    model: str = field(
-        default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-4.1-mini")
-    )
+    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-5-mini"))
 
     # Per-technique temperatures — intentionally different
     temperature_hyde: float = field(
@@ -140,7 +138,7 @@ class GenerationConfig:
     max_context_tokens: hard cap on total tokens in the retrieved context block.
     """
 
-    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-4.1-mini"))
+    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5-mini"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(
@@ -225,7 +223,7 @@ class CRAGConfig:
 
     enabled: bool = field(default_factory=lambda: _env_bool("RAG_CRAG_ENABLED", True))
     grader_model: str = field(
-        default_factory=lambda: _env_str("RAG_CRAG_GRADER_MODEL", "gpt-4.1-mini")
+        default_factory=lambda: _env_str("RAG_CRAG_GRADER_MODEL", "gpt-5-mini")
     )
     grader_temperature: float = field(
         default_factory=lambda: _env_float("RAG_CRAG_GRADER_TEMP", 0.0)
@@ -255,7 +253,7 @@ class CRAGConfig:
 class EvaluationConfig:
     """Configuration for evaluation/harness.py & metrics.py (LLMOps evaluation harness)."""
 
-    model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-4.1-mini"))
+    model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-5-mini"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_EVAL_TEMP", 0.0))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_TOKENS", 256))
     max_workers: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_WORKERS", 2))
@@ -312,7 +310,7 @@ class KnowledgeGraphConfig:
         default_factory=lambda: _env_bool("RAG_KG_RETRIEVAL_ENABLED", True)
     )
     extraction_model: str = field(
-        default_factory=lambda: _env_str("RAG_KG_EXTRACTION_MODEL", "gpt-4.1-mini")
+        default_factory=lambda: _env_str("RAG_KG_EXTRACTION_MODEL", "gpt-5-mini")
     )
     extraction_temperature: float = field(
         default_factory=lambda: _env_float("RAG_KG_EXTRACTION_TEMP", 1.0)
