@@ -138,7 +138,7 @@ class GenerationConfig:
     max_context_tokens: hard cap on total tokens in the retrieved context block.
     """
 
-    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5-mini"))
+    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(

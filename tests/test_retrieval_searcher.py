@@ -250,8 +250,33 @@ class TestFetchParentTexts:
         client = Mock(spec=QdrantClient)
         client.scroll.return_value = (
             [
-                Record(id="p1", payload={"chunk_id": "p1", "text": "parent 1 text"}),
-                Record(id="p2", payload={"chunk_id": "p2", "text": "parent 2 text"}),
+                Record(
+                    id="1",
+                    payload={
+                        "chunk_id": "c1",
+                        "parent_id": "p1",
+                        "child_index": 0,
+                        "text": "[Context: AAPL]\n\nparent 1 text part 1",
+                    },
+                ),
+                Record(
+                    id="2",
+                    payload={
+                        "chunk_id": "c1_b",
+                        "parent_id": "p1",
+                        "child_index": 1,
+                        "text": "[Context: AAPL]\n\npart 2",
+                    },
+                ),
+                Record(
+                    id="3",
+                    payload={
+                        "chunk_id": "c2",
+                        "parent_id": "p2",
+                        "child_index": 0,
+                        "text": "[Context: AAPL]\n\nparent 2 text",
+                    },
+                ),
             ],
             None,
         )
@@ -278,8 +303,8 @@ class TestFetchParentTexts:
             ]
 
             res = _fetch_parent_texts(client, results)
-            assert res[0].parent_text == "parent 1 text"
-            assert res[1].parent_text == "parent 2 text"
+            assert "parent 1 text part 1 part 2" in res[0].parent_text
+            assert "parent 2 text" in res[1].parent_text
             assert res[2].parent_text == "t3"  # Not found in returned records
 
     def test_fetch_exception_returns_original(self) -> None:

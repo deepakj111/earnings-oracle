@@ -125,12 +125,15 @@ class TestIndexDocument:
 
     # ── Embedding ─────────────────────────────────────────────────────────────
 
-    async def test_only_children_are_embedded(self) -> None:
+    async def test_only_children_and_tables_are_embedded(self) -> None:
         parent = _make_chunk("parent", 0)
         child = _make_chunk("child", 1, parent.chunk_id)
         table = _make_chunk("table", 2)
-        _, _, _, mock_client = await self._run([parent, child, table])
+        _, bm25_corpus, _, mock_client = await self._run([parent, child, table])
         assert mock_client.embeddings.create.call_count == 1
+        assert len(bm25_corpus) == 2
+        chunk_types = {entry["chunk_type"] for entry in bm25_corpus}
+        assert chunk_types == {"child", "table"}
 
     async def test_no_children_produces_no_embed_calls(self) -> None:
         parent = _make_chunk("parent", 0)

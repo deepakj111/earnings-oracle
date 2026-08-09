@@ -415,3 +415,19 @@ class TestGeneratorStreaming:
         full_text = "".join(tokens)
         assert "Apple" in full_text
         assert "$100B" in full_text
+
+
+class TestGenerationPromptsAndConfig:
+    def test_generation_system_contains_unit_and_scale_instructions(self) -> None:
+        from generation.prompts import GENERATION_SYSTEM
+
+        assert "Financial Metric Units & Scale Rules" in GENERATION_SYSTEM
+        assert "in thousands" in GENERATION_SYSTEM
+        assert "in millions" in GENERATION_SYSTEM
+        assert "unit scale" in GENERATION_SYSTEM
+
+    def test_generation_config_default_model_is_gpt_5(self) -> None:
+        from config.settings import settings
+
+        assert settings.generation.model == "gpt-5"
+        assert settings.knowledge_graph.extraction_model == "gpt-5-mini"

@@ -244,7 +244,7 @@ def _fetch_parent_texts(
 ) -> list[SearchResult]:
     """
     For each SearchResult that has a parent_id, fetch all sibling child chunks
-    sharing the same parent_id from Qdrant, sort them by chunk_id, and reconstruct
+    sharing the same parent_id from Qdrant, sort them by child_index, and reconstruct
     the full parent text (~512 tokens) to replace parent_text.
     """
     if not settings.retrieval.parent_fetch_enabled:
@@ -257,23 +257,39 @@ def _fetch_parent_texts(
     try:
         conditions = [
             qmodels.FieldCondition(
-                key="chunk_id",
+                key="parent_id",
                 match=qmodels.MatchAny(any=list(parent_ids_needed)),
             )
         ]
         scroll_res, _ = client.scroll(
             collection_name=settings.embedding.collection_name,
             scroll_filter=qmodels.Filter(must=conditions),  # type: ignore[arg-type]
-            limit=len(parent_ids_needed),
+            limit=500,
             with_payload=True,
         )
 
-        parent_text_map: dict[str, str] = {}
+        parent_chunks_map: dict[str, list[dict]] = {}
         for record in scroll_res:
             if record.payload:
-                pid = record.payload.get("chunk_id", "")
+                pid = record.payload.get("parent_id")
                 if pid:
-                    parent_text_map[pid] = record.payload.get("text", "")
+                    parent_chunks_map.setdefault(pid, []).append(record.payload)
+
+        parent_text_map: dict[str, str] = {}
+        for pid, children in parent_chunks_map.items():
+            children_sorted = sorted(children, key=lambda c: c.get("child_index", 0))
+            body_parts = []
+            prefix = ""
+            for c in children_sorted:
+                t = c.get("text", "")
+                if "]\n\n" in t:
+                    pref, body = t.split("]\n\n", 1)
+                    if not prefix:
+                        prefix = pref + "]\n\n"
+                    body_parts.append(body.strip())
+                else:
+                    body_parts.append(t.strip())
+            parent_text_map[pid] = prefix + " ".join(body_parts)
 
         fetched = 0
         for r in results:

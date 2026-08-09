@@ -201,15 +201,15 @@ async def index_document(
     timings: dict | None = None,
 ) -> tuple[list[list[str]], list[dict]]:
     """Embed chunks and index them into Qdrant, returning data for the BM25 corpus."""
-    child_chunks = [c for c in chunks if c.chunk_type == "child"]
+    indexable_chunks = [c for c in chunks if c.chunk_type in ("child", "table")]
     points: list[PointStruct] = []
     new_bm25_texts: list[list[str]] = []
     new_bm25_corpus: list[dict] = []
 
-    if not child_chunks:
+    if not indexable_chunks:
         return new_bm25_texts, new_bm25_corpus
 
-    texts = [chunk.text for chunk in child_chunks]
+    texts = [chunk.text for chunk in indexable_chunks]
 
     # Run heavy embedding CPU work in a thread pool
     t0 = time.perf_counter()
@@ -219,14 +219,14 @@ async def index_document(
         timings["embedding"] = round(t1 - t0, 4)
 
     logger.debug(
-        f"[QDRANT INDEX] Embedding and preparing {len(child_chunks)} points for {metadata.ticker} ({metadata.fiscal_period})..."
+        f"[QDRANT INDEX] Embedding and preparing {len(indexable_chunks)} points for {metadata.ticker} ({metadata.fiscal_period})..."
     )
-    for chunk, embedding in zip(child_chunks, embeddings, strict=False):
+    for chunk, embedding in zip(indexable_chunks, embeddings, strict=False):
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk.chunk_id))
 
         payload = {
             "chunk_id": chunk.chunk_id,
-            "parent_id": chunk.parent_id,
+            "parent_id": chunk.parent_id or chunk.chunk_id,
             "text": chunk.text,
             "ticker": metadata.ticker,
             "company": metadata.company,
@@ -235,7 +235,9 @@ async def index_document(
             "quarter": metadata.quarter,
             "fiscal_period": metadata.fiscal_period,
             "form_type": metadata.form_type,
-            "section_title": chunk.section_title,
+            "section_title": chunk.section_title or "Financial Table",
+            "chunk_type": chunk.chunk_type,
+            "is_table": (chunk.chunk_type == "table"),
         }
 
         points.append(
