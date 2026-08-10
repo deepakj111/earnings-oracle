@@ -80,9 +80,7 @@ list[Chunk]  (parent + child + table chunks)
         ├──▶  index_document()   ──▶ Qdrant (child embeddings via text-embedding-3-small)
         │                        ──▶ bm25_texts + bm25_corpus (in-memory)
         │
-        ├──▶  _append_metrics()  ──▶ data/ingestion_metrics.json (incremental metrics log)
-        │
-        └──▶  _mark_done()      ──▶ ingested_transcripts_checkpoint.txt
+        └──▶  _save_bm25()       ──▶ bm25_index.pkl + bm25_corpus.pkl (persisted)
 ```
 
 ### Chunking Architecture
@@ -117,7 +115,61 @@ Markdown tables are detected via `_is_table_block()` and kept **strictly atomic*
 | Cost control | Embed children only; fetch parents lazily at retrieval time |
 | Boilerplate dilution | Section boundaries prevent legal disclaimers contaminating financial content |
 
-**Chunk ID determinism**: IDs are generated via `uuid5(NAMESPACE_DNS, f"{ticker}:{date}")` — the same chunk always produces the same Qdrant point ID, making upsert operations idempotent.
+### In-Memory Store-State Auto-Checkpointing & Fault Tolerance
+
+The ingestion pipeline uses **direct, store-derived state inspection** (`IngestionStoreState`) rather than external sidecar text checkpoint files.
+
+#### 1. How Chunk IDs are Made Deterministic
+
+In `ingestion/chunker.py`, chunk IDs are constructed using **UUID v5** (a deterministic SHA-1 cryptographic hash of the ticker and filing date):
+
+```python
+def _make_chunk_id(ticker: str, date: str, index: int, suffix: str = "") -> str:
+    ns = uuid.uuid5(uuid.NAMESPACE_DNS, f"{ticker}:{date}")
+    base = f"{ticker}_{date}_{str(ns)[:8]}_{index}"
+    return f"{base}_{suffix}" if suffix else base
+```
+
+- **Parent Chunks**: `NFLX_2025-01-27_c0f682a1_0`
+- **Table Chunks**: `NFLX_2025-01-27_c0f682a1_1_tbl`
+- **Child Chunks**: `NFLX_2025-01-27_c0f682a1_0_c0`, `NFLX_2025-01-27_c0f682a1_0_c1`, etc.
+
+Because `ticker`, `date`, and section breakdown are fixed for a given file, **re-parsing the file produces the exact same chunk IDs every single time.**
+
+#### 2. How Skipping Works for Each Component
+
+In `ingestion/pipeline.py`, `IngestionStoreState` queries the current state of Qdrant, BM25, and Knowledge Graph on startup into three in-memory lookup sets:
+- `store_state.qdrant_chunk_ids`
+- `store_state.bm25_chunk_ids`
+- `store_state.kg_chunk_ids`
+
+When a file is evaluated in `_process_document()`:
+
+##### A. Vector DB (Qdrant)
+- **Check**: `missing_qdrant = [c for c in indexable_chunks if c.chunk_id not in store_state.qdrant_chunk_ids]`
+- **Skipping**: If `missing_qdrant` is empty, **0 OpenAI embedding API calls** and **0 Qdrant upserts** are performed for this document.
+- **Idempotency Guarantee**: In `ingestion/indexer.py`, Qdrant Point IDs are generated deterministically via `uuid5(NAMESPACE_DNS, chunk.chunk_id)`. Even if Qdrant receives an upsert for an existing point, Qdrant updates it in place without creating duplicate points.
+
+##### B. BM25 Keyword Index
+- **Check**: `missing_bm25 = [c for c in indexable_chunks if c.chunk_id not in store_state.bm25_chunk_ids]`
+- **Skipping**: If `missing_bm25` is empty, **0 BM25 tokenization** and **0 corpus appends** occur for this document.
+- **Deduplication Guarantee**: Only chunks missing from `store_state.bm25_chunk_ids` are appended to `bm25_texts` and `bm25_corpus.pkl`.
+
+##### C. Knowledge Graph
+- **Check**: `kg_needed = kg_enabled and not any(c.chunk_id in store_state.kg_chunk_ids for c in parent_chunks)`
+- **Skipping**: If `parent_chunks` are already represented in `store_state.kg_chunk_ids`, **0 LLM Knowledge Graph extraction calls** are made for this document.
+- **Deduplication Guarantee**: In `knowledge_graph/models.py`, `KnowledgeGraph.add_entity()` and `add_relationship()` deduplicate entities by `canonical_key` (`type::ticker::name`) and relationships by `edge_key` (`source--relation-->target`) in $O(1)$ time.
+
+#### 3. Component Skipping Summary Matrix
+
+| Target Store | Lookup Identifier | Action if Fully Present | Action if Partially Ingested |
+| :--- | :--- | :--- | :--- |
+| **Vector DB (Qdrant)** | `chunk_id` in point payload | Skip OpenAI embedding API & Qdrant upsert | Embed & upsert only missing `chunk_id`s |
+| **BM25 Index** | `chunk_id` in corpus dict | Skip tokenization & corpus append | Tokenize & append only missing `chunk_id` entries |
+| **Knowledge Graph** | `chunk_id` in entity/relation | Skip LLM entity & relation extraction | Run LLM extraction only for unindexed parent chunks |
+
+#### 4. Fault Recovery
+If an ingestion run crashes midway (e.g., Qdrant upserts succeed but BM25/KG fails), a subsequent run automatically detects completed chunk IDs, skips re-embedding, and safely completes only the missing BM25 or KG stages.
 
 ### BM25 Corpus Invariant
 

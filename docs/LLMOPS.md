@@ -529,13 +529,13 @@ python compare_reports.py data/eval_reports/baseline_*.json data/eval_reports/ab
 
 ### Filing freshness
 
-The ingestion pipeline is checkpoint-based — it never re-processes files it has already indexed. To ingest new filings (e.g., after a new earnings cycle):
+The ingestion pipeline uses automatic store-state inspection — it never re-processes chunks or files already indexed in Qdrant, BM25, and Knowledge Graph. To ingest new filings (e.g., after a new earnings cycle):
 
 ```bash
 # Run download (only fetches new filings not on disk)
 poetry run python -m ingestion.download_filings
 
-# Run pipeline (checkpoint skips already-indexed files; only processes new ones)
+# Run pipeline (auto store-state inspection skips already-indexed chunks; only processes new ones)
 poetry run python -m ingestion.pipeline
 ```
 

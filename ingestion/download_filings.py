@@ -190,7 +190,7 @@ def main() -> None:
     for ticker, cik in COMPANIES.items():
         print(f"Fetching 10-K, 10-Q filing lists for {ticker}...")
         filings = get_company_filings(
-            cik, ticker, form_types=("10-K", "10-Q"), start_date="2025-05-01"
+            cik, ticker, form_types=("10-K", "10-Q"), start_date="2025-01-01"
         )
         all_filings.extend(filings)
         time.sleep(0.15)

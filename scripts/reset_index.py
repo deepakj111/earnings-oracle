@@ -3,10 +3,10 @@
 Script to wipe Qdrant vector index collection and clean local ingestion caches/indexes.
 
 Cleans:
-  1. Qdrant collection (`earnings_call_chunks`)
+  1. Qdrant collection (`company_filings`)
   2. Local BM25 index & corpus pickles (`data/bm25_index.pkl`, `data/bm25_corpus.pkl`)
   3. Knowledge Graph JSON store (`data/knowledge_graph.json`)
-  4. Ingestion checkpoint file (`data/ingested_filings_checkpoint.txt`)
+  4. Legacy ingestion checkpoint file (`data/ingested_filings_checkpoint.txt` if present)
   5. Ingestion metrics file (`data/ingestion_metrics.json`)
 """
 

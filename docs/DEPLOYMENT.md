@@ -429,22 +429,19 @@ spec:
 
 ### Runbook: Full re-index
 
-**When**: Qdrant storage was wiped, or checkpoint is corrupt.
+**When**: Qdrant storage was wiped, or store index files are corrupt.
 
 ```bash
 # 1. Stop the API (optional but prevents partial reads during re-index)
 docker compose stop api
 
-# 2. Delete checkpoint so all files are re-processed
-rm data/ingested_transcripts_checkpoint.txt
+# 2. Reset vector DB collection and local index files
+poetry run python scripts/reset_index.py
 
-# 3. Optionally delete existing Qdrant collection (forces fresh start)
-# curl -X DELETE http://localhost:6333/collections/earnings_transcripts
-
-# 4. Run pipeline
+# 3. Run pipeline
 poetry run python -m ingestion.pipeline
 
-# 5. Restart API
+# 4. Restart API
 docker compose start api
 ```
 

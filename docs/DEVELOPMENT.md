@@ -528,13 +528,13 @@ curl -s http://localhost:8000/metrics | grep rag_
 curl -s http://localhost:8000/metrics | grep rag_grounded_responses_total
 ```
 
-### BM25 consistency check
+### BM25 & Store consistency check
 
-If Qdrant and BM25 counts diverge (inspect_index.py shows a mismatch):
+If Qdrant and BM25 counts diverge (inspect_data.py shows a mismatch):
 
 ```bash
-# Full re-index (delete checkpoint so all files are re-processed)
-rm data/ingested_transcripts_checkpoint.txt
+# Full re-index (reset index files and Qdrant collection)
+poetry run python scripts/reset_index.py
 poetry run python -m ingestion.pipeline
 ```
 
@@ -554,7 +554,7 @@ poetry run python -m ingestion.pipeline
 
 Settings validation fails at startup. Ensure `.env` is present and contains the key.
 
-### `Qdrant collection 'earnings_transcripts' NOT found`
+### `Qdrant collection 'company_filings' NOT found`
 
 The collection hasn't been created yet. Run:
 
@@ -565,7 +565,7 @@ poetry run python -m ingestion.pipeline
 Or if Qdrant storage was wiped:
 
 ```bash
-rm data/ingested_transcripts_checkpoint.txt
+poetry run python scripts/reset_index.py
 poetry run python -m ingestion.pipeline
 ```
 

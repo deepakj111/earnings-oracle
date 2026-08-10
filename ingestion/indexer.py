@@ -227,6 +227,7 @@ async def index_document(
         payload = {
             "chunk_id": chunk.chunk_id,
             "parent_id": chunk.parent_id or chunk.chunk_id,
+            "file_name": getattr(metadata, "file_name", ""),
             "text": chunk.text,
             "ticker": metadata.ticker,
             "company": metadata.company,

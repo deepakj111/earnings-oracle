@@ -34,7 +34,6 @@ from config import settings  # noqa: E402  (after sys.path setup)
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BM25_INDEX_PATH = ROOT / "data" / "bm25_index.pkl"
 BM25_CORPUS_PATH = ROOT / "data" / "bm25_corpus.pkl"
-CHECKPOINT_PATH = ROOT / "data" / "ingested_filings_checkpoint.txt"
 KG_PATH = ROOT / "data" / "knowledge_graph.json"
 FILINGS_DIR = ROOT / "data" / "company_filings"
 
@@ -89,30 +88,9 @@ def inspect_source_files() -> dict:
         info(f"{f.name}  ({size_kb:,} KB)")
         result["files"].append({"name": f.name, "size_kb": size_kb})
     ok(f"{len(files)} source filing(s) on disk")
-
-    # Checkpoint
-    if CHECKPOINT_PATH.exists():
-        checkpointed = {
-            line.strip() for line in CHECKPOINT_PATH.read_text().splitlines() if line.strip()
-        }
-
-        missing = {f.name for f in files} - checkpointed
-        extra = checkpointed - {f.name for f in files}
-        if not missing and not extra:
-            ok(f"Checkpoint matches source files ({len(checkpointed)} entries)")
-        else:
-            if missing:
-                warn(f"NOT in checkpoint (not yet ingested): {sorted(missing)}")
-            if extra:
-                warn(f"In checkpoint but file MISSING on disk: {sorted(extra)}")
-        result["checkpoint"] = {
-            "entries": sorted(checkpointed),
-            "missing": sorted(missing),
-            "extra": sorted(extra),
-        }
-    else:
-        warn("No checkpoint file found — run ingestion.pipeline first.")
-
+    info(
+        "Ingestion status is automatically derived in-memory from Qdrant, BM25, and Knowledge Graph."
+    )
     return result
 
 
@@ -438,20 +416,10 @@ def cross_check(qdrant_result: dict, bm25_result: dict, source_result: dict) -> 
         err(f"Year MISMATCH — Qdrant: {sorted(q_years, key=str)}, BM25: {sorted(b_years, key=str)}")
         issues_found = True
 
-    # ── Source files vs checkpoint ────────────────────────────────────────────
+    # ── Source files & Ingestion mode ───────────────────────────────────────────
     src_files = {f["name"] for f in source_result.get("files", [])}
-    checkpoint = set(source_result.get("checkpoint", {}).get("entries", []))
-    if checkpoint and src_files:
-        if src_files == checkpoint:
-            ok(f"Source files == Checkpoint ({len(src_files)} files)")
-        else:
-            missing_in_ckpt = src_files - checkpoint
-            extra_in_ckpt = checkpoint - src_files
-            if missing_in_ckpt:
-                err(f"Files NOT ingested yet: {sorted(missing_in_ckpt)}")
-                issues_found = True
-            if extra_in_ckpt:
-                warn(f"Checkpoint references DELETED files: {sorted(extra_in_ckpt)}")
+    if src_files:
+        ok(f"Store-derived checkpointing active for {len(src_files)} source filing(s)")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print()

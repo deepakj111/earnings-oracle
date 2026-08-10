@@ -83,6 +83,7 @@ class DocumentMetadata:
     quarter: str  # "Q1" | "Q2" | "Q3" | "Q4" | "FY"
     fiscal_period: str  # e.g. "Q1 2025" | "FY 2024"
     form_type: str = "unknown"  # "10-K" | "10-Q" | "unknown"
+    file_name: str = ""
 
 
 def _derive_fiscal_period(
@@ -158,6 +159,7 @@ def extract_metadata(
     date: str,
     raw_text: str,
     form_type: str = "unknown",
+    file_name: str = "",
 ) -> DocumentMetadata:
     """
     Extract standard metadata from a financial filing.
@@ -169,9 +171,10 @@ def extract_metadata(
                     kept for API compatibility)
         form_type : SEC form type from filename (e.g. "10-K", "10-Q").
                     Defaults to "unknown" for backwards compatibility.
+        file_name : Name of the source transcript file (e.g. "NFLX_10-K_2025-01-27_0001065280.htm").
 
     Returns:
-        DocumentMetadata with correct fiscal_period, year, and quarter.
+        DocumentMetadata with correct fiscal_period, year, quarter, and file_name.
     """
     fiscal_period, fiscal_year, quarter = _derive_fiscal_period(form_type, date)
 
@@ -183,4 +186,5 @@ def extract_metadata(
         quarter=quarter,
         fiscal_period=fiscal_period,
         form_type=form_type,
+        file_name=file_name,
     )

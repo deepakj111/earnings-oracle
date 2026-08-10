@@ -48,40 +48,50 @@ def bm25_path(tmp_path: Path) -> Path:
 class TestRunPipeline:
     def _run(self, transcript_dir: Path, bm25_path: Path) -> MagicMock:
         mock_qdrant = MagicMock()
-        checkpoint_path = bm25_path.parent / "ingested_filings_checkpoint.txt"
+        mock_qdrant.collection_exists.return_value = False
         metrics_path = bm25_path.parent / "ingestion_metrics.json"
+        bm25_corpus_path = bm25_path.parent / "bm25_corpus.pkl"
 
         with (
-            patch("ingestion.pipeline.setup_embedder"),  # FIX: was setup_genai
+            patch("ingestion.pipeline.setup_embedder"),
             patch("ingestion.pipeline.TRANSCRIPTS_DIR", transcript_dir),
             patch("ingestion.pipeline.BM25_INDEX_PATH", bm25_path),
-            patch("ingestion.pipeline.CHECKPOINT_PATH", checkpoint_path),
+            patch("ingestion.pipeline.BM25_CORPUS_PATH", bm25_corpus_path),
             patch("ingestion.pipeline.INGESTION_METRICS_PATH", metrics_path),
             patch("ingestion.pipeline.init_qdrant", return_value=mock_qdrant),
             patch(
                 "ingestion.pipeline.index_document",
                 new_callable=AsyncMock,
-                return_value=(
-                    [["token"]],
-                    [{"chunk_id": "x", "text": "x"}],
+                side_effect=lambda chunks, metadata, qdrant, timings=None: (
+                    [["token"] for _ in chunks],
+                    [
+                        {"chunk_id": c.chunk_id, "text": c.text, "ticker": metadata.ticker}
+                        for c in chunks
+                    ],
                 ),
             ),
         ):
-            run_pipeline()
+            run_pipeline(fast=True)
 
         return mock_qdrant
 
     def test_pipeline_runs_without_error(self, transcript_dir, bm25_path) -> None:
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
+        (transcript_dir / "AAPL_10-K_2024-10-31_0001234567.htm").write_text(
+            VALID_HTML, encoding="utf-8"
+        )
         self._run(transcript_dir, bm25_path)
 
     def test_bm25_index_written_to_disk(self, transcript_dir, bm25_path) -> None:
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
+        (transcript_dir / "AAPL_10-K_2024-10-31_0001234567.htm").write_text(
+            VALID_HTML, encoding="utf-8"
+        )
         self._run(transcript_dir, bm25_path)
         assert bm25_path.exists()
 
     def test_bm25_file_is_valid_pickle(self, transcript_dir, bm25_path) -> None:
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
+        (transcript_dir / "AAPL_10-K_2024-10-31_0001234567.htm").write_text(
+            VALID_HTML, encoding="utf-8"
+        )
         self._run(transcript_dir, bm25_path)
         with open(bm25_path, "rb") as f:
             obj = pickle.load(f)  # nosec B301
@@ -97,7 +107,9 @@ class TestRunPipeline:
         metrics_path = bm25_path.parent / "ingestion_metrics.json"
 
         # First run with AAPL
-        (transcript_dir / "AAPL_2024-10-31_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
+        (transcript_dir / "AAPL_10-K_2024-10-31_0001234567.htm").write_text(
+            VALID_HTML, encoding="utf-8"
+        )
         self._run(transcript_dir, bm25_path)
 
         assert metrics_path.exists()
@@ -105,10 +117,12 @@ class TestRunPipeline:
             data1 = json.load(f)
         assert data1["summary"]["total_documents_processed"] == 1
         assert len(data1["documents"]) == 1
-        assert data1["documents"][0]["file_name"] == "AAPL_2024-10-31_0001234567.htm"
+        assert data1["documents"][0]["file_name"] == "AAPL_10-K_2024-10-31_0001234567.htm"
 
         # Second run with MSFT
-        (transcript_dir / "MSFT_2024-04-30_0001234567.htm").write_text(VALID_HTML, encoding="utf-8")
+        (transcript_dir / "MSFT_10-Q_2024-04-30_0001234567.htm").write_text(
+            VALID_HTML, encoding="utf-8"
+        )
         self._run(transcript_dir, bm25_path)
 
         with open(metrics_path, encoding="utf-8") as f:
@@ -116,5 +130,5 @@ class TestRunPipeline:
         assert data2["summary"]["total_documents_processed"] == 2
         assert len(data2["documents"]) == 2
         filenames = [doc["file_name"] for doc in data2["documents"]]
-        assert "AAPL_2024-10-31_0001234567.htm" in filenames
-        assert "MSFT_2024-04-30_0001234567.htm" in filenames
+        assert "AAPL_10-K_2024-10-31_0001234567.htm" in filenames
+        assert "MSFT_10-Q_2024-04-30_0001234567.htm" in filenames
