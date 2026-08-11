@@ -303,8 +303,13 @@ async def _process_document(
                 return 0, [], [], None
 
             logger.debug(
-                f"[PROCESS] {file_path.name} | missing Qdrant: {len(missing_qdrant)}/{len(indexable_chunks)} | "
-                f"missing BM25: {len(missing_bm25)}/{len(indexable_chunks)} | missing KG: {len(unindexed_kg_chunks)}/{len(parent_chunks)}"
+                f"[PROCESS] {file_path.name} | "
+                f"Pending (Qdrant: {len(missing_qdrant)}/{len(indexable_chunks)}, "
+                f"BM25: {len(missing_bm25)}/{len(indexable_chunks)}, "
+                f"KG: {len(unindexed_kg_chunks)}/{len(parent_chunks)}) | "
+                f"Already stored (Qdrant: {len(indexable_chunks) - len(missing_qdrant)}, "
+                f"BM25: {len(indexable_chunks) - len(missing_bm25)}, "
+                f"KG: {len(parent_chunks) - len(unindexed_kg_chunks)})"
             )
 
             indexer_timings: dict[str, float] = {}
