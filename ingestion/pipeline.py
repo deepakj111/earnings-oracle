@@ -77,6 +77,7 @@ class IngestionStoreState:
         kg_chunk_ids: set[str] = set()
         if kg_graph is not None:
             try:
+                kg_chunk_ids.update(getattr(kg_graph, "processed_chunk_ids", set()))
                 for entity in kg_graph.entities.values():
                     kg_chunk_ids.update(entity.chunk_ids)
                 for rel in kg_graph.relationships:
@@ -238,6 +239,7 @@ async def _process_document(
     kg_enabled: bool,
     kg_graph: Any,
     store_state: IngestionStoreState,
+    kg_store: Any | None = None,
     store_lock: asyncio.Lock | None = None,
     kg_lock: asyncio.Lock | None = None,
     metrics_lock: asyncio.Lock | None = None,
@@ -289,12 +291,10 @@ async def _process_document(
             missing_bm25 = [
                 c for c in indexable_chunks if c.chunk_id not in store_state.bm25_chunk_ids
             ]
-            kg_needed = (
-                kg_enabled
-                and kg_graph is not None
-                and bool(parent_chunks)
-                and not any(c.chunk_id in store_state.kg_chunk_ids for c in parent_chunks)
-            )
+            unindexed_kg_chunks = [
+                c for c in parent_chunks if c.chunk_id not in store_state.kg_chunk_ids
+            ]
+            kg_needed = kg_enabled and kg_graph is not None and bool(unindexed_kg_chunks)
 
             if not missing_qdrant and not missing_bm25 and not kg_needed:
                 logger.info(
@@ -304,7 +304,7 @@ async def _process_document(
 
             logger.debug(
                 f"[PROCESS] {file_path.name} | missing Qdrant: {len(missing_qdrant)}/{len(indexable_chunks)} | "
-                f"missing BM25: {len(missing_bm25)}/{len(indexable_chunks)} | KG needed: {kg_needed}"
+                f"missing BM25: {len(missing_bm25)}/{len(indexable_chunks)} | missing KG: {len(unindexed_kg_chunks)}/{len(parent_chunks)}"
             )
 
             indexer_timings: dict[str, float] = {}
@@ -376,29 +376,16 @@ async def _process_document(
                 from knowledge_graph.extractor import extract_entities_from_chunks
 
                 try:
-                    entities, relationships = await extract_entities_from_chunks(
-                        parent_chunks, metadata.ticker, metadata.fiscal_period
+                    await extract_entities_from_chunks(
+                        unindexed_kg_chunks,
+                        metadata.ticker,
+                        metadata.fiscal_period,
+                        kg_graph=kg_graph,
+                        kg_store=kg_store,
+                        store_state=store_state,
+                        kg_lock=kg_lock,
+                        store_lock=store_lock,
                     )
-                    if kg_lock:
-                        async with kg_lock:
-                            for entity in entities:
-                                kg_graph.add_entity(entity)
-                            for rel in relationships:
-                                kg_graph.add_relationship(rel)
-                    else:
-                        for entity in entities:
-                            kg_graph.add_entity(entity)
-                        for rel in relationships:
-                            kg_graph.add_relationship(rel)
-
-                    if store_lock:
-                        async with store_lock:
-                            for c in parent_chunks:
-                                store_state.kg_chunk_ids.add(c.chunk_id)
-                    else:
-                        for c in parent_chunks:
-                            store_state.kg_chunk_ids.add(c.chunk_id)
-
                 except Exception as exc:
                     logger.warning(f"KG extraction failed for {file_path.name}: {exc}")
             t_kg_end = time.perf_counter()
@@ -506,19 +493,27 @@ async def _run_kg_only_async(threads_override: int | None = None) -> None:
         )
         chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
         parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
+        unindexed_kg_chunks = [
+            c for c in parent_chunks if c.chunk_id not in store_state.kg_chunk_ids
+        ]
+        if not unindexed_kg_chunks:
+            logger.info(f"[KG-only] Skipped (all KG chunks present): {file_path.name}")
+            continue
+
         logger.info(
-            f"[KG-only] {file_path.name} | {len(parent_chunks)} parent chunks | "
+            f"[KG-only] {file_path.name} | {len(unindexed_kg_chunks)}/{len(parent_chunks)} missing parent chunks | "
             f"ticker={metadata.ticker} period={metadata.fiscal_period}"
         )
         try:
-            entities, relationships = await extract_entities_from_chunks(
-                parent_chunks, metadata.ticker, metadata.fiscal_period
+            await extract_entities_from_chunks(
+                unindexed_kg_chunks,
+                metadata.ticker,
+                metadata.fiscal_period,
+                kg_graph=kg_graph,
+                kg_store=kg_store,
+                store_state=store_state,
+                kg_lock=kg_lock,
             )
-            async with kg_lock:
-                for entity in entities:
-                    kg_graph.add_entity(entity)
-                for rel in relationships:
-                    kg_graph.add_relationship(rel)
         except Exception as exc:
             logger.warning(f"KG extraction failed for {file_path.name}: {exc}")
 
@@ -591,6 +586,7 @@ async def run_pipeline_async(
                     kg_enabled,
                     kg_graph,
                     store_state,
+                    kg_store,
                     store_lock,
                     kg_lock,
                     metrics_lock,

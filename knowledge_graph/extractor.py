@@ -286,6 +286,11 @@ async def _extract_single_chunk(
     semaphore: asyncio.Semaphore,
     chunk_index: int = 0,
     total_chunks: int = 0,
+    kg_graph: Any | None = None,
+    kg_store: Any | None = None,
+    store_state: Any | None = None,
+    kg_lock: asyncio.Lock | None = None,
+    store_lock: asyncio.Lock | None = None,
 ) -> tuple[list[Entity], list[Relationship]]:
     """Extract entities and relationships from a single chunk using OpenAI LLM."""
     async with semaphore:
@@ -326,6 +331,35 @@ async def _extract_single_chunk(
             except Exception as exc:
                 logger.debug(f"Skipping malformed relationship: {exc}")
 
+        # Real-time incremental persistence per chunk
+        if kg_graph is not None:
+            if kg_lock is not None:
+                async with kg_lock:
+                    for entity in entities:
+                        kg_graph.add_entity(entity)
+                    for rel in relationships:
+                        kg_graph.add_relationship(rel)
+                    if chunk_id and hasattr(kg_graph, "mark_chunk_processed"):
+                        kg_graph.mark_chunk_processed(chunk_id)
+                    if kg_store is not None:
+                        kg_store.save(kg_graph)
+            else:
+                for entity in entities:
+                    kg_graph.add_entity(entity)
+                for rel in relationships:
+                    kg_graph.add_relationship(rel)
+                if chunk_id and hasattr(kg_graph, "mark_chunk_processed"):
+                    kg_graph.mark_chunk_processed(chunk_id)
+                if kg_store is not None:
+                    kg_store.save(kg_graph)
+
+        if store_state is not None and chunk_id:
+            if store_lock is not None:
+                async with store_lock:
+                    store_state.kg_chunk_ids.add(chunk_id)
+            else:
+                store_state.kg_chunk_ids.add(chunk_id)
+
         logger.info(
             f"[KG chunk {chunk_index}/{total_chunks}] {ticker} | "
             f"{len(entities)}e {len(relationships)}r | id={chunk_id[:20] if chunk_id else 'n/a'}"
@@ -337,6 +371,11 @@ async def extract_entities_from_chunks(
     parent_chunks: list,
     ticker: str,
     fiscal_period: str,
+    kg_graph: Any | None = None,
+    kg_store: Any | None = None,
+    store_state: Any | None = None,
+    kg_lock: asyncio.Lock | None = None,
+    store_lock: asyncio.Lock | None = None,
 ) -> tuple[list[Entity], list[Relationship]]:
     """
     Extract financial entities and relationships from parent chunks asynchronously.
@@ -348,6 +387,11 @@ async def extract_entities_from_chunks(
         parent_chunks: List of Chunk objects (parent type only)
         ticker: Company ticker symbol
         fiscal_period: e.g., "Q4 2024"
+        kg_graph: Optional KnowledgeGraph instance for real-time entity registration
+        kg_store: Optional EntityStore instance for real-time disk persistence
+        store_state: Optional IngestionStoreState instance for real-time chunk tracking
+        kg_lock: Optional asyncio.Lock for kg_graph thread safety
+        store_lock: Optional asyncio.Lock for store_state thread safety
 
     Returns:
         Tuple of (entities, relationships) ready for knowledge graph insertion.
@@ -363,7 +407,19 @@ async def extract_entities_from_chunks(
 
     semaphore = asyncio.Semaphore(5)
     tasks = [
-        _extract_single_chunk(chunk, ticker, fiscal_period, semaphore, idx + 1, total)
+        _extract_single_chunk(
+            chunk,
+            ticker,
+            fiscal_period,
+            semaphore,
+            idx + 1,
+            total,
+            kg_graph=kg_graph,
+            kg_store=kg_store,
+            store_state=store_state,
+            kg_lock=kg_lock,
+            store_lock=store_lock,
+        )
         for idx, chunk in enumerate(parent_chunks)
     ]
 

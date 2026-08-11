@@ -161,6 +161,7 @@ class KnowledgeGraph:
 
     entities: dict[str, Entity] = field(default_factory=dict)  # canonical_key → Entity
     relationships: list[Relationship] = field(default_factory=list)
+    processed_chunk_ids: set[str] = field(default_factory=set)
 
     # ── Private derived state (not serialized) ───────────────────────────────────────────
     _relationship_keys: set[str] = field(default_factory=set, repr=False)
@@ -182,6 +183,11 @@ class KnowledgeGraph:
             self._adj[rel.target].append(rel)
 
     # ── Mutation ───────────────────────────────────────────────────────────
+
+    def mark_chunk_processed(self, chunk_id: str) -> None:
+        """Record that a chunk has been evaluated for entity extraction."""
+        if chunk_id:
+            self.processed_chunk_ids.add(chunk_id)
 
     def add_entity(self, entity: Entity) -> Entity:
         """Add or merge an entity. Returns the canonical entity."""
@@ -305,6 +311,7 @@ class KnowledgeGraph:
         return {
             "entities": [e.to_dict() for e in self.entities.values()],
             "relationships": [r.to_dict() for r in self.relationships],
+            "processed_chunk_ids": sorted(self.processed_chunk_ids),
         }
 
     @classmethod
@@ -314,6 +321,7 @@ class KnowledgeGraph:
         graph = cls.__new__(cls)
         graph.entities = {}
         graph.relationships = []
+        graph.processed_chunk_ids = set(data.get("processed_chunk_ids", []))
         graph._relationship_keys = set()
         graph._adj = defaultdict(list)
 
