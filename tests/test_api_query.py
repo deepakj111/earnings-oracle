@@ -48,18 +48,18 @@ class TestToMetadataFilter:
 
     def test_builds_filter_with_ticker_only(self) -> None:
         req = AskRequest(
-            question="Apple revenue?",
-            filter=MetadataFilterIn(ticker="AAPL"),
+            question="NVIDIA revenue?",
+            filter=MetadataFilterIn(ticker="NVDA"),
         )
         result = _to_metadata_filter(req)
         assert isinstance(result, MetadataFilter)
-        assert result.ticker == "AAPL"
+        assert result.ticker == "NVDA"
         assert result.year is None
         assert result.quarter is None
 
     def test_builds_filter_with_all_fields(self) -> None:
         req = AskRequest(
-            question="Apple Q4 2024?",
+            question="NVIDIA Q4 2024?",
             filter=MetadataFilterIn(ticker="NVDA", year=2024, quarter="Q3"),
         )
         result = _to_metadata_filter(req)
@@ -71,12 +71,12 @@ class TestToMetadataFilter:
     def test_ticker_lowercased_normalised(self) -> None:
         """MetadataFilterIn validator uppercases ticker; _to_metadata_filter preserves it."""
         req = AskRequest(
-            question="Apple revenue?",
-            filter=MetadataFilterIn(ticker="aapl"),  # validator uppercases
+            question="NVIDIA revenue?",
+            filter=MetadataFilterIn(ticker="nvda"),  # validator uppercases
         )
         result = _to_metadata_filter(req)
         assert result is not None
-        assert result.ticker == "AAPL"
+        assert result.ticker == "NVDA"
 
 
 class TestSerialise:
@@ -207,7 +207,7 @@ class TestAskEndpoint:
     def test_filter_with_valid_ticker_passes(self, client: TestClient) -> None:
         resp = client.post(
             "/query/",
-            json={"question": "Apple revenue Q4 2024?", "filter": {"ticker": "AAPL"}},
+            json={"question": "NVIDIA revenue Q4 2024?", "filter": {"ticker": "NVDA"}},
         )
         assert resp.status_code == 200
 
@@ -231,14 +231,14 @@ class TestAskEndpoint:
         client.post(
             "/query/",
             json={
-                "question": "Apple revenue Q4 2024?",
-                "filter": {"ticker": "AAPL", "year": 2024, "quarter": "Q4"},
+                "question": "NVIDIA revenue Q4 2024?",
+                "filter": {"ticker": "NVDA", "year": 2024, "quarter": "Q4"},
             },
         )
         mock_pipeline.ask.assert_called_once()
         _, kwargs = mock_pipeline.ask.call_args
         mf = kwargs["metadata_filter"]
-        assert mf.ticker == "AAPL"
+        assert mf.ticker == "NVDA"
         assert mf.year == 2024
         assert mf.quarter == "Q4"
 

@@ -42,7 +42,7 @@ from ui.utils import (
 
 API_BASE_URL: str = os.getenv("RAG_API_URL", "http://localhost:8000")
 
-_TICKERS = ["(all)", "AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", "WMT"]
+_TICKERS = ["(all)", "NVDA", "WMT", "UNH", "NFLX"]
 _YEARS = ["(all)", 2024, 2023]
 _QUARTERS = ["(all)", "Q1", "Q2", "Q3", "Q4"]
 

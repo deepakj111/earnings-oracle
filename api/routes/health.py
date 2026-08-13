@@ -144,6 +144,7 @@ async def health(request: Request) -> HealthResponse:
         version=_API_VERSION,
         uptime_seconds=uptime,
         components=components,
+        model=settings.generation.model,
     )
 
 

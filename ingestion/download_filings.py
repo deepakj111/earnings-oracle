@@ -26,10 +26,6 @@ COMPANIES = {
     "WMT": "0000104169",  # Consumer Discretionary / Retail
     "UNH": "0000731766",  # Healthcare / Managed Care
     "NFLX": "0001065280",  # Comm Services / Streaming (Concise business model)
-    # "MNST": "0000865752",  # Consumer Staples / Beverages
-    # "CMG":  "0001058090",  # Consumer Discretionary / Restaurants
-    # "ADBE": "0000796343",  # Technology / SaaS
-    # "ISRG": "0001035267",  # Healthcare / Medical Devices
 }
 
 

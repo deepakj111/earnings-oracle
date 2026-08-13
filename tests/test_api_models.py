@@ -94,15 +94,15 @@ class TestMetadataFilterIn:
 
     @pytest.mark.parametrize(
         "ticker",
-        ["AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", "WMT"],
+        ["NVDA", "WMT", "UNH", "NFLX"],
     )
     def test_valid_tickers(self, ticker: str) -> None:
         f = MetadataFilterIn(ticker=ticker)
         assert f.ticker == ticker
 
     def test_ticker_lowercased_is_uppercased(self) -> None:
-        f = MetadataFilterIn(ticker="aapl")
-        assert f.ticker == "AAPL"
+        f = MetadataFilterIn(ticker="nvda")
+        assert f.ticker == "NVDA"
 
     def test_ticker_mixed_case_normalised(self) -> None:
         f = MetadataFilterIn(ticker="nvdA")

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 # ── Domain constants ───────────────────────────────────────────────────────────
 
 _VALID_TICKERS: frozenset[str] = frozenset(
-    {"AAPL", "NVDA", "MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "TSLA", "WMT"}
+    {"NVDA", "WMT", "UNH", "NFLX"}
 )
 
 _VALID_QUARTERS: frozenset[str] = frozenset({"Q1", "Q2", "Q3", "Q4"})
@@ -36,9 +36,9 @@ class MetadataFilterIn(BaseModel):
     ticker: str | None = Field(
         default=None,
         description=(
-            "Company ticker. Supported: AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, WMT"
+            "Company ticker. Supported: NVDA, WMT, UNH, NFLX"
         ),
-        examples=["AAPL"],
+        examples=["NVDA"],
     )
     year: int | None = Field(
         default=None,
@@ -206,3 +206,4 @@ class HealthResponse(BaseModel):
     version: str
     uptime_seconds: float
     components: dict[str, ComponentStatus] = Field(..., description="Per-dependency health status.")
+    model: str = Field(default="gpt-5", description="Generation LLM model name.")

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EarningsOracle — Financial RAG Intelligence</title>
-  <meta name="description" content="Ask financial questions over SEC 8-K earnings filings from 10 major public companies using an AI-powered RAG system." />
+  <meta name="description" content="Ask financial questions over SEC 10-K & 10-Q earnings filings from 4 portfolio companies using an AI-powered RAG system." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -947,16 +947,10 @@
           <label for="filter-ticker">Company</label>
           <select id="filter-ticker">
             <option value="">(all companies)</option>
-            <option value="AAPL">AAPL — Apple</option>
             <option value="NVDA">NVDA — NVIDIA</option>
-            <option value="MSFT">MSFT — Microsoft</option>
-            <option value="AMZN">AMZN — Amazon</option>
-            <option value="META">META — Meta</option>
-            <option value="JPM">JPM — JPMorgan</option>
-            <option value="XOM">XOM — ExxonMobil</option>
-            <option value="UNH">UNH — UnitedHealth</option>
-            <option value="TSLA">TSLA — Tesla</option>
             <option value="WMT">WMT — Walmart</option>
+            <option value="UNH">UNH — UnitedHealth</option>
+            <option value="NFLX">NFLX — Netflix</option>
           </select>
         </div>
         <div class="filter-group">
@@ -1043,7 +1037,7 @@
       <div class="topbar-actions">
         <div class="topbar-pill" id="model-pill">
           <span>⚡</span>
-          <span id="model-name">gpt-5-mini</span>
+          <span id="model-name">gpt-5</span>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="newConversation()" title="New conversation">✏️ New</button>
       </div>
@@ -1064,16 +1058,15 @@
         <div class="welcome-icon">📈</div>
         <h2 class="welcome-title">Ask About Earnings</h2>
         <p class="welcome-sub">
-          Query SEC 8-K filings from 10 major public companies — Apple, NVIDIA, Microsoft, Amazon, Meta,
-          JPMorgan, ExxonMobil, UnitedHealth, Tesla & Walmart.
+          Query SEC 10-K & 10-Q filings from 4 portfolio companies — NVIDIA, Walmart, UnitedHealth & Netflix.
         </p>
         <div class="example-chips">
-          <div class="example-chip" onclick="askExample(this)">What was Apple's revenue in Q4 2024?</div>
-          <div class="example-chip" onclick="askExample(this)">Compare NVIDIA and AMD GPU revenue growth</div>
+          <div class="example-chip" onclick="askExample(this)">What was NVIDIA's revenue and gross margin trend?</div>
           <div class="example-chip" onclick="askExample(this)">What was Walmart's net sales for fiscal year 2026?</div>
-          <div class="example-chip" onclick="askExample(this)">What is Microsoft's cloud revenue trend?</div>
-          <div class="example-chip" onclick="askExample(this)">JPMorgan net income and EPS for Q1 2025?</div>
-          <div class="example-chip" onclick="askExample(this)">Tesla vehicle delivery guidance for 2025?</div>
+          <div class="example-chip" onclick="askExample(this)">What were UnitedHealth Group's operating results?</div>
+          <div class="example-chip" onclick="askExample(this)">What was Netflix's subscriber and revenue growth?</div>
+          <div class="example-chip" onclick="askExample(this)">Compare revenue growth between NVIDIA and Netflix</div>
+          <div class="example-chip" onclick="askExample(this)">What are the key risk factors in Walmart's filings?</div>
         </div>
       </div>
 
@@ -1084,7 +1077,7 @@
       <div class="input-wrapper">
         <textarea
           id="chat-input"
-          placeholder="Ask about earnings, revenue, guidance… (e.g. What was Apple's Q4 2024 revenue?)"
+          placeholder="Ask about earnings, revenue, guidance… (e.g. What was NVIDIA's Q1 2026 revenue?)"
           rows="1"
           onkeydown="handleKeyDown(event)"
           oninput="autoResize(this)"
@@ -1131,16 +1124,15 @@ function getWelcomeHtml() {
       <div class="welcome-icon">📈</div>
       <h2 class="welcome-title">Ask About Earnings</h2>
       <p class="welcome-sub">
-        Query SEC 8-K filings from 10 major public companies — Apple, NVIDIA, Microsoft, Amazon, Meta,
-        JPMorgan, ExxonMobil, UnitedHealth, Tesla & Walmart.
+        Query SEC 10-K & 10-Q filings from 4 portfolio companies — NVIDIA, Walmart, UnitedHealth & Netflix.
       </p>
       <div class="example-chips">
-        <div class="example-chip" onclick="askExample(this)">What was Apple's revenue in Q4 2024?</div>
-        <div class="example-chip" onclick="askExample(this)">Compare NVIDIA and AMD GPU revenue growth</div>
+        <div class="example-chip" onclick="askExample(this)">What was NVIDIA's revenue and gross margin trend?</div>
         <div class="example-chip" onclick="askExample(this)">What was Walmart's net sales for fiscal year 2026?</div>
-        <div class="example-chip" onclick="askExample(this)">What is Microsoft's cloud revenue trend?</div>
-        <div class="example-chip" onclick="askExample(this)">JPMorgan net income and EPS for Q1 2025?</div>
-        <div class="example-chip" onclick="askExample(this)">Tesla vehicle delivery guidance for 2025?</div>
+        <div class="example-chip" onclick="askExample(this)">What were UnitedHealth Group's operating results?</div>
+        <div class="example-chip" onclick="askExample(this)">What was Netflix's subscriber and revenue growth?</div>
+        <div class="example-chip" onclick="askExample(this)">Compare revenue growth between NVIDIA and Netflix</div>
+        <div class="example-chip" onclick="askExample(this)">What are the key risk factors in Walmart's filings?</div>
       </div>
     </div>`;
 }
