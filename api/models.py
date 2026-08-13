@@ -14,9 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 # ── Domain constants ───────────────────────────────────────────────────────────
 
-_VALID_TICKERS: frozenset[str] = frozenset(
-    {"NVDA", "WMT", "UNH", "NFLX"}
-)
+_VALID_TICKERS: frozenset[str] = frozenset({"NVDA", "WMT", "UNH", "NFLX"})
 
 _VALID_QUARTERS: frozenset[str] = frozenset({"Q1", "Q2", "Q3", "Q4"})
 
@@ -35,9 +33,7 @@ class MetadataFilterIn(BaseModel):
 
     ticker: str | None = Field(
         default=None,
-        description=(
-            "Company ticker. Supported: NVDA, WMT, UNH, NFLX"
-        ),
+        description=("Company ticker. Supported: NVDA, WMT, UNH, NFLX"),
         examples=["NVDA"],
     )
     year: int | None = Field(
