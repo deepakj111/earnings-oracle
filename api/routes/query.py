@@ -74,6 +74,7 @@ from loguru import logger
 from api.dependencies import get_pipeline
 from api.metrics import record_generation_result  # ← NEW
 from api.models import AskRequest, AskResponse, CitationOut, ContextOut, UsageOut
+from crag.models import CRAGResult
 from generation.models import GenerationResult
 from rag_pipeline import FinancialRAGPipeline
 from retrieval.models import MetadataFilter
@@ -115,6 +116,10 @@ def _serialise(
     verbose: bool,
     query_summary: str | None,
     retrieval_summary: str | None,
+    crag_action: str | None = None,
+    was_corrected: bool | None = None,
+    web_search_triggered: bool | None = None,
+    overall_latency: float | None = None,
 ) -> AskResponse:
     """
     Convert the internal GenerationResult dataclass into the public AskResponse.
@@ -153,11 +158,16 @@ def _serialise(
             chunks_used=result.context_chunks_used,
             tokens_used=result.context_tokens_used,
         ),
-        latency_seconds=round(result.latency_seconds, 3),
+        latency_seconds=round(
+            overall_latency if overall_latency is not None else result.latency_seconds, 3
+        ),
         unique_tickers=result.unique_tickers,
         unique_sources=result.unique_sources,
         query_summary=query_summary if verbose else None,
         retrieval_summary=retrieval_summary if verbose else None,
+        crag_action=crag_action,
+        was_corrected=was_corrected,
+        web_search_triggered=web_search_triggered,
     )
 
 
@@ -177,8 +187,9 @@ def _serialise(
         "- **L3 Hybrid Retrieval** — BM25 + Qdrant dense search → RRF fusion → "
         "FlashRank cross-encoder reranking (~0.3–0.8 s)\n"
         "- **L4 Answer Generation** — GPT synthesis with grounded [N] citations "
-        "(~0.8–2.0 s)\n\n"
-        "**Total typical latency:** 2–4 s (CPU-only).\n\n"
+        "(~0.8–2.0 s)\n"
+        "- **L5 CRAG (Optional)** — Corrective RAG loop if `use_crag=true` (~1.5–3.0 s extra)\n\n"
+        "**Total typical latency:** 2–4 s (standard) or 4–6 s (with CRAG).\n\n"
         "Set `verbose=true` to receive `query_summary` and `retrieval_summary` "
         "diagnostic strings in the response — useful for debugging and evaluation."
     ),
@@ -206,7 +217,7 @@ async def ask(
     logger.info(
         f"[{rid}] POST /query | "
         f"q={body.question!r:.80} | "
-        f"filter={body.filter} | verbose={body.verbose}"
+        f"filter={body.filter} | verbose={body.verbose} | use_crag={body.use_crag}"
     )
 
     metadata_filter = _to_metadata_filter(body)
@@ -214,7 +225,27 @@ async def ask(
     # get_event_loop() is deprecated in Python 3.10+ with a running loop.
     loop = asyncio.get_running_loop()
 
-    if body.verbose:
+    crag_action: str | None = None
+    was_corrected: bool | None = None
+    web_search_triggered: bool | None = None
+    overall_latency: float | None = None
+
+    if body.use_crag:
+
+        def _run_crag() -> CRAGResult:
+            return pipeline.ask_with_crag(
+                question=body.question,
+                metadata_filter=metadata_filter,
+            )
+
+        crag_res = await loop.run_in_executor(_THREAD_POOL, _run_crag)
+        result = crag_res.final_result
+        query_summary = retrieval_summary = None
+        crag_action = crag_res.action.value
+        was_corrected = crag_res.was_corrected
+        web_search_triggered = crag_res.web_search_triggered
+        overall_latency = crag_res.latency_seconds
+    elif body.verbose:
 
         def _run_verbose() -> tuple[GenerationResult, str, str]:
             return pipeline.ask_verbose(
@@ -244,7 +275,7 @@ async def ask(
     logger.info(
         f"[{rid}] answer ready | grounded={result.grounded} | "
         f"citations={len(result.citations)} | tokens={result.total_tokens} | "
-        f"latency={result.latency_seconds:.2f}s"
+        f"latency={result.latency_seconds:.2f}s | crag={crag_action}"
     )
 
     return _serialise(
@@ -252,6 +283,10 @@ async def ask(
         verbose=body.verbose,
         query_summary=query_summary,
         retrieval_summary=retrieval_summary,
+        crag_action=crag_action,
+        was_corrected=was_corrected,
+        web_search_triggered=web_search_triggered,
+        overall_latency=overall_latency,
     )
 
 

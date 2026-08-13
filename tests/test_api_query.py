@@ -267,6 +267,27 @@ class TestAskEndpoint:
         mock_pipeline.ask_verbose.assert_called_once()
         mock_pipeline.ask.assert_not_called()
 
+    def test_use_crag_invokes_ask_with_crag(
+        self, client: TestClient, mock_pipeline: MagicMock
+    ) -> None:
+        from crag.models import CRAGAction, CRAGResult
+
+        mock_crag_res = MagicMock(spec=CRAGResult)
+        mock_crag_res.final_result = mock_pipeline.ask.return_value
+        mock_crag_res.action = CRAGAction.CORRECT
+        mock_crag_res.was_corrected = False
+        mock_crag_res.web_search_triggered = False
+        mock_crag_res.latency_seconds = 3.5
+        mock_pipeline.ask_with_crag.return_value = mock_crag_res
+
+        resp = client.post("/query/", json={"question": "Apple revenue?", "use_crag": True})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["crag_action"] == "correct"
+        assert data["was_corrected"] is False
+        assert data["web_search_triggered"] is False
+        mock_pipeline.ask_with_crag.assert_called_once()
+
     def test_request_id_header_present(self, client: TestClient) -> None:
         resp = client.post("/query/", json={"question": "Apple revenue?"})
         assert "x-request-id" in resp.headers

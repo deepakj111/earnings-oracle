@@ -134,8 +134,15 @@ with st.sidebar:
         value=False,
         help="Include query transform + retrieval summaries in response.",
     )
+    crag_mode = st.toggle(
+        "Corrective RAG (CRAG)",
+        value=False,
+        help="Enable Layer 5 CRAG: grades chunk relevance & triggers web search fallback if needed.",
+    )
     if streaming_mode and verbose_mode:
         st.caption("ℹ️ Verbose diagnostics only available in non-streaming mode.")
+    if streaming_mode and crag_mode:
+        st.caption("ℹ️ CRAG operates in structured mode. Streaming mode will bypass CRAG.")
 
     st.divider()
 
@@ -194,6 +201,13 @@ def _render_response_meta(meta: dict[str, Any]) -> None:
     grounded_cls = "grounded-true" if grounded else "grounded-false"
     grounded_label = "✓ Grounded" if grounded else "✗ Ungrounded"
 
+    crag_action = meta.get("crag_action")
+    crag_chip = ""
+    if crag_action:
+        web_triggered = meta.get("web_search_triggered", False)
+        crag_label = f"🔄 CRAG: {crag_action}" + (" (Web Search)" if web_triggered else "")
+        crag_chip = f'<span class="stat-chip">{crag_label}</span>'
+
     st.markdown(
         f"""
         <div style="margin: 8px 0 4px 0;">
@@ -202,6 +216,7 @@ def _render_response_meta(meta: dict[str, Any]) -> None:
           <span class="stat-chip">📄 {context.get("chunks_used", 0)} chunks
           ({format_token_count(context_tokens)} ctx tokens)</span>
           <span class="stat-chip {grounded_cls}">{grounded_label}</span>
+          {crag_chip}
         </div>
         """,
         unsafe_allow_html=True,
@@ -361,6 +376,7 @@ if question:
                         question=question,
                         metadata_filter=metadata_filter,
                         verbose=verbose_mode,
+                        use_crag=crag_mode,
                     )
                     content = data.get("answer", "")
                     resp_meta = data

@@ -69,6 +69,15 @@ The pipeline consists of six distinct execution layers, parallelized via `asynci
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### ⚡ Production Pipeline Trade-offs & Execution Modes
+
+| Pipeline Mode | Active Layers | Typical Latency | Primary Use Case |
+| :--- | :--- | :--- | :--- |
+| **Fast Path (Default)** | **L1 Router** → **L2 Transformation** → **L3 Hybrid Search + FlashRank** → **L3.5 GraphRAG** → **L4 Generator** | **~2.0s** | **Default mode.** Optimized for low-latency, high-precision retrieval on SEC 8-K/10-K filings. |
+| **Corrective Path (CRAG)** | Fast Path + **L5 CRAG**: LLM relevance grading → Web search fallback if ungrounded → Re-generation | **~4.5s** | **On-demand fallback mode** (`use_crag=true` in API / UI toggle). Activated when retrieval confidence is low or query is out-of-corpus. |
+
+> **Architectural Rationale**: Stacking CRAG on every request introduces unnecessary latency (~2.5s overhead) and cost for closed-domain financial queries. Exposing CRAG as an on-demand fallback layer preserves low P95 latency for standard queries while guaranteeing recall resilience when retrieval context is weak or incomplete.
+
 ---
 
 ## 🛠 Tech Stack

@@ -120,6 +120,7 @@ def fetch_structured(
     question: str,
     metadata_filter: dict[str, Any] | None = None,
     verbose: bool = False,
+    use_crag: bool = False,
     timeout: int = 90,
 ) -> dict[str, Any]:
     """
@@ -130,6 +131,7 @@ def fetch_structured(
         question       : user question
         metadata_filter: optional filter dict
         verbose        : include query_summary and retrieval_summary
+        use_crag       : enable Layer 5 Corrective RAG loop
         timeout        : request timeout seconds
 
     Returns:
@@ -142,6 +144,7 @@ def fetch_structured(
     payload: dict[str, Any] = {
         "question": question,
         "verbose": verbose,
+        "use_crag": use_crag,
     }
     if metadata_filter:
         payload["filter"] = metadata_filter

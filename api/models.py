@@ -96,6 +96,13 @@ class AskRequest(BaseModel):
             "and retrieval_summary (ranked chunk diagnostics). Adds negligible overhead."
         ),
     )
+    use_crag: bool = Field(
+        default=False,
+        description=(
+            "When true, runs Layer 5 Corrective RAG (CRAG) loop: grades chunk relevance, "
+            "and triggers web-search fallback if retrieval is insufficient or ungrounded."
+        ),
+    )
 
 
 # ── Response sub-models ────────────────────────────────────────────────────────
@@ -184,6 +191,19 @@ class AskResponse(BaseModel):
     retrieval_summary: str | None = Field(
         default=None,
         description="Retrieval diagnostics: candidate counts, rerank scores, sources.",
+    )
+    # CRAG diagnostics — None unless AskRequest.use_crag=True or CRAG is run
+    crag_action: str | None = Field(
+        default=None,
+        description="CRAG quality assessment action: 'CORRECT' | 'INCORRECT' | 'AMBIGUOUS'",
+    )
+    was_corrected: bool | None = Field(
+        default=None,
+        description="True if CRAG re-generated the answer using web search or filtered context.",
+    )
+    web_search_triggered: bool | None = Field(
+        default=None,
+        description="True if external web search fallback was executed during CRAG.",
     )
 
 
