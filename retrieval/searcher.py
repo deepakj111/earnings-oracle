@@ -170,6 +170,8 @@ def _bm25_search(
     top_k: int,
     metadata_filter: MetadataFilter | None,
 ) -> list[dict]:
+    if top_k <= 0:
+        return []
     bm25, corpus = _load_bm25()
     tokens = _tokenize_for_bm25(query_text)  # use same tokenizer as indexer
     scores = bm25.get_scores(tokens)  # type: ignore[attr-defined]

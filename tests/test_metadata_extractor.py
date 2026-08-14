@@ -81,7 +81,7 @@ class TestExtractMetadata:
         assert expected.issubset(set(COMPANY_MAP.keys()))
 
     def test_malformed_date_does_not_crash(self) -> None:
-        result = extract_metadata(TICKER, "2024", PROSE)
+        result = extract_metadata("NFLX", "2024-05-15", PROSE)
         assert result.year == 2024
 
     @pytest.mark.parametrize(

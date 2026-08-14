@@ -194,12 +194,12 @@ def test_score_all_returns_all_four_metrics(mock_call: MagicMock) -> None:
         ground_truth="GT.",
     )
     metric_names = {r.metric for r in results}
-    assert metric_names == {
-        "faithfulness",
-        "answer_relevancy",
-        "context_precision",
-        "context_recall",
-    }
+    assert "faithfulness" in metric_names
+    assert "answer_relevancy" in metric_names
+    assert "context_precision" in metric_names
+    assert "context_recall" in metric_names
+    assert "rouge1_f1" in metric_names
+    assert "bleu_4" in metric_names
 
 
 @patch("evaluation.metrics._call")

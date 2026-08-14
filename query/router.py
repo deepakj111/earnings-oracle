@@ -324,7 +324,7 @@ class QueryRouter:
                     {"role": "system", "content": _ROUTER_SYSTEM_PROMPT},
                     {"role": "user", "content": question},
                 ],
-                "max_tokens": _settings.query_router.max_tokens,
+                "max_completion_tokens": _settings.query_router.max_tokens,
                 "response_format": {"type": "json_object"},
             }
             if _settings.query_router.temperature != 1.0 and not self._model.startswith(

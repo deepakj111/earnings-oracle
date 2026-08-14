@@ -283,8 +283,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     _settings.validate()
-    client = QdrantClient(url=_settings.infra.qdrant_url)
-    pipeline = FinancialRAGPipeline(qdrant_client=client)
+    try:
+        client = QdrantClient(
+            url=_settings.infra.qdrant_url, timeout=2.0, check_compatibility=False
+        )
+        client.get_collections()
+    except Exception:
+        client = QdrantClient(path="data/qdrant_user_storage")
+    pipeline = FinancialRAGPipeline(qdrant_client=client, generation_model="gpt-5-mini")
     harness = EvaluationHarness(pipeline)
 
     from evaluation.dataset import get_dataset_subset

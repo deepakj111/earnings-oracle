@@ -64,9 +64,9 @@ def test_golden_dataset_all_have_ground_truth() -> None:
 
 def test_get_dataset_by_ticker() -> None:
     """Get dataset by ticker."""
-    aapl = get_dataset_by_ticker("AAPL")
-    assert all(s.ticker == "AAPL" for s in aapl)
-    assert len(aapl) >= 1
+    nvda = get_dataset_by_ticker("NVDA")
+    assert all(s.ticker == "NVDA" for s in nvda)
+    assert len(nvda) >= 1
 
 
 def test_get_dataset_subset_limits_count() -> None:

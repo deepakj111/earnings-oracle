@@ -8,6 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from config import settings as _settings
+from config.companies import CompanyRegistry
 
 
 class FormSummary(TypedDict):
@@ -18,14 +19,6 @@ class FormSummary(TypedDict):
 HEADERS = {
     "User-Agent": _settings.infra.sec_user_agent,
     "Accept-Encoding": "gzip, deflate",
-}
-
-# Added diverse popular companies across different sectors
-COMPANIES = {
-    "NVDA": "0001045810",  # Technology / Semiconductors
-    "WMT": "0000104169",  # Consumer Discretionary / Retail
-    "UNH": "0000731766",  # Healthcare / Managed Care
-    "NFLX": "0001065280",  # Comm Services / Streaming (Concise business model)
 }
 
 
@@ -182,23 +175,31 @@ def main() -> None:
     # --- Main ---
     os.makedirs("data/company_filings", exist_ok=True)
 
+    # Core portfolio tickers to download
+    target_tickers = ["NVDA", "WMT", "UNH", "NFLX"]
     all_filings = []
-    for ticker, cik in COMPANIES.items():
-        print(f"Fetching 10-K, 10-Q filing lists for {ticker}...")
+
+    for ticker in target_tickers:
+        prof = CompanyRegistry.get_company(ticker)
+        if not prof or not prof.cik:
+            continue
+        print(f"Fetching 10-K, 10-Q filing lists for {prof.name} ({prof.ticker})...")
         filings = get_company_filings(
-            cik, ticker, form_types=("10-K", "10-Q"), start_date="2025-01-01"
+            cik=prof.cik,
+            ticker=prof.ticker,
+            form_types=("10-K", "10-Q"),
+            start_date=prof.download_start_date,
         )
         all_filings.extend(filings)
         time.sleep(0.15)
 
-    print(f"\nTotal filings found across {', '.join(COMPANIES.keys())}: {len(all_filings)}")
+    print(f"\nTotal filings found across {', '.join(target_tickers)}: {len(all_filings)}")
     print("Fetching document indexes and downloading reports...\n")
 
     # Data structure to hold summary info
-    # ticker -> form_type -> {"count": int, "years": set}
     summary: dict[str, dict[str, FormSummary]] = {
         ticker: {"10-K": {"count": 0, "years": set()}, "10-Q": {"count": 0, "years": set()}}
-        for ticker in COMPANIES
+        for ticker in target_tickers
     }
 
     # Tracking list to hold (file_name, size_in_bytes)

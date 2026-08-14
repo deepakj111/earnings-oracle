@@ -234,6 +234,21 @@ poetry run pytest tests/test_api_query.py::TestAskEndpoint -v
 # Single test
 poetry run pytest tests/test_generator.py::TestGeneratorGenerate::test_empty_retrieval_returns_no_context_answer -v
 
+### Ablation Arm Component Isolation
+
+The 6-arm RAG portfolio ablation framework (`scripts.run_portfolio_ablations`) enforces strict component isolation between architecture iterations. Each arm patches environment variables via `ExperimentConfig.to_env_patch()`:
+
+| Arm | Description | BM25 (`top_k_bm25`) | Transforms (`RAG_TRANSFORM_*`) | Reranker (`RAG_RERANKER`) | GraphRAG (`RAG_KG_RETRIEVAL`) | CRAG (`RAG_CRAG`) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **1** | Base Naive RAG | `0` | `false` | `false` | `false` | `false` |
+| **2** | + BM25 Sparse Hybrid | `25` | `false` | `false` | `false` | `false` |
+| **3** | + Query Transformations | `25` | `true` | `false` | `false` | `false` |
+| **4** | + FlashRank Reranker | `25` | `true` | `true` | `false` | `false` |
+| **5** | + Knowledge Graph (GraphRAG) | `25` | `true` | `true` | `true` | `false` |
+| **6** | Full Stack (+ CRAG Fallback) | `25` | `true` | `true` | `true` | `true` |
+
+Component isolation is validated via unit tests in `tests/test_retrieval_experiment.py::TestExperimentConfig::test_all_six_ablation_arms_isolation`.
+
 # Skip integration tests
 poetry run pytest tests/ -m "not integration"
 ```

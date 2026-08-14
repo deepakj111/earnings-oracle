@@ -102,10 +102,11 @@ class FinancialRAGPipeline:
         qdrant_client: QdrantClient,
         enable_query_cache: bool = True,
         async_warmup: bool = True,
+        generation_model: str | None = None,
     ) -> None:
         self.qdrant_client = qdrant_client
         self._transformer = QueryTransformer(enable_cache=enable_query_cache)
-        self._generator = Generator()
+        self._generator = Generator(model=generation_model)
         self._router = QueryRouter()
         self._corrector: CRAGCorrector | None = None  # lazy-init in ask_with_crag()
         self._warmup_complete = threading.Event()

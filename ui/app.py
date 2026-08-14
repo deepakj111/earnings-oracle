@@ -26,6 +26,7 @@ from typing import Any
 import requests
 import streamlit as st
 
+from config.companies import CompanyRegistry
 from ui.utils import (
     build_metadata_filter,
     citation_badge_label,
@@ -42,8 +43,8 @@ from ui.utils import (
 
 API_BASE_URL: str = os.getenv("RAG_API_URL", "http://localhost:8000")
 
-_TICKERS = ["(all)", "NVDA", "WMT", "UNH", "NFLX"]
-_YEARS = ["(all)", 2024, 2023]
+_TICKERS = ["(all)"] + sorted(CompanyRegistry.get_supported_tickers())
+_YEARS = ["(all)", 2026, 2025, 2024, 2023]
 _QUARTERS = ["(all)", "Q1", "Q2", "Q3", "Q4"]
 
 # ── Page setup ─────────────────────────────────────────────────────────────────

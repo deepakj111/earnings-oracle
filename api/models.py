@@ -13,10 +13,13 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 
 # ── Domain constants ───────────────────────────────────────────────────────────
-
-_VALID_TICKERS: frozenset[str] = frozenset({"NVDA", "WMT", "UNH", "NFLX"})
+from config.companies import CompanyRegistry
 
 _VALID_QUARTERS: frozenset[str] = frozenset({"Q1", "Q2", "Q3", "Q4"})
+
+
+def _get_valid_tickers() -> set[str]:
+    return set(CompanyRegistry.get_supported_tickers())
 
 
 # ── Request models ─────────────────────────────────────────────────────────────
@@ -33,7 +36,7 @@ class MetadataFilterIn(BaseModel):
 
     ticker: str | None = Field(
         default=None,
-        description=("Company ticker. Supported: NVDA, WMT, UNH, NFLX"),
+        description=("Company ticker (e.g. NVDA, WMT, UNH, NFLX, AAPL, MSFT)"),
         examples=["NVDA"],
     )
     year: int | None = Field(
@@ -55,10 +58,9 @@ class MetadataFilterIn(BaseModel):
         if v is None:
             return None
         v = v.upper().strip()
-        if v not in _VALID_TICKERS:
-            raise ValueError(
-                f"Unknown ticker '{v}'. Supported: {', '.join(sorted(_VALID_TICKERS))}"
-            )
+        valid = _get_valid_tickers()
+        if v not in valid:
+            raise ValueError(f"Unknown ticker '{v}'. Supported: {', '.join(sorted(valid))}")
         return v
 
     @field_validator("quarter")

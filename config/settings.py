@@ -62,7 +62,7 @@ class QueryRouterConfig:
 
     model: str = field(default_factory=lambda: _env_str("RAG_QUERY_ROUTER_MODEL", "gpt-5-mini"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_QUERY_ROUTER_TEMP", 0.0))
-    max_tokens: int = field(default_factory=lambda: _env_int("RAG_QUERY_ROUTER_MAX_TOKENS", 150))
+    max_tokens: int = field(default_factory=lambda: _env_int("RAG_QUERY_ROUTER_MAX_TOKENS", 2048))
 
 
 # ── Layer 2: Query Transformation ─────────────────────────────────────────────
@@ -142,7 +142,7 @@ class GenerationConfig:
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(
-        default_factory=lambda: _env_int("RAG_GENERATION_MAX_CONTEXT_TOKENS", 4096)
+        default_factory=lambda: _env_int("RAG_GENERATION_MAX_CONTEXT_TOKENS", 8192)
     )
     max_retries: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_RETRIES", 3))
     retry_base_delay_seconds: float = field(
@@ -189,7 +189,7 @@ class RetrievalConfig:
 
     top_k_dense: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_DENSE", 25))
     top_k_bm25: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_BM25", 25))
-    top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 8))
+    top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 12))
     rrf_k_constant: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_RRF_K", 60))
     parent_fetch_enabled: bool = field(
         default_factory=lambda: _env_bool("RAG_RETRIEVAL_PARENT_FETCH", True)
@@ -229,7 +229,7 @@ class CRAGConfig:
         default_factory=lambda: _env_float("RAG_CRAG_GRADER_TEMP", 0.0)
     )
     grader_max_tokens: int = field(
-        default_factory=lambda: _env_int("RAG_CRAG_GRADER_MAX_TOKENS", 128)
+        default_factory=lambda: _env_int("RAG_CRAG_GRADER_MAX_TOKENS", 2048)
     )
     high_relevance_threshold: float = field(
         default_factory=lambda: _env_float("RAG_CRAG_HIGH_THRESHOLD", 0.6)
@@ -255,7 +255,7 @@ class EvaluationConfig:
 
     model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-5-mini"))
     temperature: float = field(default_factory=lambda: _env_float("RAG_EVAL_TEMP", 0.0))
-    max_tokens: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_TOKENS", 256))
+    max_tokens: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_TOKENS", 2048))
     max_workers: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_WORKERS", 2))
     output_dir: str = field(
         default_factory=lambda: _env_str(

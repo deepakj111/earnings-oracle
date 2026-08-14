@@ -69,12 +69,17 @@ class ExperimentConfig:
     rrf_k_constant: int | None = None
     reranker_enabled: bool | None = None
     hyde_enabled: bool | None = None
+    multiquery_enabled: bool | None = None
+    stepback_enabled: bool | None = None
     graphrag_enabled: bool | None = None
     use_crag: bool | None = None
+    generation_model: str | None = "gpt-5-mini"
 
     def to_env_patch(self) -> dict[str, str]:
         """Convert config fields to environment variable overrides."""
         patch: dict[str, str] = {}
+        if self.generation_model is not None:
+            patch["RAG_GENERATION_MODEL"] = str(self.generation_model)
         if self.top_k_final is not None:
             patch["RAG_RETRIEVAL_TOP_K_FINAL"] = str(self.top_k_final)
         if self.top_k_dense is not None:
@@ -87,12 +92,21 @@ class ExperimentConfig:
             patch["RAG_RERANKER_ENABLED"] = str(self.reranker_enabled).lower()
         if self.graphrag_enabled is not None:
             patch["RAG_KG_RETRIEVAL_ENABLED"] = str(self.graphrag_enabled).lower()
+        if self.hyde_enabled is not None:
+            patch["RAG_TRANSFORM_HYDE_ENABLED"] = str(self.hyde_enabled).lower()
+        if self.multiquery_enabled is not None:
+            patch["RAG_TRANSFORM_MULTIQUERY_ENABLED"] = str(self.multiquery_enabled).lower()
+        if self.stepback_enabled is not None:
+            patch["RAG_TRANSFORM_STEPBACK_ENABLED"] = str(self.stepback_enabled).lower()
+        if self.use_crag is not None:
+            patch["RAG_CRAG_ENABLED"] = str(self.use_crag).lower()
         return patch
 
     def diff_vs(self, other: ExperimentConfig) -> dict[str, tuple[Any, Any]]:
         """Return fields that differ between self and other as {field: (self_val, other_val)}."""
         diffs: dict[str, tuple[Any, Any]] = {}
         for f_name in (
+            "generation_model",
             "top_k_final",
             "top_k_dense",
             "top_k_bm25",
@@ -241,7 +255,18 @@ class RetrievalExperiment:
     After each arm, os.environ is restored to its pre-experiment state.
     """
 
-    _METRICS = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+    _METRICS = [
+        "faithfulness",
+        "answer_relevancy",
+        "context_precision",
+        "context_recall",
+        "token_f1",
+        "rouge1_f1",
+        "rouge2_f1",
+        "rougeL_f1",
+        "bleu_4",
+        "semantic_similarity",
+    ]
 
     def __init__(self, pipeline_factory: PipelineFactory) -> None:
         self._factory = pipeline_factory
@@ -256,16 +281,6 @@ class RetrievalExperiment:
     ) -> ExperimentReport:
         """
         Run baseline and variant arms sequentially and return a diff report.
-
-        Args:
-            baseline  : Baseline configuration arm
-            variant   : Variant configuration arm to compare against baseline
-            n_samples : Number of samples from the golden dataset to evaluate
-            metrics   : Subset of metrics to compute (defaults to all four)
-            name      : Human-readable experiment name for report
-
-        Returns:
-            ExperimentReport with per-metric scores and diff table
         """
         metrics = metrics or self._METRICS
         exp_name = name or f"{baseline.label}_vs_{variant.label}"
@@ -293,9 +308,13 @@ class RetrievalExperiment:
         config: ExperimentConfig,
         dataset: list[EvalSample],
         metrics: list[str],
+        arm_dir: Path | None = None,
     ) -> ArmResult:
         """
-        Run a single experiment arm: patch env, build pipeline, evaluate, restore env.
+        Run a single experiment arm with incremental per-sample checkpointing.
+
+        If arm_dir is provided and contains samples.json, successful sample results
+        are reused to prevent redundant API calls upon restart/resumption.
         """
         env_patch = config.to_env_patch()
         original_env: dict[str, str | None] = {}
@@ -307,14 +326,46 @@ class RetrievalExperiment:
         logger.info(f"Running arm '{config.label}' | env_patch={env_patch}")
         t_start = time.perf_counter()
 
+        cached_map: dict[str, dict[str, Any]] = {}
+        cache_file: Path | None = None
+        if arm_dir is not None:
+            arm_dir.mkdir(parents=True, exist_ok=True)
+            cache_file = arm_dir / "samples.json"
+            if cache_file.exists():
+                try:
+                    with open(cache_file, encoding="utf-8") as f:
+                        cached_items = json.load(f)
+                    for item in cached_items:
+                        if isinstance(item, dict) and not item.get("pipeline_failed", True):
+                            cached_map[item["sample_id"]] = item
+                    if cached_map:
+                        logger.info(
+                            f"[{config.label}] Loaded {len(cached_map)} cached sample results from {cache_file}"
+                        )
+                except Exception as exc:
+                    logger.warning(f"Failed to read cache file {cache_file}: {exc}")
+
         try:
-            # REMOVED: the frozen-dataclass hot-swap block that caused the crash
-            # os.environ is already patched above; the factory will read fresh env
             pipeline = self._factory()
             sample_scores: list[dict[str, Any]] = []
             errors = 0
 
-            for sample in dataset:
+            for idx, sample in enumerate(dataset, start=1):
+                # ── Check incremental cache ──────────────────────────────────
+                if sample.sample_id in cached_map:
+                    cached_sample = cached_map[sample.sample_id]
+                    scores_str = " | ".join(
+                        f"{m[:5].capitalize()}: {v:.2f}"
+                        for m, v in list(cached_sample["scores"].items())[:4]
+                    )
+                    logger.info(
+                        f"[{config.label}] Sample {idx}/{len(dataset)}: {sample.sample_id} [CACHED] "
+                        f"| {cached_sample.get('latency_seconds', 0.0):.1f}s | {scores_str}"
+                    )
+                    sample_scores.append(cached_sample)
+                    continue
+
+                t_sample = time.perf_counter()
                 try:
                     if config.use_crag:
                         crag_res = pipeline.ask_with_crag(sample.question)
@@ -329,25 +380,67 @@ class RetrievalExperiment:
                         ground_truth=sample.ground_truth,
                         metrics=metrics,
                     )
-                    sample_scores.append(
-                        {
-                            "sample_id": sample.sample_id,
-                            "question": sample.question,
-                            "scores": scores,
-                            "pipeline_failed": False,
-                        }
+                    sample_latency = time.perf_counter() - t_sample
+                    scores_str = " | ".join(
+                        f"{m[:5].capitalize()}: {v:.2f}" for m, v in list(scores.items())[:4]
                     )
+                    logger.info(
+                        f"[{config.label}] Sample {idx}/{len(dataset)}: {sample.sample_id} "
+                        f"| {sample_latency:.1f}s | {scores_str}"
+                    )
+                    s_dict = {
+                        "sample_id": sample.sample_id,
+                        "ticker": sample.ticker,
+                        "question": sample.question,
+                        "ground_truth": sample.ground_truth,
+                        "generated_answer": result.answer,
+                        "citations": [
+                            {
+                                "source_file": getattr(c, "source_file", ""),
+                                "excerpt": getattr(c, "excerpt", "")[:300],
+                            }
+                            for c in result.citations
+                        ],
+                        "context_chunks": [c.excerpt for c in result.citations],
+                        "latency_seconds": round(sample_latency, 3),
+                        "scores": scores,
+                        "pipeline_failed": False,
+                    }
+                    sample_scores.append(s_dict)
                 except Exception as exc:
-                    logger.warning(f"  Sample {sample.sample_id} failed: {exc}")
-                    errors += 1
-                    sample_scores.append(
-                        {
-                            "sample_id": sample.sample_id,
-                            "question": sample.question,
-                            "scores": {m: 0.0 for m in metrics},
-                            "pipeline_failed": True,
-                        }
+                    logger.warning(
+                        f"  [{config.label}] Sample {idx}/{len(dataset)}: {sample.sample_id} failed: {exc}"
                     )
+                    errors += 1
+                    s_dict = {
+                        "sample_id": sample.sample_id,
+                        "ticker": sample.ticker,
+                        "question": sample.question,
+                        "ground_truth": sample.ground_truth,
+                        "generated_answer": "",
+                        "citations": [],
+                        "context_chunks": [],
+                        "latency_seconds": round(time.perf_counter() - t_sample, 3),
+                        "scores": {m: 0.0 for m in metrics},
+                        "pipeline_failed": True,
+                    }
+                    sample_scores.append(s_dict)
+
+                # Checkpoint to disk after every sample
+                if cache_file is not None:
+                    try:
+                        with open(cache_file, "w", encoding="utf-8") as f:
+                            json.dump(sample_scores, f, indent=2)
+                        # Save answers.json: clean isolated mapping of sample_id -> generated_answer
+                        answers_map = {
+                            s["sample_id"]: s.get("generated_answer", "")
+                            for s in sample_scores
+                            if isinstance(s, dict)
+                        }
+                        with open(arm_dir / "answers.json", "w", encoding="utf-8") as f:
+                            json.dump(answers_map, f, indent=2)
+                    except Exception as exc:
+                        logger.warning(f"Failed to write checkpoint to {cache_file}: {exc}")
 
             total_latency = time.perf_counter() - t_start
 
@@ -375,7 +468,7 @@ class RetrievalExperiment:
 
         finally:
             # Releasing the lock so subsequent local Qdrant clients can bind
-            if hasattr(pipeline, "qdrant_client"):
+            if "pipeline" in locals() and hasattr(pipeline, "qdrant_client"):
                 pipeline.qdrant_client.close()
 
             for k, original_v in original_env.items():

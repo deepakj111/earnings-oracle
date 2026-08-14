@@ -23,6 +23,7 @@ hard failure only occurs if ALL techniques fail simultaneously.
 from __future__ import annotations
 
 import hashlib
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -276,22 +277,42 @@ class QueryTransformer:
         logger.info(f"Transforming query | {query!r}")
         failed_techniques: list[str] = []
 
-        # Fire techniques concurrently via persistent thread pool.
-        hyde_doc: str = query  # fallback: original query
-        multi_queries: list[str] = [query]  # fallback: only original
-        stepback_query: str = query  # fallback: original query
+        def _env_bool(key: str, default: bool) -> bool:
+            raw = os.getenv(key)
+            if raw is None:
+                return default
+            return raw.strip().lower() in ("1", "true", "yes", "on")
 
-        tasks: dict[str, Any] = {
-            "multi": _run_multi_query,
-            "stepback": _run_stepback,
-        }
+        hyde_enabled = _env_bool("RAG_TRANSFORM_HYDE_ENABLED", True) and not skip_hyde
+        multiquery_enabled = _env_bool("RAG_TRANSFORM_MULTIQUERY_ENABLED", True)
+        stepback_enabled = _env_bool("RAG_TRANSFORM_STEPBACK_ENABLED", True)
 
-        if not skip_hyde:
+        tasks: dict[str, Any] = {}
+        if hyde_enabled:
             tasks["hyde"] = _run_hyde
-        else:
-            logger.debug(
-                "HyDE skipped by router (skip_hyde=True) — using original query as hyde_document"
+        if multiquery_enabled:
+            tasks["multi"] = _run_multi_query
+        if stepback_enabled:
+            tasks["stepback"] = _run_stepback
+
+        if not tasks:
+            logger.info(
+                "All query transformations disabled by configuration — skipping Layer 2 LLM calls."
             )
+            transformed = TransformedQuery(
+                original=query,
+                hyde_document=query,
+                multi_queries=[query],
+                stepback_query=query,
+                failed_techniques=[],
+            )
+            if self.enable_cache:
+                _cache[_cache_key(query)] = transformed
+            return transformed
+
+        hyde_doc: str = query
+        multi_queries: list[str] = [query]
+        stepback_query: str = query
 
         futures = {_pool.submit(fn, query): name for name, fn in tasks.items()}
 

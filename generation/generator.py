@@ -149,7 +149,9 @@ def _is_grounded(answer: str) -> bool:
     stop=stop_after_attempt(_cfg.max_retries),
     reraise=True,
 )
-def _call_llm(prompt_messages: list[Any]) -> tuple[str, int, int]:
+def _call_llm(
+    prompt_messages: list[Any], model_override: str | None = None
+) -> tuple[str, int, int]:
     """
     Single OpenAI chat completion call with tenacity retry on transient errors.
 
@@ -160,12 +162,13 @@ def _call_llm(prompt_messages: list[Any]) -> tuple[str, int, int]:
         (answer_text, prompt_tokens, completion_tokens)
     """
     client = get_openai_client()
+    target_model = model_override or _cfg.model
     kwargs: dict[str, Any] = {
-        "model": _cfg.model,
+        "model": target_model,
         "messages": prompt_messages,
         "max_completion_tokens": _cfg.max_tokens,
     }
-    if _cfg.temperature != 1.0 and not _cfg.model.startswith(("gpt-5", "o1", "o3")):
+    if _cfg.temperature != 1.0 and not target_model.startswith(("gpt-5", "o1", "o3")):
         kwargs["temperature"] = _cfg.temperature
 
     try:
@@ -212,20 +215,10 @@ class Generator:
     Thread-safety: the Generator instance is stateless — it holds no mutable
     state.  The OpenAI client is a process-level singleton that is safe for
     concurrent use after first initialization.
-
-    Usage (recommended — via module-level shortcut):
-        from generation import generate
-        result = generate(question="...", retrieval_result=result)
-
-    Usage (direct):
-        generator = Generator()
-        result = generator.generate(question, retrieval_result)
-        print(result.format_answer_with_citations())
-
-    Streaming:
-        for token in generator.generate_streaming(question, retrieval_result):
-            print(token, end="", flush=True)
     """
+
+    def __init__(self, model: str | None = None) -> None:
+        self._model = model
 
     def generate(
         self,
@@ -290,7 +283,9 @@ class Generator:
         ]
 
         # ── LLM call (tenacity-retried) ────────────────────────────────────────
-        answer, prompt_tokens, completion_tokens = _call_llm(prompt_messages)
+        answer, prompt_tokens, completion_tokens = _call_llm(
+            prompt_messages, model_override=self._model
+        )
 
         # ── Post-process ───────────────────────────────────────────────────────
         citations = _extract_citations(answer, citation_results)

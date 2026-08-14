@@ -44,7 +44,7 @@ class TestExperimentConfig:
 
     def test_env_patch_empty_when_no_overrides(self) -> None:
         cfg = ExperimentConfig(label="default")
-        assert cfg.to_env_patch() == {}
+        assert cfg.to_env_patch() == {"RAG_GENERATION_MODEL": "gpt-5-mini"}
 
     def test_env_patch_multiple_fields(self) -> None:
         cfg = ExperimentConfig(label="multi", top_k_final=3, rrf_k_constant=30)
@@ -68,6 +68,47 @@ class TestExperimentConfig:
         variant = ExperimentConfig(label="v", reranker_enabled=False)
         diffs = baseline.diff_vs(variant)
         assert "reranker_enabled" in diffs
+
+    def test_all_six_ablation_arms_isolation(self) -> None:
+        from scripts.run_portfolio_ablations import get_ablation_arms
+
+        arms = get_ablation_arms()
+
+        # Arm 1: Naive RAG (BM25=0, transform=False, rerank=False, kg=False, crag=False)
+        arm1_patch = arms[0].to_env_patch()
+        assert arm1_patch["RAG_RETRIEVAL_TOP_K_BM25"] == "0"
+        assert arm1_patch["RAG_TRANSFORM_HYDE_ENABLED"] == "false"
+        assert arm1_patch["RAG_TRANSFORM_MULTIQUERY_ENABLED"] == "false"
+        assert arm1_patch["RAG_TRANSFORM_STEPBACK_ENABLED"] == "false"
+        assert arm1_patch["RAG_RERANKER_ENABLED"] == "false"
+        assert arm1_patch["RAG_KG_RETRIEVAL_ENABLED"] == "false"
+        assert arm1_patch["RAG_CRAG_ENABLED"] == "false"
+
+        # Arm 2: BM25 Sparse Hybrid (BM25=25, transform=False, rerank=False, kg=False, crag=False)
+        arm2_patch = arms[1].to_env_patch()
+        assert arm2_patch["RAG_RETRIEVAL_TOP_K_BM25"] == "25"
+        assert arm2_patch["RAG_TRANSFORM_HYDE_ENABLED"] == "false"
+        assert arm2_patch["RAG_RERANKER_ENABLED"] == "false"
+
+        # Arm 3: Query Transform (BM25=25, transform=True, rerank=False, kg=False, crag=False)
+        arm3_patch = arms[2].to_env_patch()
+        assert arm3_patch["RAG_TRANSFORM_HYDE_ENABLED"] == "true"
+        assert arm3_patch["RAG_TRANSFORM_MULTIQUERY_ENABLED"] == "true"
+        assert arm3_patch["RAG_RERANKER_ENABLED"] == "false"
+
+        # Arm 4: Reranker (rerank=True, kg=False, crag=False)
+        arm4_patch = arms[3].to_env_patch()
+        assert arm4_patch["RAG_RERANKER_ENABLED"] == "true"
+        assert arm4_patch["RAG_KG_RETRIEVAL_ENABLED"] == "false"
+
+        # Arm 5: Knowledge Graph (kg=True, crag=False)
+        arm5_patch = arms[4].to_env_patch()
+        assert arm5_patch["RAG_KG_RETRIEVAL_ENABLED"] == "true"
+        assert arm5_patch["RAG_CRAG_ENABLED"] == "false"
+
+        # Arm 6: Full Stack (crag=True)
+        arm6_patch = arms[5].to_env_patch()
+        assert arm6_patch["RAG_CRAG_ENABLED"] == "true"
 
 
 class TestArmResult:

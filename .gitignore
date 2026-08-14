@@ -42,6 +42,7 @@ MANIFEST
 # Qdrant / Data / ML Caches
 /data/*
 !/data/.gitkeep
+!/data/golden_dataset.json
 
 mypy_report.txt
 
@@ -72,3 +73,6 @@ cover/
 
 # OS
 .DS_Store
+
+# One-time repair scripts
+scripts/repair_*.py
