@@ -332,6 +332,7 @@ def search(
     top_k_dense = cfg.top_k_dense
     top_k_bm25 = cfg.top_k_bm25
     top_k_pre = settings.reranker.top_k_pre_rerank
+    rrf_k = cfg.rrf_k_constant
     qdrant_filter = _build_qdrant_filter(metadata_filter)
 
     all_payloads: dict[str, dict] = {}
@@ -367,28 +368,29 @@ def search(
         except Exception as e:
             logger.warning(f"Dense search failed for query '{q_text[:60]}': {e}")
 
-        # BM25
-        try:
-            hits = _bm25_search(q_text, top_k_bm25, metadata_filter)
-            ids = []
-            for entry in hits:
-                cid = entry.get("chunk_id", "")
-                if cid:
-                    # BM25 corpus entries don't have all payload fields —
-                    # merge with existing Qdrant payload if available
-                    if cid not in all_payloads:
-                        all_payloads[cid] = entry
-                    ids.append(cid)
-            rrf_input.append((ids, "bm25"))
-        except Exception as e:
-            logger.warning(f"BM25 search failed for query '{q_text[:60]}': {e}")
+        # BM25 (only when enabled / top_k_bm25 > 0)
+        if top_k_bm25 > 0:
+            try:
+                hits = _bm25_search(q_text, top_k_bm25, metadata_filter)
+                ids = []
+                for entry in hits:
+                    cid = entry.get("chunk_id", "")
+                    if cid:
+                        # BM25 corpus entries don't have all payload fields —
+                        # merge with existing Qdrant payload if available
+                        if cid not in all_payloads:
+                            all_payloads[cid] = entry
+                        ids.append(cid)
+                rrf_input.append((ids, "bm25"))
+            except Exception as e:
+                logger.warning(f"BM25 search failed for query '{q_text[:60]}': {e}")
 
     if not rrf_input:
         logger.error("All search variants failed — returning empty results.")
         return []
 
     # ── 3. RRF fusion ──────────────────────────────────────────────────────────
-    fused = _rrf_fuse(rrf_input, all_payloads, k=cfg.rrf_k_constant)  # type: ignore[arg-type]
+    fused = _rrf_fuse(rrf_input, all_payloads, k=rrf_k)  # type: ignore[arg-type]
     logger.info(
         f"RRF fusion: {len(all_payloads)} unique chunks → "
         f"top {min(top_k_pre, len(fused))} passed to reranker"

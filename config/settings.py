@@ -350,6 +350,25 @@ class Settings:
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     knowledge_graph: KnowledgeGraphConfig = field(default_factory=KnowledgeGraphConfig)
 
+    def reload(self) -> None:
+        """Reload all configuration sections from current os.environ."""
+        object.__setattr__(self, "query_router", QueryRouterConfig())
+        object.__setattr__(self, "query_transform", QueryTransformConfig())
+        object.__setattr__(self, "generation", GenerationConfig())
+        object.__setattr__(self, "embedding", EmbeddingConfig())
+        object.__setattr__(self, "retrieval", RetrievalConfig())
+        object.__setattr__(self, "reranker", RerankerConfig())
+        object.__setattr__(self, "infra", InfraConfig())
+        object.__setattr__(self, "crag", CRAGConfig())
+        object.__setattr__(self, "evaluation", EvaluationConfig())
+        object.__setattr__(self, "observability", ObservabilityConfig())
+        object.__setattr__(self, "knowledge_graph", KnowledgeGraphConfig())
+
+        import sys
+
+        if "crag.corrector" in sys.modules:
+            setattr(sys.modules["crag.corrector"], "_cfg", self.crag)  # noqa: B010
+
     def validate(self) -> None:
         if not self.infra.openai_api_key:
             raise OSError("OPENAI_API_KEY is not set. Add it to your .env file.")

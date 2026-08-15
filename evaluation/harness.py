@@ -104,8 +104,12 @@ class EvaluationHarness:
                 error_message=str(exc),
             )
 
-        # Extract context chunks for metric scoring
-        context_chunks = [(c.excerpt or "") for c in result.citations]
+        # Extract full context chunks for metric scoring
+        context_chunks = (
+            result.retrieved_chunks
+            if getattr(result, "retrieved_chunks", None)
+            else [(c.full_text or c.excerpt or "") for c in result.citations]
+        )
 
         # Score metrics
         metric_scores: dict[str, MetricScore] = {}

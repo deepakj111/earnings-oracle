@@ -68,8 +68,14 @@ _TEMP_STEPBACK: float = _cfg.temperature_stepback
 _cache: LRUCache[str, TransformedQuery] = LRUCache(maxsize=CACHE_MAX_SIZE)
 
 
-def _cache_key(query: str) -> str:
-    return hashlib.sha256(query.strip().lower().encode("utf-8")).hexdigest()
+def _cache_key(
+    query: str,
+    hyde: bool = True,
+    multi: bool = True,
+    stepback: bool = True,
+) -> str:
+    raw = f"{query.strip().lower()}|hyde:{hyde}|multi:{multi}|stepback:{stepback}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 # ── Core LLM call with exponential backoff ────────────────────────────────────
@@ -268,15 +274,6 @@ class QueryTransformer:
         if not query:
             raise ValueError("Query must not be empty.")
 
-        if self.enable_cache:
-            ckey = _cache_key(query)
-            if ckey in _cache:
-                logger.debug(f"Cache hit | query={query!r}")
-                return _cache[ckey]
-
-        logger.info(f"Transforming query | {query!r}")
-        failed_techniques: list[str] = []
-
         def _env_bool(key: str, default: bool) -> bool:
             raw = os.getenv(key)
             if raw is None:
@@ -286,6 +283,20 @@ class QueryTransformer:
         hyde_enabled = _env_bool("RAG_TRANSFORM_HYDE_ENABLED", True) and not skip_hyde
         multiquery_enabled = _env_bool("RAG_TRANSFORM_MULTIQUERY_ENABLED", True)
         stepback_enabled = _env_bool("RAG_TRANSFORM_STEPBACK_ENABLED", True)
+
+        if self.enable_cache:
+            ckey = _cache_key(
+                query,
+                hyde=hyde_enabled,
+                multi=multiquery_enabled,
+                stepback=stepback_enabled,
+            )
+            if ckey in _cache:
+                logger.debug(f"Cache hit | query={query!r}")
+                return _cache[ckey]
+
+        logger.info(f"Transforming query | {query!r}")
+        failed_techniques: list[str] = []
 
         tasks: dict[str, Any] = {}
         if hyde_enabled:
@@ -307,7 +318,14 @@ class QueryTransformer:
                 failed_techniques=[],
             )
             if self.enable_cache:
-                _cache[_cache_key(query)] = transformed
+                _cache[
+                    _cache_key(
+                        query,
+                        hyde=hyde_enabled,
+                        multi=multiquery_enabled,
+                        stepback=stepback_enabled,
+                    )
+                ] = transformed
             return transformed
 
         hyde_doc: str = query
@@ -345,6 +363,13 @@ class QueryTransformer:
         )
 
         if self.enable_cache:
-            _cache[_cache_key(query)] = transformed
+            _cache[
+                _cache_key(
+                    query,
+                    hyde=hyde_enabled,
+                    multi=multiquery_enabled,
+                    stepback=stepback_enabled,
+                )
+            ] = transformed
 
         return transformed

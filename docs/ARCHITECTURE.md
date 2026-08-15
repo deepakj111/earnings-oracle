@@ -524,6 +524,7 @@ All configuration lives in `config/settings.py` as frozen `@dataclass` classes. 
 
 ```
 Settings
+  ├── QueryRouterConfig       (RAG_QUERY_ROUTER_*)
   ├── QueryTransformConfig    (RAG_QUERY_TRANSFORM_*)
   ├── GenerationConfig        (RAG_GENERATION_*)
   ├── EmbeddingConfig         (RAG_EMBEDDING_*)
@@ -531,10 +532,14 @@ Settings
   ├── RerankerConfig          (RAG_RERANKER_*)
   ├── InfraConfig             (QDRANT_URL, OPENAI_API_KEY, SEC_USER_AGENT)
   ├── CRAGConfig              (RAG_CRAG_*)
-  └── EvaluationConfig        (RAG_EVAL_*)
+  ├── EvaluationConfig        (RAG_EVAL_*)
+  ├── ObservabilityConfig     (RAG_TRACING_*, RAG_AUDIT_*)
+  └── KnowledgeGraphConfig    (RAG_KG_*)
 ```
 
-`settings = Settings()` is a module-level singleton — imported by every other module with `from config import settings`. `settings.validate()` is called at startup and raises `OSError` on missing required values, causing a fast fail before accepting any traffic.
+`settings = Settings()` is a module-level singleton — imported by every other module with `from config import settings`.
+- `settings.validate()`: Called at startup; raises `OSError` on missing required values (e.g. OpenAI key or Qdrant URL) for fast-fail execution.
+- `settings.reload()`: Dynamically re-reads all environment variables from `os.environ` into fresh configuration instances. This allows tests and ablation runners to switch parameters at runtime with 100% component isolation.
 
 ---
 
@@ -551,20 +556,23 @@ SearchResult               (retrieval/models.py)
   ├── text (child, 128 tokens)
   ├── parent_text (512 tokens, populated after parent fetch)
   ├── rrf_score (pre-rerank)
-  └── rerank_score (post-rerank, float("-inf") before)
+  ├── rerank_score (post-rerank, float("-inf") before)
+  └── source ("dense" | "bm25" | "both" | "graph" | "web")
 
 RetrievalResult            (retrieval/models.py)
   ├── results: list[SearchResult]
-  ├── reranked: bool
+  ├── reranked: bool (True only if cross-encoder executed)
   └── is_empty: bool  (property)
 
 Citation                   (generation/models.py)
   ├── index (1-based, matches [N] in answer text)
-  └── excerpt (first 250 chars of parent_text)
+  ├── excerpt (first 250 chars of parent_text for UI cards)
+  └── full_text (complete 512-token chunk text for evaluation)
 
 GenerationResult           (generation/models.py)
   ├── answer (with inline [N] citations)
   ├── citations: list[Citation]
+  ├── retrieved_chunks: list[str] (full text of all chunks provided to context)
   ├── grounded: bool
   ├── unique_sources: list[str]  (property)
   └── format_answer_with_citations(): str

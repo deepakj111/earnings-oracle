@@ -34,6 +34,7 @@ Usage:
 from __future__ import annotations
 
 import collections
+import contextlib
 import json
 import math
 import re
@@ -88,37 +89,31 @@ def _parse_score(raw: str, metric: str) -> tuple[float, str]:
     text = raw.strip()
 
     # 1. Direct JSON parse
-    try:
+    with contextlib.suppress(Exception):
         data = json.loads(text)
         if isinstance(data, dict) and "score" in data:
             score = max(0.0, min(1.0, float(data.get("score", 0.5))))
             reasoning = str(data.get("reasoning", ""))[:250]
             return score, reasoning
-    except Exception:
-        pass
 
     # 2. Extract substring between first '{' and last '}'
     start_idx = text.find("{")
     end_idx = text.rfind("}")
     if start_idx != -1 and end_idx > start_idx:
         json_str = text[start_idx : end_idx + 1]
-        try:
+        with contextlib.suppress(Exception):
             data = json.loads(json_str)
             if isinstance(data, dict) and "score" in data:
                 score = max(0.0, min(1.0, float(data.get("score", 0.5))))
                 reasoning = str(data.get("reasoning", ""))[:250]
                 return score, reasoning
-        except Exception:
-            pass
 
     # 3. Regex fallback for "score": X.X
     match = re.search(r'"score"\s*:\s*([0-1](?:\.\d+)?)', text)
     if match:
-        try:
+        with contextlib.suppress(Exception):
             score = float(match.group(1))
             return max(0.0, min(1.0, score)), "regex score fallback"
-        except Exception:
-            pass
 
     logger.warning(f"[{metric}] no valid JSON in response: {text[:100]!r}")
     return 0.5, "parse error"
@@ -212,7 +207,7 @@ def score_faithfulness(
     context_chunks: list[str],
 ) -> MetricScore:
     """Are all claims in the answer supported by the retrieved context?"""
-    context = "\n\n".join(f"[{i + 1}] {c[:600]}" for i, c in enumerate(context_chunks))
+    context = "\n\n".join(f"[{i + 1}] {c[:3000].strip()}" for i, c in enumerate(context_chunks))
     prompt = _FAITHFULNESS_PROMPT.format(question=question, context=context, answer=answer)
     try:
         raw = _call(prompt)
@@ -239,7 +234,9 @@ def score_context_precision(question: str, context_chunks: list[str]) -> MetricS
     """What fraction of retrieved chunks are relevant to the question?"""
     if not context_chunks:
         return MetricScore(metric="context_precision", score=0.0, reasoning="no context chunks")
-    chunks_numbered = "\n\n".join(f"[{i + 1}] {c[:400]}" for i, c in enumerate(context_chunks))
+    chunks_numbered = "\n\n".join(
+        f"[{i + 1}] {c[:2500].strip()}" for i, c in enumerate(context_chunks)
+    )
     prompt = _PRECISION_PROMPT.format(question=question, chunks_numbered=chunks_numbered)
     try:
         raw = _call(prompt)
@@ -258,7 +255,7 @@ def score_context_recall(
     """Does the retrieved context cover the key facts in the ground truth?"""
     if not context_chunks:
         return MetricScore(metric="context_recall", score=0.0, reasoning="no context chunks")
-    context = "\n\n".join(f"[{i + 1}] {c[:600]}" for i, c in enumerate(context_chunks))
+    context = "\n\n".join(f"[{i + 1}] {c[:3000].strip()}" for i, c in enumerate(context_chunks))
     prompt = _RECALL_PROMPT.format(question=question, ground_truth=ground_truth, context=context)
     try:
         raw = _call(prompt)

@@ -9,7 +9,7 @@ Two dataclasses are produced by this layer:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -28,7 +28,8 @@ class Citation:
     doc_type    : "earnings_release" etc.
     source      : which retrieval system surfaced this chunk ("dense"|"bm25"|"both")
     rerank_score: FlashRank cross-encoder score — higher = more relevant
-    excerpt     : first 250 chars of parent_text — used for answer verification / Ragas eval
+    excerpt     : first 250 chars of parent_text — used for UI cards
+    full_text   : full parent/child chunk text — used for LLM-as-a-judge evaluation
     """
 
     index: int
@@ -43,6 +44,7 @@ class Citation:
     source: str
     rerank_score: float
     excerpt: str
+    full_text: str = ""
 
     @property
     def label(self) -> str:
@@ -64,6 +66,7 @@ class Citation:
             "source": self.source,
             "rerank_score": round(self.rerank_score, 4),
             "excerpt": self.excerpt,
+            "full_text": self.full_text,
         }
 
 
@@ -78,6 +81,7 @@ class GenerationResult:
     retrieval_failed : True if the retrieval layer returned zero results
     context_chunks_used: how many chunks were actually sent to the LLM
     context_tokens_used: token cost of the context block (for cost tracking)
+    retrieved_chunks : full text of all retrieved chunks provided as context to the LLM
     """
 
     question: str
@@ -93,6 +97,7 @@ class GenerationResult:
     grounded: bool
     retrieval_failed: bool
     trace_id: str | None = None  # set by tracer for request correlation
+    retrieved_chunks: list[str] = field(default_factory=list)
 
     # ── Derived properties ────────────────────────────────────────────────────
 

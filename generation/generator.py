@@ -96,7 +96,8 @@ def _extract_citations(
         result_index = idx - 1  # [1] → index 0, [2] → index 1, …
         if 0 <= result_index < len(citation_results):
             r = citation_results[result_index]
-            excerpt = (r.parent_text or r.text)[:250].strip()
+            full_text = (r.parent_text or r.text).strip()
+            excerpt = full_text[:250].strip()
             citations.append(
                 Citation(
                     index=idx,
@@ -111,6 +112,7 @@ def _extract_citations(
                     source=r.source,
                     rerank_score=r.rerank_score,
                     excerpt=excerpt,
+                    full_text=full_text,
                 )
             )
         else:
@@ -311,6 +313,7 @@ class Generator:
             latency_seconds=latency,
             grounded=grounded,
             retrieval_failed=False,
+            retrieved_chunks=[(r.parent_text or r.text).strip() for r in citation_results],
         )
 
     def generate_streaming(

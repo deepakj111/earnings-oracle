@@ -21,20 +21,18 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from qdrant_client import QdrantClient
 
+from config import settings
 from retrieval.models import MetadataFilter, RetrievalResult, SearchResult
-from retrieval.reranker import rerank
-
-if TYPE_CHECKING:
-    from query.models import TransformedQuery
-
-# retrieval/__init__.py — add at the bottom of the file
-from retrieval.reranker import warmup_reranker
-from retrieval.searcher import (  # <-- Add _fetch_parent_texts here
+from retrieval.reranker import rerank, warmup_reranker
+from retrieval.searcher import (
     _fetch_parent_texts,
     search,
     warmup_bm25,
     warmup_embed_client,
 )
+
+if TYPE_CHECKING:
+    from query.models import TransformedQuery
 
 
 def retrieve(
@@ -77,7 +75,7 @@ def retrieve(
     return RetrievalResult(
         query=query.original,
         results=top_children,
-        reranked=True,
+        reranked=settings.reranker.enabled,
         total_candidates=len(candidates),
         metadata_filter=metadata_filter,
         failed_techniques=list(query.failed_techniques),

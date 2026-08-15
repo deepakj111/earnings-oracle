@@ -98,6 +98,9 @@ High recall = all key financial figures are present in context
 Low recall = important facts missing (likely due to chunking or retrieval gaps)
 ```
 
+#### Context Retention & LLM-as-a-Judge Prompt Windows
+Unlike basic evaluation setups that pass short UI excerpts (e.g. 250 characters), the evaluation harness passes the **complete retrieved context** (`GenerationResult.retrieved_chunks` and `Citation.full_text`) to the LLM-as-a-Judge. The evaluation prompts allow up to 3,000 characters per chunk, ensuring complex multi-column financial tables and detailed management commentary are fully visible during scoring.
+
 ### Running Evaluations
 
 ```bash
@@ -498,29 +501,77 @@ for m in report_a.metric_averages:
 
 ---
 
-## Retrieval Ablations
+## Retrieval Ablations & Architecture Benchmarks
 
-Use environment variable overrides to ablate components and measure impact on evaluation metrics:
+The system provides a comprehensive 6-arm incremental ablation framework (`scripts/run_portfolio_ablations.py`) to quantify the exact marginal gain of each RAG architecture layer:
 
-| Ablation | Config | Purpose |
-|----------|--------|---------|
-| Dense-only retrieval | `RAG_RETRIEVAL_TOP_K_BM25=0` | Measure BM25 contribution |
-| BM25-only retrieval | `RAG_RETRIEVAL_TOP_K_DENSE=0` | Measure dense search contribution |
-| No reranking | `RAG_RERANKER_ENABLED=false` | Measure reranker contribution |
-| No HyDE | Patch `_run_hyde` to return original | Measure HyDE contribution |
-| No step-back | Patch `_run_stepback` to return original | Measure step-back contribution |
-| No parent fetch | `RAG_RETRIEVAL_PARENT_FETCH=false` | Measure parent context contribution |
-| No valley ordering | Patch `_valley_reorder` to return input | Measure lost-in-middle mitigation |
+```
+[Arm 1] Dense Vector Search Only (top_k_bm25=0, no transforms, no reranking, no KG, no CRAG)
+   ↓ (+ BM25 Keyword Matching + Reciprocal Rank Fusion)
+[Arm 2] Hybrid Dense + BM25 Search
+   ↓ (+ HyDE Passage Synthesis + Multi-Query Expansion + Step-Back Abstraction)
+[Arm 3] Hybrid Search + Query Transformations
+   ↓ (+ FlashRank Cross-Encoder ms-marco-MiniLM-L-12-v2)
+[Arm 4] Hybrid Search + Transforms + FlashRank Reranker
+   ↓ (+ GraphRAG Entity Matching & Multi-Hop Context Injection)
+[Arm 5] Hybrid Search + Transforms + Reranker + Knowledge Graph
+   ↓ (+ Relevance Grader + Dynamic Web-Search Fallback)
+[Arm 6] Full Stack Pipeline (+ CRAG Corrective Loop)
+```
 
-Example ablation run:
+### 6-Arm Architecture Reference
+
+| Arm # | Architecture Arm | Active Subsystems & Configurations |
+|:---:|:---|:---|
+| **1** | `1. Base Naive RAG (Dense Only)` | Dense vector retrieval only (`top_k_bm25=0`, reranker disabled, transforms disabled, KG disabled, CRAG disabled) |
+| **2** | `2. + BM25 Sparse (Hybrid RRF)` | Dense vector + BM25 keyword matching fused via Reciprocal Rank Fusion (k=60) |
+| **3** | `3. + Query Transform` | Hybrid search + HyDE synthesis, 3× Multi-Query expansion, and Step-Back prompting |
+| **4** | `4. + FlashRank Reranker` | Hybrid search + Transforms + FlashRank cross-encoder (`ms-marco-MiniLM-L-12-v2`) |
+| **5** | `5. + Knowledge Graph (GraphRAG)` | Hybrid + Transforms + Reranker + GraphRAG entity context injection |
+| **6** | `6. Full Stack (+ CRAG Fallback)` | Complete pipeline with Corrective RAG (CRAG) web-search fallback |
+
+### Running Ablation Studies
 
 ```bash
-# Run with reranker disabled
-RAG_RERANKER_ENABLED=false poetry run python -m evaluation.harness \
-  --name ablation_no_reranker
+# Run all 6 arms across the ENTIRE golden dataset (all questions)
+poetry run python scripts/run_portfolio_ablations.py --all
 
-# Compare with baseline
-python compare_reports.py data/eval_reports/baseline_*.json data/eval_reports/ablation_no_reranker_*.json
+# Run all 6 arms on a custom sample size (e.g. 5 samples for rapid validation)
+poetry run python scripts/run_portfolio_ablations.py -n 5
+
+# Force fresh re-evaluation bypassing cached sample checkpoints
+poetry run python scripts/run_portfolio_ablations.py --all --no-cache
+
+# Run a single arm in isolation (e.g. Arm 1 only)
+poetry run python scripts/run_portfolio_ablations.py --arm 1
+
+# Run specific arms (e.g. Arm 1, Arm 2, and Arm 4)
+poetry run python scripts/run_portfolio_ablations.py --arms 1 2 4
+```
+
+### Automated Invariant Verification (Zero Leakage Check)
+
+To guarantee that components are strictly isolated during ablation testing (e.g. ensuring Arm 1 does not execute FlashRank reranking or query expansion), use `scripts/verify_ablation_isolation.py`. It inspects per-sample execution telemetry:
+
+```bash
+# Run a fresh 5-sample verification test across all 6 arms and assert structural invariants
+poetry run python scripts/verify_ablation_isolation.py --run -n 5
+
+# Audit existing saved results in data/ablation_results/
+poetry run python scripts/verify_ablation_isolation.py
+```
+
+### Custom Pairwise A/B Experiments
+
+To run head-to-head A/B experiments between arbitrary pipeline configurations:
+
+```bash
+poetry run python -m experiments.retrieval_experiment \
+  --baseline '{"top_k_final": 5, "reranker_enabled": false}' \
+  --variant  '{"top_k_final": 5, "reranker_enabled": true}' \
+  --n 10 \
+  --name "reranker_ablation" \
+  --save
 ```
 
 ---

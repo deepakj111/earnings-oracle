@@ -155,6 +155,72 @@ Execute the automated MLOps statistical evaluation suite:
 poetry run python -m evaluation.harness --metrics faithfulness answer_relevancy
 ```
 
+### 6. Run Granular 6-Arm Ablation Studies
+Evaluate how each incremental architecture layer impacts retrieval and generation metrics across the golden dataset:
+
+```bash
+# Run all 6 arms against the ENTIRE golden dataset (all questions)
+poetry run python scripts/run_portfolio_ablations.py --all
+# (or equivalently: poetry run python scripts/run_portfolio_ablations.py -n 0)
+
+# Run all 6 incremental arms with default sample size (10 samples for quick validation)
+poetry run python scripts/run_portfolio_ablations.py
+
+# Run all 6 arms on a custom sample size (e.g. 5 samples for fast runs)
+poetry run python scripts/run_portfolio_ablations.py -n 5
+
+# Recompute fresh results bypassing any cached sample checkpoints
+poetry run python scripts/run_portfolio_ablations.py --all --no-cache
+```
+
+#### Run Individual Arms Separately (e.g., Arm 1 Only)
+You can isolate and benchmark any specific arm or combination using the `--arm` / `--arms` flag:
+
+```bash
+# Run ONLY Arm 1 (Base Naive RAG - Dense Vector Retrieval Only)
+poetry run python scripts/run_portfolio_ablations.py --arm 1
+
+# Run Arm 1 on 5 samples
+poetry run python scripts/run_portfolio_ablations.py -n 5 --arm 1
+
+# Run specific arms (e.g., Arm 1, Arm 2, and Arm 4)
+poetry run python scripts/run_portfolio_ablations.py --arms 1 2 4
+```
+
+| Arm # | Architecture Layer | Active Components & Configuration |
+|:---:|:---|:---|
+| **1** | `1. Base Naive RAG (Dense Only)` | Dense vector retrieval only (`top_k_bm25=0`, no reranking/transforms/KG/CRAG) |
+| **2** | `2. + BM25 Sparse (Hybrid RRF)` | Dense vector + BM25 keyword matching fused via Reciprocal Rank Fusion |
+| **3** | `3. + Query Transform` | Hybrid search + HyDE synthesis, Multi-Query expansion, & Step-Back prompting |
+| **4** | `4. + FlashRank Reranker` | Hybrid search + Query transforms + Cross-encoder reranking (`ms-marco-MiniLM-L-12-v2`) |
+| **5** | `5. + Knowledge Graph (GraphRAG)` | Hybrid + Transforms + Reranker + Multi-hop GraphRAG entity context injection |
+| **6** | `6. Full Stack (+ CRAG Fallback)` | Complete pipeline with Corrective RAG (CRAG) web search fallback |
+
+#### Custom Pairwise A/B Retrieval Experiments
+To run controlled head-to-head A/B testing between arbitrary configurations:
+
+```bash
+poetry run python -m experiments.retrieval_experiment \
+  --baseline '{"top_k_final": 5, "reranker_enabled": false}' \
+  --variant  '{"top_k_final": 5, "reranker_enabled": true}' \
+  --n 10 \
+  --name "reranker_ablation" \
+  --save
+```
+
+*Results and markdown summary reports are automatically generated under `data/ablation_results/` (`ablation_report.md`, `ablation_summary.json`, and per-arm subdirectories).*
+
+#### Automated Component Isolation Verification (Zero Leakage Check)
+To mathematically verify that each ablation arm executed **only** its intended components without leakage (asserting query expansion counts, reranker execution flags, chunk source origins, and graph/CRAG hooks per sample):
+
+```bash
+# Run a fresh 5-sample verification test across all 6 arms and assert structural invariants
+poetry run python scripts/verify_ablation_isolation.py --run -n 5
+
+# Or verify the existing evaluation checkpoints in data/ablation_results/
+poetry run python scripts/verify_ablation_isolation.py
+```
+
 ---
 
 ## 🧪 Testing & CI/CD

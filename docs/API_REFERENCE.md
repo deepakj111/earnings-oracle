@@ -110,9 +110,10 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
 | `answer` | string | LLM-synthesised answer with inline `[N]` citations |
 | `citations` | array | Structured metadata for each citation number used in answer |
 | `citations[].index` | integer | 1-based citation number matching `[N]` in answer text |
-| `citations[].source` | string | `"dense"` \| `"bm25"` \| `"both"` — retrieval system that surfaced this chunk |
+| `citations[].source` | string | `"dense"` \| `"bm25"` \| `"both"` \| `"graph"` \| `"web"` — retrieval system that surfaced this chunk |
 | `citations[].rerank_score` | float | FlashRank cross-encoder relevance score (higher = more relevant) |
-| `citations[].excerpt` | string | First 250 chars of source passage |
+| `citations[].excerpt` | string | First 250 chars of source passage for compact UI cards |
+| `citations[].full_text` | string | Full text of retrieved context chunk for evaluation and deep inspection |
 | `grounded` | boolean | `false` if model signalled insufficient context — consider CRAG web fallback |
 | `retrieval_failed` | boolean | `true` if zero documents were retrieved from the index |
 | `unique_tickers` | array | Deduplicated tickers cited in answer, in citation order |

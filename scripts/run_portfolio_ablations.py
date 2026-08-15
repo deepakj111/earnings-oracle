@@ -39,7 +39,11 @@ def make_pipeline() -> FinancialRAGPipeline:
         client.get_collections()
     except Exception:
         client = QdrantClient(path="data/qdrant_user_storage")
-    return FinancialRAGPipeline(qdrant_client=client, generation_model="gpt-5-mini")
+    return FinancialRAGPipeline(
+        qdrant_client=client,
+        enable_query_cache=False,
+        generation_model="gpt-5-mini",
+    )
 
 
 def get_ablation_arms() -> list[ExperimentConfig]:
@@ -108,7 +112,11 @@ def get_ablation_arms() -> list[ExperimentConfig]:
     ]
 
 
-def run_granular_ablations(n_samples: int = 0) -> None:
+def run_granular_ablations(
+    n_samples: int = 0,
+    target_arms: list[int] | None = None,
+    force: bool = False,
+) -> None:
     dataset = load_golden_dataset()
     if n_samples > 0:
         dataset = dataset[:n_samples]
@@ -124,11 +132,21 @@ def run_granular_ablations(n_samples: int = 0) -> None:
     base_out_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Define the 6 Granular Incremental Arms ────────────────────────────────
-    arms = get_ablation_arms()
+    all_arms = get_ablation_arms()
+    if target_arms:
+        valid_arms = [a for a in target_arms if 1 <= a <= len(all_arms)]
+        if not valid_arms:
+            logger.error(
+                f"No valid arms selected from {target_arms}. Available arms: 1 to {len(all_arms)}"
+            )
+            return
+        selected_arms = [(idx, all_arms[idx - 1]) for idx in valid_arms]
+    else:
+        selected_arms = list(enumerate(all_arms, start=1))
 
     results_map = {}
 
-    for idx, cfg in enumerate(arms, start=1):
+    for idx, cfg in selected_arms:
         logger.info(f"\n{'=' * 70}\n🚀 RUNNING ARM {idx}: {cfg.label}\n{'=' * 70}")
 
         # Create subfolder for this arm
@@ -136,7 +154,9 @@ def run_granular_ablations(n_samples: int = 0) -> None:
         arm_dir = base_out_dir / f"arm_{idx}_{slug}"
         arm_dir.mkdir(parents=True, exist_ok=True)
 
-        arm_res = exp._run_arm(cfg, dataset=dataset, metrics=exp._METRICS, arm_dir=arm_dir)
+        arm_res = exp._run_arm(
+            cfg, dataset=dataset, metrics=exp._METRICS, arm_dir=arm_dir, force_recompute=force
+        )
         results_map[cfg.label] = arm_res
 
         # 1. Save samples.json (already checkpointed during _run_arm)
@@ -200,7 +220,7 @@ def run_granular_ablations(n_samples: int = 0) -> None:
                 ),
                 "pipeline_errors": results_map[cfg.label].pipeline_errors,
             }
-            for cfg in arms
+            for _, cfg in selected_arms
         },
     }
     with open(base_out_dir / "ablation_summary.json", "w", encoding="utf-8") as f:
@@ -230,13 +250,13 @@ def run_granular_ablations(n_samples: int = 0) -> None:
     print(header_str)
     print(sep_str)
 
-    master_md = "# Comprehensive 6-Arm RAG Ablation & Metric Report\n\n"
+    master_md = "# Comprehensive RAG Ablation & Metric Report\n\n"
     master_md += f"**Evaluated Samples**: {len(dataset)} financial QA pairs\n\n"
     master_md += (
         "## Table 1: Absolute Pipeline Performance Metrics\n\n" + header_str + "\n" + sep_str + "\n"
     )
 
-    for cfg in arms:
+    for _, cfg in selected_arms:
         res = results_map[cfg.label]
         f_val = res.avg("faithfulness")
         a_val = res.avg("answer_relevancy")
@@ -256,74 +276,75 @@ def run_granular_ablations(n_samples: int = 0) -> None:
     print("=" * 110)
 
     # ── Table 2: Incremental Marginal Component Lift Table ────────────────────
-    print("\n\n" + "=" * 110)
-    print("### 📈 TABLE 2: Incremental Component Marginal Lift (Layer-by-Layer) ###")
-    print("=" * 110)
-    headers_t2 = [
-        "Added Component Layer",
-        "Targeted Capability",
-        "Delta Faithfulness",
-        "Delta Precision",
-        "Delta Recall",
-        "Delta Token F1",
-        "Delta ROUGE-1",
-        "Delta Semantic Sim",
-        "Latency Change",
-    ]
-    header_t2_str = "| " + " | ".join(headers_t2) + " |"
-    sep_t2_str = "|:" + ":|:".join(["----------------"] * len(headers_t2)) + ":|"
-    print(header_t2_str)
-    print(sep_t2_str)
+    if len(selected_arms) > 1 and selected_arms[0][0] == 1:
+        print("\n\n" + "=" * 110)
+        print("### 📈 TABLE 2: Incremental Component Marginal Lift (Layer-by-Layer) ###")
+        print("=" * 110)
+        headers_t2 = [
+            "Added Component Layer",
+            "Targeted Capability",
+            "Delta Faithfulness",
+            "Delta Precision",
+            "Delta Recall",
+            "Delta Token F1",
+            "Delta ROUGE-1",
+            "Delta Semantic Sim",
+            "Latency Change",
+        ]
+        header_t2_str = "| " + " | ".join(headers_t2) + " |"
+        sep_t2_str = "|:" + ":|:".join(["----------------"] * len(headers_t2)) + ":|"
+        print(header_t2_str)
+        print(sep_t2_str)
 
-    master_md += (
-        "\n## Table 2: Incremental Component Marginal Lift (Layer-by-Layer)\n\n"
-        + header_t2_str
-        + "\n"
-        + sep_t2_str
-        + "\n"
-    )
+        master_md += (
+            "\n## Table 2: Incremental Component Marginal Lift (Layer-by-Layer)\n\n"
+            + header_t2_str
+            + "\n"
+            + sep_t2_str
+            + "\n"
+        )
 
-    prev_res = None
-    for idx, cfg in enumerate(arms):
-        res = results_map[cfg.label]
-        if idx == 0:
-            target = "Dense Vector Retrieval Baseline"
-            d_f = d_p = d_r = d_tf1 = d_r1 = d_sim = "0.000"
-            d_lat = "+0.00s"
-        else:
-            d_f_val = res.avg("faithfulness") - prev_res.avg("faithfulness")
-            d_p_val = res.avg("context_precision") - prev_res.avg("context_precision")
-            d_r_val = res.avg("context_recall") - prev_res.avg("context_recall")
-            d_tf1_val = res.avg("token_f1") - prev_res.avg("token_f1")
-            d_r1_val = res.avg("rouge1_f1") - prev_res.avg("rouge1_f1")
-            d_sim_val = res.avg("semantic_similarity") - prev_res.avg("semantic_similarity")
-            d_lat_val = (res.total_latency_s - prev_res.total_latency_s) / max(1, len(dataset))
+        prev_res = None
+        for loop_i, (orig_idx, cfg) in enumerate(selected_arms):
+            res = results_map[cfg.label]
+            if loop_i == 0:
+                target = "Dense Vector Retrieval Baseline"
+                d_f = d_p = d_r = d_tf1 = d_r1 = d_sim = "0.000"
+                d_lat = "+0.00s"
+            else:
+                d_f_val = res.avg("faithfulness") - prev_res.avg("faithfulness")
+                d_p_val = res.avg("context_precision") - prev_res.avg("context_precision")
+                d_r_val = res.avg("context_recall") - prev_res.avg("context_recall")
+                d_tf1_val = res.avg("token_f1") - prev_res.avg("token_f1")
+                d_r1_val = res.avg("rouge1_f1") - prev_res.avg("rouge1_f1")
+                d_sim_val = res.avg("semantic_similarity") - prev_res.avg("semantic_similarity")
+                d_lat_val = (res.total_latency_s - prev_res.total_latency_s) / max(1, len(dataset))
 
-            d_f = f"+{d_f_val:.3f}" if d_f_val >= 0 else f"{d_f_val:.3f}"
-            d_p = f"+{d_p_val:.3f}" if d_p_val >= 0 else f"{d_p_val:.3f}"
-            d_r = f"+{d_r_val:.3f}" if d_r_val >= 0 else f"{d_r_val:.3f}"
-            d_tf1 = f"+{d_tf1_val:.3f}" if d_tf1_val >= 0 else f"{d_tf1_val:.3f}"
-            d_r1 = f"+{d_r1_val:.3f}" if d_r1_val >= 0 else f"{d_r1_val:.3f}"
-            d_sim = f"+{d_sim_val:.3f}" if d_sim_val >= 0 else f"{d_sim_val:.3f}"
-            d_lat = f"+{d_lat_val:.2f}s" if d_lat_val >= 0 else f"{d_lat_val:.2f}s"
+                d_f = f"+{d_f_val:.3f}" if d_f_val >= 0 else f"{d_f_val:.3f}"
+                d_p = f"+{d_p_val:.3f}" if d_p_val >= 0 else f"{d_p_val:.3f}"
+                d_r = f"+{d_r_val:.3f}" if d_r_val >= 0 else f"{d_r_val:.3f}"
+                d_tf1 = f"+{d_tf1_val:.3f}" if d_tf1_val >= 0 else f"{d_tf1_val:.3f}"
+                d_r1 = f"+{d_r1_val:.3f}" if d_r1_val >= 0 else f"{d_r1_val:.3f}"
+                d_sim = f"+{d_sim_val:.3f}" if d_sim_val >= 0 else f"{d_sim_val:.3f}"
+                d_lat = f"+{d_lat_val:.2f}s" if d_lat_val >= 0 else f"{d_lat_val:.2f}s"
 
-            targets = [
-                "",
-                "Exact Table & Financial Keyword Matching",
-                "Query Expansion & HyDE Document Synthesis",
-                "Deep Cross-Encoder Re-ranking",
-                "Multi-Hop Entity Link Context Injection",
-                "Self-Correction & Web Search Fallback",
-            ]
-            target = targets[idx]
+                targets = [
+                    "",
+                    "Exact Table & Financial Keyword Matching",
+                    "Query Expansion & HyDE Document Synthesis",
+                    "Deep Cross-Encoder Re-ranking",
+                    "Multi-Hop Entity Link Context Injection",
+                    "Self-Correction & Web Search Fallback",
+                ]
+                target = targets[orig_idx - 1] if orig_idx - 1 < len(targets) else ""
 
-        comp_name = cfg.label.split(". ", 1)[-1]
-        row_t2_str = f"| **{comp_name}** | {target} | {d_f} | {d_p} | {d_r} | {d_tf1} | {d_r1} | {d_sim} | {d_lat} |"
-        print(row_t2_str)
-        master_md += row_t2_str + "\n"
-        prev_res = res
+            comp_name = cfg.label.split(". ", 1)[-1]
+            row_t2_str = f"| **{comp_name}** | {target} | {d_f} | {d_p} | {d_r} | {d_tf1} | {d_r1} | {d_sim} | {d_lat} |"
+            print(row_t2_str)
+            master_md += row_t2_str + "\n"
+            prev_res = res
 
-    print("=" * 110 + "\n")
+        print("=" * 110 + "\n")
 
     with open(base_out_dir / "ablation_report.md", "w", encoding="utf-8") as f:
         f.write(master_md)
@@ -338,7 +359,29 @@ if __name__ == "__main__":
         "--n-samples",
         type=int,
         default=10,
-        help="Number of dataset samples to evaluate (default: 10)",
+        help="Number of dataset samples to evaluate (default: 10, pass 0 or use --all for the entire dataset)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Evaluate against ALL questions in the golden dataset (equivalent to -n 0)",
+    )
+    parser.add_argument(
+        "--arm",
+        "--arms",
+        nargs="+",
+        type=int,
+        default=None,
+        dest="arms",
+        help="Specific arm number(s) to evaluate (1 to 6). Example: --arm 1 or --arms 1 2 3",
+    )
+    parser.add_argument(
+        "--no-cache",
+        "--force",
+        action="store_true",
+        dest="force",
+        help="Ignore cached sample checkpoints and re-evaluate all samples from scratch.",
     )
     args = parser.parse_args()
-    run_granular_ablations(n_samples=args.n_samples)
+    n_samples = 0 if args.all else args.n_samples
+    run_granular_ablations(n_samples=n_samples, target_arms=args.arms, force=args.force)

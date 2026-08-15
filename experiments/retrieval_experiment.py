@@ -113,6 +113,8 @@ class ExperimentConfig:
             "rrf_k_constant",
             "reranker_enabled",
             "hyde_enabled",
+            "multiquery_enabled",
+            "stepback_enabled",
             "graphrag_enabled",
             "use_crag",
         ):
@@ -309,12 +311,14 @@ class RetrievalExperiment:
         dataset: list[EvalSample],
         metrics: list[str],
         arm_dir: Path | None = None,
+        force_recompute: bool = False,
     ) -> ArmResult:
         """
         Run a single experiment arm with incremental per-sample checkpointing.
 
         If arm_dir is provided and contains samples.json, successful sample results
-        are reused to prevent redundant API calls upon restart/resumption.
+        are reused to prevent redundant API calls upon restart/resumption unless
+        force_recompute is True.
         """
         env_patch = config.to_env_patch()
         original_env: dict[str, str | None] = {}
@@ -322,6 +326,10 @@ class RetrievalExperiment:
         for k, v in env_patch.items():
             original_env[k] = os.environ.get(k)
             os.environ[k] = v
+
+        from config import settings
+
+        settings.reload()
 
         logger.info(f"Running arm '{config.label}' | env_patch={env_patch}")
         t_start = time.perf_counter()
@@ -331,7 +339,7 @@ class RetrievalExperiment:
         if arm_dir is not None:
             arm_dir.mkdir(parents=True, exist_ok=True)
             cache_file = arm_dir / "samples.json"
-            if cache_file.exists():
+            if cache_file.exists() and not force_recompute:
                 try:
                     with open(cache_file, encoding="utf-8") as f:
                         cached_items = json.load(f)
@@ -373,10 +381,17 @@ class RetrievalExperiment:
                     else:
                         result = pipeline.ask(sample.question)
 
+                    # Use full text of retrieved context chunks provided to the generator
+                    context_chunks = (
+                        result.retrieved_chunks
+                        if getattr(result, "retrieved_chunks", None)
+                        else [c.full_text or c.excerpt for c in result.citations]
+                    )
+
                     scores = compute_all_metrics(
                         question=sample.question,
                         answer=result.answer,
-                        context_chunks=[c.excerpt for c in result.citations],
+                        context_chunks=context_chunks,
                         ground_truth=sample.ground_truth,
                         metrics=metrics,
                     )
@@ -388,6 +403,33 @@ class RetrievalExperiment:
                         f"[{config.label}] Sample {idx}/{len(dataset)}: {sample.sample_id} "
                         f"| {sample_latency:.1f}s | {scores_str}"
                     )
+                    transformed_q = getattr(pipeline, "last_transformed_query", None)
+                    retrieval_res = getattr(pipeline, "last_retrieval_result", None)
+                    crag_res = getattr(pipeline, "last_crag_result", None)
+
+                    telemetry = {
+                        "multi_query_count": len(transformed_q.multi_queries)
+                        if transformed_q
+                        else 1,
+                        "hyde_generated": (transformed_q.hyde_document != sample.question)
+                        if transformed_q
+                        else False,
+                        "stepback_generated": (transformed_q.stepback_query != sample.question)
+                        if transformed_q
+                        else False,
+                        "reranked": bool(retrieval_res.reranked) if retrieval_res else False,
+                        "total_candidates": retrieval_res.total_candidates if retrieval_res else 0,
+                        "chunk_sources": list({r.source for r in retrieval_res.results})
+                        if retrieval_res
+                        else [],
+                        "graph_chunks_count": sum(
+                            1 for r in retrieval_res.results if r.source == "graph"
+                        )
+                        if retrieval_res
+                        else 0,
+                        "crag_action": crag_res.action.value if crag_res else None,
+                    }
+
                     s_dict = {
                         "sample_id": sample.sample_id,
                         "ticker": sample.ticker,
@@ -401,7 +443,8 @@ class RetrievalExperiment:
                             }
                             for c in result.citations
                         ],
-                        "context_chunks": [c.excerpt for c in result.citations],
+                        "context_chunks": context_chunks,
+                        "telemetry": telemetry,
                         "latency_seconds": round(sample_latency, 3),
                         "scores": scores,
                         "pipeline_failed": False,
@@ -476,6 +519,10 @@ class RetrievalExperiment:
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = original_v
+
+            from config import settings
+
+            settings.reload()
 
 
 def _cli_main() -> None:

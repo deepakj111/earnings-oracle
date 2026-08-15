@@ -59,6 +59,7 @@ Thread-safety:
 from __future__ import annotations
 
 import contextlib
+import threading
 import time
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
@@ -79,9 +80,8 @@ from retrieval.models import MetadataFilter, RetrievalResult
 if TYPE_CHECKING:
     from crag.corrector import CRAGCorrector
     from crag.models import CRAGResult
-
-
-import threading
+    from observability.trace_models import PipelineTrace
+    from query.models import TransformedQuery
 
 
 class FinancialRAGPipeline:
@@ -127,6 +127,12 @@ class FinancialRAGPipeline:
             cost_alert_per_session_usd=obs_cfg.cost_alert_per_session_usd,
             audit_writer=audit_writer,
         )
+
+        self.last_trace: PipelineTrace | None = None
+        self.last_transformed_query: TransformedQuery | None = None
+        self.last_retrieval_result: RetrievalResult | None = None
+        self.last_generation_result: GenerationResult | None = None
+        self.last_crag_result: CRAGResult | None = None
 
         if async_warmup:
             threading.Thread(target=self._preload_models, daemon=True).start()
@@ -337,6 +343,12 @@ class FinancialRAGPipeline:
 
         # Attach trace_id for request correlation
         result.trace_id = trace.trace_id
+
+        self.last_trace = trace
+        self.last_transformed_query = transformed
+        self.last_retrieval_result = retrieval_result
+        self.last_generation_result = result
+        self.last_crag_result = None
 
         logger.info(
             f"Pipeline complete | grounded={result.grounded} | "
@@ -602,6 +614,11 @@ class FinancialRAGPipeline:
             generation_result=generation_result,
             retrieval_result=retrieval_result,
         )
+
+        self.last_transformed_query = transformed
+        self.last_retrieval_result = retrieval_result
+        self.last_generation_result = generation_result
+        self.last_crag_result = crag_result
 
         total = time.perf_counter() - pipeline_start
         logger.info(
