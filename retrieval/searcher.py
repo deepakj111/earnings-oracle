@@ -195,17 +195,21 @@ def _bm25_search(
 
 
 def _rrf_fuse(
-    result_lists: list[list[str]],
+    result_lists: list[tuple[list[str], str]],
     all_payloads: dict[str, dict],
     k: int,
+    bm25_weight: float = 1.15,
+    dense_weight: float = 1.0,
 ) -> list[tuple[str, float, str]]:
     """
-    Reciprocal Rank Fusion across multiple result lists.
+    Reciprocal Rank Fusion across multiple result lists with configurable source weighting.
 
     Args:
-        result_lists : list of ordered chunk_id lists (each is one search result)
+        result_lists : list of (chunk_id list, source_label) tuples
         all_payloads : chunk_id → payload dict (built up during search)
         k            : RRF constant (default 60 from original paper)
+        bm25_weight  : score multiplier for BM25 sparse keyword hits (default 1.15)
+        dense_weight : score multiplier for dense vector hits (default 1.0)
 
     Returns:
         List of (chunk_id, rrf_score, source) sorted by rrf_score descending.
@@ -216,8 +220,9 @@ def _rrf_fuse(
 
     for result_list_with_source in result_lists:
         chunk_ids, source_label = result_list_with_source
+        weight = bm25_weight if "bm25" in source_label.lower() else dense_weight
         for rank, chunk_id in enumerate(chunk_ids, start=1):
-            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (k + rank)
+            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + weight / (k + rank)
             if chunk_id not in sources:
                 sources[chunk_id] = set()
             sources[chunk_id].add(source_label)
@@ -382,10 +387,27 @@ def search(
         return []
 
     # ── 3. RRF fusion ──────────────────────────────────────────────────────────
-    fused = _rrf_fuse(rrf_input, all_payloads, k=rrf_k)  # type: ignore[arg-type]
+    try:
+        bm25_w = float(settings.retrieval.bm25_weight)
+    except (TypeError, ValueError):
+        bm25_w = 1.15
+
+    try:
+        dense_w = float(settings.retrieval.dense_weight)
+    except (TypeError, ValueError):
+        dense_w = 1.0
+
+    fused = _rrf_fuse(
+        rrf_input,
+        all_payloads,
+        k=rrf_k,
+        bm25_weight=bm25_w,
+        dense_weight=dense_w,
+    )
     logger.info(
         f"RRF fusion: {len(all_payloads)} unique chunks → "
-        f"top {min(top_k_pre, len(fused))} passed to reranker"
+        f"top {min(top_k_pre, len(fused))} passed to reranker "
+        f"(weights: dense={dense_w}, bm25={bm25_w})"
     )
 
     # Build SearchResult objects for top_k_pre_rerank candidates

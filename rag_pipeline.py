@@ -238,15 +238,16 @@ class FinancialRAGPipeline:
 
         # Gate HyDE on query specificity:
         #   - router.skip_hyde=True  → query is FINANCIAL_GENERAL or AMBIGUOUS (no RAG needed)
-        #   - Specific queries (ticker + year both detected) skip HyDE too: the original
-        #     query IS the best search signal; a hypothetical answer can drift from exact figures.
-        #   - HyDE only fires for FINANCIAL_SPECIFIC queries where year/ticker is vague,
+        #   - Specific queries (ticker + year both detected AND NOT comparative) skip HyDE:
+        #     the original query IS the best search signal; a hypothetical answer can drift from exact figures.
+        #   - HyDE fires for comparative queries or when year/ticker is vague,
         #     where a "hypothetical passage" genuinely helps close the query-doc gap.
         routing_skip_hyde = routing.skip_hyde if routing else False
         specific_and_grounded = (
             routing is not None
             and routing.detected_ticker is not None
             and routing.detected_year is not None
+            and not routing.is_comparative
         )
         skip_hyde_flag = routing_skip_hyde or specific_and_grounded
 

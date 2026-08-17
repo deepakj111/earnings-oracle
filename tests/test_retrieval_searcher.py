@@ -370,6 +370,8 @@ class TestSearch:
             mock_settings.retrieval.top_k_dense = 2
             mock_settings.retrieval.top_k_bm25 = 2
             mock_settings.retrieval.rrf_k_constant = 60
+            mock_settings.retrieval.bm25_weight = 1.15
+            mock_settings.retrieval.dense_weight = 1.0
             mock_settings.reranker.top_k_pre_rerank = 5
 
             mock_qsearch.side_effect = [

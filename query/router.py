@@ -136,6 +136,26 @@ Respond ONLY with valid JSON:
 }"""
 
 
+_COMPARATIVE_KEYWORDS = frozenset(
+    [
+        "compare",
+        "comparison",
+        "compared",
+        "change",
+        "growth",
+        "increased",
+        "decreased",
+        "versus",
+        "vs",
+        "yoy",
+        "qoq",
+        "difference",
+        "trend",
+        "between",
+    ]
+)
+
+
 class QueryIntent(str, Enum):
     FINANCIAL_SPECIFIC = "FINANCIAL_SPECIFIC"
     FINANCIAL_GENERAL = "FINANCIAL_GENERAL"
@@ -158,6 +178,9 @@ class RoutingDecision:
         should_refuse   : True when query is entirely out of scope
         latency_ms      : Time taken for routing decision in milliseconds
         used_heuristic  : True if heuristic fast-path was used (no LLM call)
+        detected_year   : Year detected in query (e.g. 2024), else None
+        detected_quarter: Quarter detected in query (e.g. Q1), else None
+        is_comparative  : True if query compares metrics across periods or years
     """
 
     intent: QueryIntent
@@ -171,6 +194,7 @@ class RoutingDecision:
     used_heuristic: bool = False
     detected_year: int | None = None
     detected_quarter: str | None = None
+    is_comparative: bool = False
 
     @property
     def is_specific(self) -> bool:
@@ -182,11 +206,12 @@ class RoutingDecision:
 
     def summary(self) -> str:
         heuristic_tag = " [heuristic]" if self.used_heuristic else ""
+        comparative_tag = " [comparative]" if self.is_comparative else ""
         return (
             f"intent={self.intent.value} confidence={self.confidence:.2f} "
             f"ticker={self.detected_ticker or 'none'} "
             f"skip_transform={self.skip_transform} refuse={self.should_refuse} "
-            f"latency={self.latency_ms:.0f}ms{heuristic_tag}"
+            f"latency={self.latency_ms:.0f}ms{heuristic_tag}{comparative_tag}"
         )
 
 
@@ -253,16 +278,17 @@ class QueryRouter:
         heuristic_result = self._heuristic_classify(question_clean)
         if heuristic_result is not None:
             latency_ms = (time.perf_counter() - t_start) * 1000
-            h_intent, h_confidence, h_ticker, h_reasoning, h_year, h_quarter = heuristic_result
+            h_intent, h_conf, h_ticker, h_reason, h_year, h_quarter, h_comp = heuristic_result
             decision = self._build_decision(
                 intent=h_intent,
-                confidence=h_confidence,
+                confidence=h_conf,
                 detected_ticker=h_ticker,
-                reasoning=h_reasoning,
+                reasoning=h_reason,
                 latency_ms=latency_ms,
                 used_heuristic=True,
                 detected_year=h_year,
                 detected_quarter=h_quarter,
+                is_comparative=h_comp,
             )
             self._update_stats(decision)
             logger.debug(f"Router [heuristic] | {decision.summary()}")
@@ -271,6 +297,15 @@ class QueryRouter:
         llm_result = self._llm_classify(question_clean)
         latency_ms = (time.perf_counter() - t_start) * 1000
 
+        all_years = re.findall(r"\b(202[0-9])\b", question_clean)
+        is_comparative = (
+            any(kw in question_clean.lower() for kw in _COMPARATIVE_KEYWORDS)
+            or len(set(all_years)) > 1
+        )
+        detected_year = int(all_years[0]) if all_years else None
+        quarter_match = re.search(r"\b(q[1-4]|fy)\b", question_clean.lower())
+        detected_quarter = quarter_match.group(1).upper() if quarter_match else None
+
         decision = self._build_decision(
             intent=QueryIntent(llm_result.get("intent", "AMBIGUOUS")),
             confidence=float(llm_result.get("confidence", 0.5)),
@@ -278,6 +313,9 @@ class QueryRouter:
             reasoning=llm_result.get("reasoning", "LLM classification"),
             latency_ms=latency_ms,
             used_heuristic=False,
+            detected_year=detected_year,
+            detected_quarter=detected_quarter,
+            is_comparative=is_comparative,
         )
         self._update_stats(decision)
         logger.debug(f"Router [llm] | {decision.summary()}")
@@ -285,33 +323,38 @@ class QueryRouter:
 
     def _heuristic_classify(
         self, question: str
-    ) -> tuple[QueryIntent, float, str | None, str, int | None, str | None] | None:
+    ) -> tuple[QueryIntent, float, str | None, str, int | None, str | None, bool] | None:
         """
         Fast-path classification using regex and keyword matching.
 
-        Returns a 6-tuple (intent, confidence, ticker, reasoning, detected_year,
-        detected_quarter) if heuristics are conclusive, else None to fall through
+        Returns a 7-tuple (intent, confidence, ticker, reasoning, detected_year,
+        detected_quarter, is_comparative) if heuristics are conclusive, else None to fall through
         to LLM classification.
         """
         lower = question.lower()
         words = lower.split()
 
         if len(words) <= 2 and not any(kw in lower for kw in _FINANCIAL_KEYWORDS):
-            return QueryIntent.OUT_OF_SCOPE, 0.9, None, "Too short and no financial keywords"
+            return QueryIntent.OUT_OF_SCOPE, 0.9, None, "Too short and no financial keywords", None, None, False
 
         greeting_patterns = ("hello", "hi ", "hey ", "thanks", "thank you", "what is your")
         if any(lower.startswith(p) for p in greeting_patterns) and len(words) < 6:
-            return QueryIntent.OUT_OF_SCOPE, 0.95, None, "Greeting or small talk detected"
+            return QueryIntent.OUT_OF_SCOPE, 0.95, None, "Greeting or small talk detected", None, None, False
 
         ticker_pattern, ticker_map = _build_ticker_resolver()
         ticker_match = ticker_pattern.search(question)
         has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
 
-        year_match = re.search(r"\b(202[0-9])\b", question)
-        detected_year = int(year_match.group(1)) if year_match else None
+        all_years = re.findall(r"\b(202[0-9])\b", question)
+        detected_year = int(all_years[0]) if all_years else None
 
         quarter_match = re.search(r"\b(q[1-4]|fy)\b", lower)
         detected_quarter = quarter_match.group(1).upper() if quarter_match else None
+
+        is_comparative = (
+            any(kw in lower for kw in _COMPARATIVE_KEYWORDS)
+            or len(set(all_years)) > 1
+        )
 
         if ticker_match and has_financial_kw:
             raw_match = ticker_match.group(0).upper()
@@ -323,6 +366,7 @@ class QueryRouter:
                 f"Detected ticker {canonical} with financial keyword",
                 detected_year,
                 detected_quarter,
+                is_comparative,
             )
 
         return None
@@ -375,6 +419,7 @@ class QueryRouter:
         used_heuristic: bool,
         detected_year: int | None = None,
         detected_quarter: str | None = None,
+        is_comparative: bool = False,
     ) -> RoutingDecision:
         return RoutingDecision(
             intent=intent,
@@ -388,6 +433,7 @@ class QueryRouter:
             used_heuristic=used_heuristic,
             detected_year=detected_year,
             detected_quarter=detected_quarter,
+            is_comparative=is_comparative,
         )
 
     def _update_stats(self, decision: RoutingDecision) -> None:

@@ -200,6 +200,12 @@ class RetrievalConfig:
     metadata_filter_enabled: bool = field(
         default_factory=lambda: _env_bool("RAG_RETRIEVAL_META_FILTER", True)
     )
+    bm25_weight: float = field(
+        default_factory=lambda: _env_float("RAG_RETRIEVAL_BM25_WEIGHT", 1.15)
+    )
+    dense_weight: float = field(
+        default_factory=lambda: _env_float("RAG_RETRIEVAL_DENSE_WEIGHT", 1.0)
+    )
 
 
 # ── Infrastructure ─────────────────────────────────────────────────────────────
