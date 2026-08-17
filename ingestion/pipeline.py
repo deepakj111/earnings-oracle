@@ -115,7 +115,14 @@ def _save_bm25(bm25_texts: list[list[str]], bm25_corpus: list[dict]) -> None:
             f"but bm25_corpus has {len(bm25_corpus)}. They must be equal length."
         )
 
-    bm25 = BM25Okapi(bm25_texts)
+    # BM25 hyperparameter tuning for financial document corpora:
+    #   k1=1.5 (default) — term frequency saturation; 1.2-2.0 is standard range
+    #   b=0.5 (reduced from 0.75 default) — length normalization factor
+    #   Financial chunks vary wildly in length: a 3-row income-statement table
+    #   vs a 500-word MD&A section. The default b=0.75 over-penalizes longer
+    #   but information-rich chunks. b=0.5 reduces this penalty so dense
+    #   financial tables and detailed disclosures score more fairly.
+    bm25 = BM25Okapi(bm25_texts, k1=1.5, b=0.5)
     BM25_INDEX_PATH.parent.mkdir(exist_ok=True)
 
     with open(BM25_INDEX_PATH, "wb") as f:
@@ -275,7 +282,14 @@ async def _process_document(
             doc_timings["extract_metadata"] = round(t1 - t0, 4)
 
             t0 = time.perf_counter()
-            chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
+            chunks = create_parent_child_chunks(
+                ticker=doc.ticker,
+                date=doc.date,
+                sections=doc.sections,
+                doc_type=metadata.form_type,
+                company_name=metadata.company,
+                fiscal_period=metadata.fiscal_period,
+            )
             t1 = time.perf_counter()
             doc_timings["create_chunks"] = round(t1 - t0, 4)
 

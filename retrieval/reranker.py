@@ -65,17 +65,33 @@ def rerank(
         ranker, rerank_request_cls = _get_ranker()  # moved inside try
         request = rerank_request_cls(query=query, passages=passages)  # type: ignore[operator]
         reranked = ranker.rerank(request)  # type: ignore[attr-defined]
-
         id_to_score: dict[int, float] = {item["id"]: float(item["score"]) for item in reranked}
+
+        if len(candidates) == 1:
+            candidates[0].rerank_score = id_to_score.get(0, 0.0)
+            return candidates
+
+        raw_scores = [id_to_score.get(i, 0.0) for i in range(len(candidates))]
+        min_ce, max_ce = min(raw_scores), max(raw_scores)
+        range_ce = (max_ce - min_ce) if max_ce > min_ce else 1.0
+
+        rrf_scores = [r.rrf_score for r in candidates]
+        min_rrf, max_rrf = min(rrf_scores), max(rrf_scores)
+        range_rrf = (max_rrf - min_rrf) if max_rrf > min_rrf else 1.0
+
         for i, result in enumerate(candidates):
-            result.rerank_score = id_to_score.get(i, float("-inf"))
+            raw_ce = id_to_score.get(i, min_ce)
+            norm_ce = (raw_ce - min_ce) / range_ce
+            norm_rrf = (result.rrf_score - min_rrf) / range_rrf
+            # Soft score interpolation: 65% cross-encoder + 35% RRF confidence
+            result.rerank_score = 0.65 * norm_ce + 0.35 * norm_rrf
 
         candidates.sort(key=lambda r: r.rerank_score, reverse=True)
         top = candidates[:top_k_final]
 
         logger.info(
             f"Reranking: {len(candidates)} candidates → {len(top)} results "
-            f"(top score: {top[0].rerank_score:.4f})"
+            f"(top blended score: {top[0].rerank_score:.4f})"
         )
         return top
 

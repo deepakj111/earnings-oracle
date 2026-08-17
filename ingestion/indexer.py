@@ -43,16 +43,47 @@ _MAX_EMBEDDING_TOKENS = (
 # BM25 tokenizer that preserves financial tokens like "$94.9b", "6.7%", "q4", "2024"
 # while stripping trailing punctuation that naive .split() would attach.
 _BM25_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.$%/-]*")
+_DATE_ISO_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+_MONTH_NAMES = {
+    "01": "january",
+    "02": "february",
+    "03": "march",
+    "04": "april",
+    "05": "may",
+    "06": "june",
+    "07": "july",
+    "08": "august",
+    "09": "september",
+    "10": "october",
+    "11": "november",
+    "12": "december",
+}
 
 
 def _tokenize_for_bm25(text: str) -> list[str]:
-    """Tokenize text for BM25 indexing.
+    """Tokenize text for BM25 indexing and querying.
 
-    Strips punctuation from word boundaries so that query tokens like
-    'revenue', '2024', and 'q4' match their counterparts in indexed text.
-    Financial patterns like '$94.9b', '6.7%', 'q4' are preserved whole.
+    Preserves:
+      - Clean alphanumeric and financial tokens ('$94.9b', '6.7%', 'q4', '10-k')
+      - Dual date representation: ISO dates ('2024-12-31') expand to include
+        year, month name ('december'), and day ('31') so that natural queries
+        match ISO formatted dates in tables.
     """
-    return _BM25_TOKEN_RE.findall(text.lower())
+    text_lower = text.lower()
+    tokens = _BM25_TOKEN_RE.findall(text_lower)
+
+    # Expand ISO dates to enable natural query date matching
+    extra_date_tokens: list[str] = []
+    for match in _DATE_ISO_RE.finditer(text_lower):
+        year, month, day = match.group(1), match.group(2), match.group(3)
+        month_name = _MONTH_NAMES.get(month)
+        if month_name:
+            extra_date_tokens.extend([year, month_name, str(int(day))])
+
+    if extra_date_tokens:
+        tokens.extend(extra_date_tokens)
+
+    return tokens
 
 
 def _truncate_for_embedding(text: str, max_tokens: int = _MAX_EMBEDDING_TOKENS) -> str:
@@ -147,16 +178,18 @@ def _ensure_payload_indices(client: QdrantClient) -> None:
     query, which is functionally correct but O(n) instead of O(log n).
 
     Index types:
-      ticker   → keyword  (exact match: ticker == "AAPL")
-      year     → integer  (range: year >= 2023)
-      quarter  → keyword  (exact match: quarter == "Q4")
-      date     → keyword  (exact match or range via string comparison)
+      ticker    → keyword  (exact match: ticker == "AAPL")
+      year      → integer  (range: year >= 2023)
+      quarter   → keyword  (exact match: quarter == "Q4")
+      date      → keyword  (exact match or range via string comparison)
+      parent_id → keyword  (exact match for fast parent context reconstruction)
     """
     index_fields: list[tuple[str, str]] = [
         ("ticker", "keyword"),
         ("year", "integer"),
         ("quarter", "keyword"),
         ("date", "keyword"),
+        ("parent_id", "keyword"),
     ]
     for field_name, schema_type in index_fields:
         try:
@@ -174,8 +207,16 @@ def _ensure_payload_indices(client: QdrantClient) -> None:
 
 def init_qdrant(url: str) -> QdrantClient:
     """Initialize Qdrant client and optionally create the target collection if missing."""
-    client = QdrantClient(url=url, timeout=60, check_compatibility=False)
-    existing = {c.name for c in client.get_collections().collections}
+    try:
+        client = QdrantClient(url=url, timeout=5, check_compatibility=False)
+        existing = {c.name for c in client.get_collections().collections}
+    except Exception as exc:
+        logger.warning(
+            f"Could not connect to Qdrant at {url} ({exc}). Using local path storage 'data/qdrant_user_storage'..."
+        )
+        client = QdrantClient(path="data/qdrant_user_storage")
+        existing = {c.name for c in client.get_collections().collections}
+
     if COLLECTION_NAME not in existing:
         client.create_collection(
             collection_name=COLLECTION_NAME,
@@ -186,8 +227,6 @@ def init_qdrant(url: str) -> QdrantClient:
         logger.info(
             f"Created Qdrant collection '{COLLECTION_NAME}' (dim={VECTOR_DIM}, on_disk=True)"
         )
-    else:
-        logger.info(f"Qdrant collection '{COLLECTION_NAME}' already exists — reusing.")
 
     # Always ensure indices exist — idempotent, costs nothing on subsequent calls
     _ensure_payload_indices(client)

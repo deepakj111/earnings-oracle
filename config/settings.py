@@ -189,7 +189,10 @@ class RetrievalConfig:
 
     top_k_dense: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_DENSE", 25))
     top_k_bm25: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_BM25", 25))
-    top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 12))
+    # Reduced 12 → 8: ablations showed Context Precision 0.245–0.37 with 12 chunks.
+    # Fewer, higher-quality chunks improve LLM focus and reduce hallucination risk.
+    # Override with RAG_RETRIEVAL_TOP_K_FINAL env var.
+    top_k_final: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_TOP_K_FINAL", 8))
     rrf_k_constant: int = field(default_factory=lambda: _env_int("RAG_RETRIEVAL_RRF_K", 60))
     parent_fetch_enabled: bool = field(
         default_factory=lambda: _env_bool("RAG_RETRIEVAL_PARENT_FETCH", True)
@@ -221,7 +224,11 @@ class InfraConfig:
 class CRAGConfig:
     """Configuration for Layer 5 — Corrective RAG (crag/corrector.py & crag/grader.py)."""
 
-    enabled: bool = field(default_factory=lambda: _env_bool("RAG_CRAG_ENABLED", True))
+    # Disabled by default: ablation studies (Arm 6) showed CRAG degrades performance
+    # (-10pp Context Precision, -13pp Answer Relevancy) when the corpus is already
+    # well-grounded (Faithfulness=1.0). Enable only for fallback experiments or when
+    # dealing with domains where the corpus may be incomplete.
+    enabled: bool = field(default_factory=lambda: _env_bool("RAG_CRAG_ENABLED", False))
     grader_model: str = field(
         default_factory=lambda: _env_str("RAG_CRAG_GRADER_MODEL", "gpt-5-mini")
     )

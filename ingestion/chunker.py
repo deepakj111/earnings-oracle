@@ -133,11 +133,38 @@ def _make_chunk_id(ticker: str, date: str, index: int, suffix: str = "") -> str:
     return f"{base}_{suffix}" if suffix else base
 
 
-def _contextual_prefix(ticker: str, date: str, doc_type: str, section_title: str) -> str:
-    prefix = f"[Context: {ticker} | {doc_type} | {date}"
+def _contextual_prefix(
+    ticker: str,
+    date: str,
+    doc_type: str,
+    section_title: str,
+    company_name: str = "",
+    fiscal_period: str = "",
+) -> str:
+    from ingestion.metadata_extractor import COMPANY_MAP
+
+    comp = company_name or COMPANY_MAP.get(ticker.upper(), "")
+    parts = []
+    if comp and comp.upper() != ticker.upper():
+        parts.append(f"{comp} ({ticker.upper()})")
+    else:
+        parts.append(ticker.upper())
+
+    if doc_type and doc_type not in ("earnings_release", "unknown"):
+        parts.append(f"SEC Form {doc_type}")
+    elif doc_type:
+        parts.append(doc_type)
+
+    if fiscal_period:
+        parts.append(f"Fiscal Period: {fiscal_period}")
+
+    if date and date != "unknown":
+        parts.append(f"Date: {date}")
+
     if section_title and section_title not in ("__TABLE__", "Financial Table"):
-        prefix += f" | Section: {section_title}"
-    return prefix + "]\n\n"
+        parts.append(f"Section: {section_title}")
+
+    return f"[Context: {' | '.join(parts)}]\n\n"
 
 
 def _split_into_semantic_sections(sections: list[str]) -> list[tuple[str, str]]:
@@ -205,6 +232,8 @@ def _build_parents(
     ticker: str,
     date: str,
     doc_type: str,
+    company_name: str = "",
+    fiscal_period: str = "",
 ) -> list[Chunk]:
     parents: list[Chunk] = []
     current_texts: list[str] = []
@@ -214,7 +243,14 @@ def _build_parents(
 
     def emit_parent(texts: list[str], title: str, has_overlap: bool) -> Chunk:
         body = "\n\n".join(texts)
-        prefix = _contextual_prefix(ticker, date, doc_type, title)
+        prefix = _contextual_prefix(
+            ticker,
+            date,
+            doc_type,
+            title,
+            company_name=company_name,
+            fiscal_period=fiscal_period,
+        )
         full = (prefix + body).strip()
         pid = _make_chunk_id(ticker, date, len(parents))
         return Chunk(
@@ -230,6 +266,8 @@ def _build_parents(
                 "ticker": ticker,
                 "date": date,
                 "doc_type": doc_type,
+                "company": company_name,
+                "fiscal_period": fiscal_period,
                 "chunk_index": len(parents),
                 "section": title,
                 "has_overlap": has_overlap,
@@ -273,29 +311,113 @@ def _build_parents(
                 current_texts = []
                 current_tokens = 0
 
-            prefix = _contextual_prefix(ticker, date, doc_type, "Financial Table")
-            tid = _make_chunk_id(ticker, date, len(parents), "tbl")
-            parents.append(
-                Chunk(
-                    chunk_id=tid,
-                    parent_id=None,
-                    ticker=ticker,
-                    date=date,
-                    doc_type=doc_type,
-                    chunk_type="table",
-                    text=(prefix + section_text).strip(),
-                    section_title="Financial Table",
-                    metadata={
-                        "ticker": ticker,
-                        "date": date,
-                        "doc_type": doc_type,
-                        "chunk_index": len(parents),
-                        "section": "Financial Table",
-                        "has_overlap": False,
-                        "is_table": True,
-                    },
-                )
+            prefix = _contextual_prefix(
+                ticker,
+                date,
+                doc_type,
+                "Financial Table",
+                company_name=company_name,
+                fiscal_period=fiscal_period,
             )
+
+            table_lines = [line.strip() for line in section_text.split("\n") if line.strip()]
+            # If table is large and has a header structure, split row-by-row while preserving header
+            if (
+                _token_count(section_text) > PARENT_TOKEN_TARGET
+                and len(table_lines) >= 3
+                and table_lines[0].startswith("|")
+                and "---" in table_lines[1]
+            ):
+                header_block = table_lines[0] + "\n" + table_lines[1]
+                data_rows = table_lines[2:]
+                current_sub_rows: list[str] = []
+                current_sub_tokens = _token_count(header_block)
+
+                for r in data_rows:
+                    r_toks = _token_count(r)
+                    if current_sub_tokens + r_toks > PARENT_TOKEN_TARGET and current_sub_rows:
+                        sub_table = header_block + "\n" + "\n".join(current_sub_rows)
+                        tid = _make_chunk_id(ticker, date, len(parents), "tbl")
+                        parents.append(
+                            Chunk(
+                                chunk_id=tid,
+                                parent_id=None,
+                                ticker=ticker,
+                                date=date,
+                                doc_type=doc_type,
+                                chunk_type="table",
+                                text=(prefix + sub_table).strip(),
+                                section_title="Financial Table",
+                                metadata={
+                                    "ticker": ticker,
+                                    "date": date,
+                                    "doc_type": doc_type,
+                                    "company": company_name,
+                                    "fiscal_period": fiscal_period,
+                                    "chunk_index": len(parents),
+                                    "section": "Financial Table",
+                                    "has_overlap": False,
+                                    "is_table": True,
+                                },
+                            )
+                        )
+                        current_sub_rows = []
+                        current_sub_tokens = _token_count(header_block)
+
+                    current_sub_rows.append(r)
+                    current_sub_tokens += r_toks
+
+                if current_sub_rows:
+                    sub_table = header_block + "\n" + "\n".join(current_sub_rows)
+                    tid = _make_chunk_id(ticker, date, len(parents), "tbl")
+                    parents.append(
+                        Chunk(
+                            chunk_id=tid,
+                            parent_id=None,
+                            ticker=ticker,
+                            date=date,
+                            doc_type=doc_type,
+                            chunk_type="table",
+                            text=(prefix + sub_table).strip(),
+                            section_title="Financial Table",
+                            metadata={
+                                "ticker": ticker,
+                                "date": date,
+                                "doc_type": doc_type,
+                                "company": company_name,
+                                "fiscal_period": fiscal_period,
+                                "chunk_index": len(parents),
+                                "section": "Financial Table",
+                                "has_overlap": False,
+                                "is_table": True,
+                            },
+                        )
+                    )
+            else:
+                tid = _make_chunk_id(ticker, date, len(parents), "tbl")
+                parents.append(
+                    Chunk(
+                        chunk_id=tid,
+                        parent_id=None,
+                        ticker=ticker,
+                        date=date,
+                        doc_type=doc_type,
+                        chunk_type="table",
+                        text=(prefix + section_text).strip(),
+                        section_title="Financial Table",
+                        metadata={
+                            "ticker": ticker,
+                            "date": date,
+                            "doc_type": doc_type,
+                            "company": company_name,
+                            "fiscal_period": fiscal_period,
+                            "chunk_index": len(parents),
+                            "section": "Financial Table",
+                            "has_overlap": False,
+                            "is_table": True,
+                        },
+                    )
+                )
             overlap_text = ""
             continue
 
@@ -315,7 +437,11 @@ def _build_parents(
     return parents
 
 
-def _split_parent_into_children(parent: Chunk) -> list[Chunk]:
+def _split_parent_into_children(
+    parent: Chunk,
+    company_name: str = "",
+    fiscal_period: str = "",
+) -> list[Chunk]:
     if parent.chunk_type == "table":
         # Tables are indexed directly as parents — no child needed.
         # Creating a child that is a verbatim copy of the parent wastes
@@ -335,7 +461,12 @@ def _split_parent_into_children(parent: Chunk) -> list[Chunk]:
         nonlocal child_index
         child_text = " ".join(sents)
         prefix = _contextual_prefix(
-            parent.ticker, parent.date, parent.doc_type, parent.section_title
+            parent.ticker,
+            parent.date,
+            parent.doc_type,
+            parent.section_title,
+            company_name=company_name or parent.metadata.get("company", ""),
+            fiscal_period=fiscal_period or parent.metadata.get("fiscal_period", ""),
         )
         c = Chunk(
             chunk_id=f"{parent.chunk_id}_c{child_index}",
@@ -389,16 +520,31 @@ def create_parent_child_chunks(
     date: str,
     sections: list[str],
     doc_type: str = "earnings_release",
+    company_name: str = "",
+    fiscal_period: str = "",
 ) -> list[Chunk]:
     """Create structured parent and sentence-aware child chunks from document sections."""
     semantic_sections = _split_into_semantic_sections(sections)
     if not semantic_sections:
         return []
 
-    parents = _build_parents(semantic_sections, ticker, date, doc_type)
+    parents = _build_parents(
+        semantic_sections,
+        ticker,
+        date,
+        doc_type,
+        company_name=company_name,
+        fiscal_period=fiscal_period,
+    )
     all_chunks = []
     for parent in parents:
         all_chunks.append(parent)
-        all_chunks.extend(_split_parent_into_children(parent))
+        all_chunks.extend(
+            _split_parent_into_children(
+                parent,
+                company_name=company_name,
+                fiscal_period=fiscal_period,
+            )
+        )
 
     return all_chunks

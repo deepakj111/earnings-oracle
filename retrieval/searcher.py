@@ -24,7 +24,6 @@ Pipeline:
 from __future__ import annotations
 
 import pickle
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,15 +39,8 @@ if TYPE_CHECKING:
 
 from config.openai_client import get_openai_client
 
-# ── BM25 tokenizer (must match ingestion/indexer._tokenize_for_bm25) ───────────
-# Both indexing and querying must use the same tokenization to ensure token match.
-_BM25_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.$%/-]*")
-
-
-def _tokenize_for_bm25(text: str) -> list[str]:
-    """Tokenize query text for BM25 — must be identical to ingestion tokenizer."""
-    return _BM25_TOKEN_RE.findall(text.lower())
-
+# ── BM25 tokenizer (imported directly from ingestion.indexer for 100% lockstep) ─
+from ingestion.indexer import _tokenize_for_bm25
 
 # ── BM25 index helpers ─────────────────────────────────────────────────────────
 

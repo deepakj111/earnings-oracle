@@ -35,10 +35,24 @@ from rag_pipeline import FinancialRAGPipeline
 def make_pipeline() -> FinancialRAGPipeline:
     """Factory to create a new default pipeline for the experiment."""
     try:
-        client = QdrantClient(url=settings.infra.qdrant_url, timeout=2.0, check_compatibility=False)
-        client.get_collections()
-    except Exception:
+        client = QdrantClient(url=settings.infra.qdrant_url, timeout=5.0, check_compatibility=False)
+        cols = {c.name for c in client.get_collections().collections}
+        if settings.embedding.collection_name in cols:
+            pt_count = client.count(settings.embedding.collection_name).count
+            logger.info(
+                f"Connected to Qdrant at {settings.infra.qdrant_url} | "
+                f"collection '{settings.embedding.collection_name}' has {pt_count} points"
+            )
+        else:
+            logger.warning(
+                f"Collection '{settings.embedding.collection_name}' not found at {settings.infra.qdrant_url}"
+            )
+    except Exception as exc:
+        logger.warning(
+            f"Could not connect to Qdrant at {settings.infra.qdrant_url} ({exc}) — falling back to local storage"
+        )
         client = QdrantClient(path="data/qdrant_user_storage")
+
     return FinancialRAGPipeline(
         qdrant_client=client,
         enable_query_cache=False,

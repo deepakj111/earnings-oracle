@@ -236,11 +236,25 @@ class FinancialRAGPipeline:
         else:
             routing = None
 
+        # Gate HyDE on query specificity:
+        #   - router.skip_hyde=True  → query is FINANCIAL_GENERAL or AMBIGUOUS (no RAG needed)
+        #   - Specific queries (ticker + year both detected) skip HyDE too: the original
+        #     query IS the best search signal; a hypothetical answer can drift from exact figures.
+        #   - HyDE only fires for FINANCIAL_SPECIFIC queries where year/ticker is vague,
+        #     where a "hypothetical passage" genuinely helps close the query-doc gap.
+        routing_skip_hyde = routing.skip_hyde if routing else False
+        specific_and_grounded = (
+            routing is not None
+            and routing.detected_ticker is not None
+            and routing.detected_year is not None
+        )
+        skip_hyde_flag = routing_skip_hyde or specific_and_grounded
+
         # ── Layer 2: Query Transformation ────────────────────────────────────
         t2 = time.perf_counter()
         transformed = self._transformer.transform(
             question,
-            skip_hyde=(routing.skip_hyde if routing else False),
+            skip_hyde=skip_hyde_flag,
         )
         t2_elapsed = time.perf_counter() - t2
 

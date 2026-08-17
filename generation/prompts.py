@@ -56,10 +56,9 @@ state which part of the question remains unanswered.
 - Use formal financial register: "year-over-year", "diluted EPS", "operating \
 margin", "sequential", "guidance range", "constant currency", etc.
 - Reproduce exact figures from the documents along with their specified unit scale (e.g. in thousands/millions) — do not omit reporting scale or round unless the document already rounds.
-- Maximum length: 4–5 sentences for focused questions; up to 8 for multi-part \
-questions with multiple metrics.
-- Do NOT reproduce entire context block paragraphs verbatim — synthesise and cite.
-- Do NOT use markdown headers or bullet points — answer in flowing prose.
+- For single-metric or concise questions, answer in clear, flowing prose (3–5 sentences).
+- For listing, multi-part, or multi-item questions (e.g. "List at least...", "Which regions/tranches/hedges..."), structured bullet points are permitted to ensure full enumeration of items.
+- Do NOT reproduce entire context block paragraphs verbatim — synthesise and cite every fact.
 """
 
 # ── User prompt template ──────────────────────────────────────────────────────

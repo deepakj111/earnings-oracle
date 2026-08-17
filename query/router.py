@@ -169,6 +169,8 @@ class RoutingDecision:
     should_refuse: bool
     latency_ms: float
     used_heuristic: bool = False
+    detected_year: int | None = None
+    detected_quarter: str | None = None
 
     @property
     def is_specific(self) -> bool:
@@ -251,13 +253,16 @@ class QueryRouter:
         heuristic_result = self._heuristic_classify(question_clean)
         if heuristic_result is not None:
             latency_ms = (time.perf_counter() - t_start) * 1000
+            h_intent, h_confidence, h_ticker, h_reasoning, h_year, h_quarter = heuristic_result
             decision = self._build_decision(
-                intent=heuristic_result[0],
-                confidence=heuristic_result[1],
-                detected_ticker=heuristic_result[2],
-                reasoning=heuristic_result[3],
+                intent=h_intent,
+                confidence=h_confidence,
+                detected_ticker=h_ticker,
+                reasoning=h_reasoning,
                 latency_ms=latency_ms,
                 used_heuristic=True,
+                detected_year=h_year,
+                detected_quarter=h_quarter,
             )
             self._update_stats(decision)
             logger.debug(f"Router [heuristic] | {decision.summary()}")
@@ -280,12 +285,13 @@ class QueryRouter:
 
     def _heuristic_classify(
         self, question: str
-    ) -> tuple[QueryIntent, float, str | None, str] | None:
+    ) -> tuple[QueryIntent, float, str | None, str, int | None, str | None] | None:
         """
         Fast-path classification using regex and keyword matching.
 
-        Returns a 4-tuple (intent, confidence, ticker, reasoning) if heuristics
-        are conclusive, else None to fall through to LLM classification.
+        Returns a 6-tuple (intent, confidence, ticker, reasoning, detected_year,
+        detected_quarter) if heuristics are conclusive, else None to fall through
+        to LLM classification.
         """
         lower = question.lower()
         words = lower.split()
@@ -301,6 +307,12 @@ class QueryRouter:
         ticker_match = ticker_pattern.search(question)
         has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
 
+        year_match = re.search(r"\b(202[0-9])\b", question)
+        detected_year = int(year_match.group(1)) if year_match else None
+
+        quarter_match = re.search(r"\b(q[1-4]|fy)\b", lower)
+        detected_quarter = quarter_match.group(1).upper() if quarter_match else None
+
         if ticker_match and has_financial_kw:
             raw_match = ticker_match.group(0).upper()
             canonical = ticker_map.get(raw_match, raw_match)
@@ -309,6 +321,8 @@ class QueryRouter:
                 0.92,
                 canonical,
                 f"Detected ticker {canonical} with financial keyword",
+                detected_year,
+                detected_quarter,
             )
 
         return None
@@ -359,6 +373,8 @@ class QueryRouter:
         reasoning: str,
         latency_ms: float,
         used_heuristic: bool,
+        detected_year: int | None = None,
+        detected_quarter: str | None = None,
     ) -> RoutingDecision:
         return RoutingDecision(
             intent=intent,
@@ -370,6 +386,8 @@ class QueryRouter:
             should_refuse=(intent == QueryIntent.OUT_OF_SCOPE),
             latency_ms=latency_ms,
             used_heuristic=used_heuristic,
+            detected_year=detected_year,
+            detected_quarter=detected_quarter,
         )
 
     def _update_stats(self, decision: RoutingDecision) -> None:

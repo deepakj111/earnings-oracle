@@ -286,7 +286,7 @@ class TestInitialization:
 
         mock_client = MagicMock()
         _ensure_payload_indices(mock_client)
-        assert mock_client.create_payload_index.call_count == 4
+        assert mock_client.create_payload_index.call_count == 5
 
         # Test the exception branch
         mock_client.create_payload_index.side_effect = Exception("Index exists")

@@ -5,11 +5,12 @@ Script to wipe Qdrant vector index collection and clean local ingestion caches/i
 Cleans:
   1. Qdrant collection (`company_filings`)
   2. Local BM25 index & corpus pickles (`data/bm25_index.pkl`, `data/bm25_corpus.pkl`)
-  3. Knowledge Graph JSON store (`data/knowledge_graph.json`)
-  4. Legacy ingestion checkpoint file (`data/ingested_filings_checkpoint.txt` if present)
-  5. Ingestion metrics file (`data/ingestion_metrics.json`)
+  3. Legacy ingestion checkpoint file (`data/ingested_filings_checkpoint.txt` if present)
+  4. Ingestion metrics file (`data/ingestion_metrics.json`)
+  5. Knowledge Graph (ONLY if explicitly requested via --wipe-kg)
 """
 
+import argparse
 from pathlib import Path
 
 from loguru import logger
@@ -22,11 +23,11 @@ FILES_TO_REMOVE = [
     Path("data/bm25_corpus.pkl"),
     Path("data/ingested_filings_checkpoint.txt"),
     Path("data/ingestion_metrics.json"),
-    Path("data/knowledge_graph.json"),
 ]
+KG_FILE = Path("data/knowledge_graph.json")
 
 
-def reset_all() -> None:
+def reset_all(wipe_kg: bool = False) -> None:
     # 1. Clean Qdrant Collection
     qdrant_url = settings.infra.qdrant_url
     collection_name = settings.embedding.collection_name
@@ -43,8 +44,27 @@ def reset_all() -> None:
     except Exception as exc:
         logger.error(f"Failed to clear Qdrant collection: {exc}")
 
-    # 2. Clean Local Files
-    for file_path in FILES_TO_REMOVE:
+    # 2. Clean Local Storage Folders
+    import shutil
+
+    for local_dir in [Path("data/qdrant_user_storage"), Path("data/qdrant_storage")]:
+        if local_dir.exists():
+            try:
+                shutil.rmtree(local_dir)
+                logger.info(f"Removed local Qdrant storage directory: {local_dir}")
+            except Exception as exc:
+                logger.warning(f"Failed to remove {local_dir}: {exc}")
+
+    # 3. Clean Local Index Files
+    files_to_clean = list(FILES_TO_REMOVE)
+    if wipe_kg:
+        files_to_clean.append(KG_FILE)
+    else:
+        logger.info(
+            f"Preserving existing Knowledge Graph ({KG_FILE}) to save LLM extraction costs."
+        )
+
+    for file_path in files_to_clean:
         if file_path.exists():
             try:
                 file_path.unlink()
@@ -58,4 +78,12 @@ def reset_all() -> None:
 
 
 if __name__ == "__main__":
-    reset_all()
+    parser = argparse.ArgumentParser(description="Reset Qdrant and BM25 search indices.")
+    parser.add_argument(
+        "--wipe-kg",
+        action="store_true",
+        default=False,
+        help="Wipe the Knowledge Graph JSON store as well (default: False to preserve KG)",
+    )
+    args = parser.parse_args()
+    reset_all(wipe_kg=args.wipe_kg)
