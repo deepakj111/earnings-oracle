@@ -96,6 +96,17 @@ class QueryTransformConfig:
         default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_STEPBACK", 4096)
     )
 
+    # Per-technique toggles
+    hyde_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_TRANSFORM_HYDE_ENABLED", True)
+    )
+    multiquery_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_TRANSFORM_MULTIQUERY_ENABLED", True)
+    )
+    stepback_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_TRANSFORM_STEPBACK_ENABLED", True)
+    )
+
     # Retry / backoff
     max_retries: int = field(default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_RETRIES", 3))
     retry_base_delay_seconds: float = field(
@@ -257,6 +268,7 @@ class CRAGConfig:
     web_search_max_results: int = field(
         default_factory=lambda: _env_int("RAG_CRAG_WEB_MAX_RESULTS", 4)
     )
+    tavily_api_key: str = field(default_factory=lambda: _env_str("TAVILY_API_KEY", ""))
 
 
 # ── Evaluation ─────────────────────────────────────────────────────────────────

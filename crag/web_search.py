@@ -104,8 +104,12 @@ class WebSearchClient:
         results = client.search("Apple Q4 2024 revenue earnings", max_results=4)
     """
 
-    def __init__(self) -> None:
-        self._tavily_key: str | None = (os.getenv("TAVILY_API_KEY") or "").strip() or None
+    def __init__(self, api_key: str | None = None) -> None:
+        if api_key is not None:
+            self._tavily_key: str | None = api_key.strip() or None
+        else:
+            key = os.getenv("TAVILY_API_KEY")
+            self._tavily_key = (key or "").strip() or None
         logger.info(f"WebSearchClient | provider={self.provider}")
 
     @property

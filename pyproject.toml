@@ -123,7 +123,7 @@ skips        = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "evaluation", "api", "config", "ui", "observability", "cache", "knowledge_graph"]
+known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "evaluation", "api", "config", "ui", "observability", "knowledge_graph"]
 
 [tool.poetry.extras]
 crag-tavily = ["tavily-python"]
@@ -145,7 +145,6 @@ addopts = [
     "--cov-report=term-missing",
     "--cov=experiments",
     "--cov=observability",
-    "--cov=cache",
     "--cov=knowledge_graph",
 ]
 # Note: --cov-fail-under is intentionally left in the CI command only

@@ -37,8 +37,9 @@ def verify_arm_isolation(
     violations: list[str] = []
 
     valid_samples = [s for s in samples if not s.get("pipeline_failed", False)]
+    logger.debug(f"Verifying arm {arm_index} ({arm_label}) on {len(valid_samples)} valid samples")
     if not valid_samples:
-        return [f"Arm {arm_index}: No successful samples to evaluate."]
+        return [f"Arm {arm_index} ({arm_label}): No successful samples to evaluate."]
 
     for s in valid_samples:
         sid = s.get("sample_id", "unknown")

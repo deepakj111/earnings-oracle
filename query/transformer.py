@@ -23,7 +23,6 @@ hard failure only occurs if ALL techniques fail simultaneously.
 from __future__ import annotations
 
 import hashlib
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -274,15 +273,10 @@ class QueryTransformer:
         if not query:
             raise ValueError("Query must not be empty.")
 
-        def _env_bool(key: str, default: bool) -> bool:
-            raw = os.getenv(key)
-            if raw is None:
-                return default
-            return raw.strip().lower() in ("1", "true", "yes", "on")
-
-        hyde_enabled = _env_bool("RAG_TRANSFORM_HYDE_ENABLED", True) and not skip_hyde
-        multiquery_enabled = _env_bool("RAG_TRANSFORM_MULTIQUERY_ENABLED", True)
-        stepback_enabled = _env_bool("RAG_TRANSFORM_STEPBACK_ENABLED", True)
+        cfg = _settings.query_transform
+        hyde_enabled = cfg.hyde_enabled and not skip_hyde
+        multiquery_enabled = cfg.multiquery_enabled
+        stepback_enabled = cfg.stepback_enabled
 
         if self.enable_cache:
             ckey = _cache_key(

@@ -64,16 +64,13 @@ jobs:
         with:
           path: .venv
           # runner.os makes the key portable if you ever add macos/windows runners
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+          key: v2-venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
           # restore-keys: on a cache miss, restore nearest partial cache instead
           # of starting from scratch — saves ~30-60s per job
           restore-keys: |
-            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+            v2-venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
 
       - name: Install dependencies
-        # --no-root: installs deps only, not the project itself — keeps the
-        # cache valid even when source files change between runs
-        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
       - name: Ruff lint
@@ -109,12 +106,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+          key: v2-venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+            v2-venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
 
       - name: Install dependencies
-        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
       - name: Run mypy
@@ -163,12 +159,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+          key: v2-venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+            v2-venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
 
       - name: Install dependencies
-        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
       - name: Run pip-audit
@@ -253,12 +248,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          key: v2-venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            venv-${{ runner.os }}-${{ matrix.python-version }}-
+            v2-venv-${{ runner.os }}-${{ matrix.python-version }}-
 
       - name: Install dependencies
-        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
       - name: Create runtime data directories
