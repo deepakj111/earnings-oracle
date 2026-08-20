@@ -335,11 +335,27 @@ class QueryRouter:
         words = lower.split()
 
         if len(words) <= 2 and not any(kw in lower for kw in _FINANCIAL_KEYWORDS):
-            return QueryIntent.OUT_OF_SCOPE, 0.9, None, "Too short and no financial keywords", None, None, False
+            return (
+                QueryIntent.OUT_OF_SCOPE,
+                0.9,
+                None,
+                "Too short and no financial keywords",
+                None,
+                None,
+                False,
+            )
 
         greeting_patterns = ("hello", "hi ", "hey ", "thanks", "thank you", "what is your")
         if any(lower.startswith(p) for p in greeting_patterns) and len(words) < 6:
-            return QueryIntent.OUT_OF_SCOPE, 0.95, None, "Greeting or small talk detected", None, None, False
+            return (
+                QueryIntent.OUT_OF_SCOPE,
+                0.95,
+                None,
+                "Greeting or small talk detected",
+                None,
+                None,
+                False,
+            )
 
         ticker_pattern, ticker_map = _build_ticker_resolver()
         ticker_match = ticker_pattern.search(question)
@@ -351,10 +367,7 @@ class QueryRouter:
         quarter_match = re.search(r"\b(q[1-4]|fy)\b", lower)
         detected_quarter = quarter_match.group(1).upper() if quarter_match else None
 
-        is_comparative = (
-            any(kw in lower for kw in _COMPARATIVE_KEYWORDS)
-            or len(set(all_years)) > 1
-        )
+        is_comparative = any(kw in lower for kw in _COMPARATIVE_KEYWORDS) or len(set(all_years)) > 1
 
         if ticker_match and has_financial_kw:
             raw_match = ticker_match.group(0).upper()
