@@ -44,7 +44,20 @@ The evaluation harness closes the loop: offline evaluation against a golden data
 | Netflix | NFLX | Communication Services / Streaming | 35 |
 | UnitedHealth Group | UNH | Healthcare / Managed Care | 35 |
 
-Questions span both annual (10-K) and quarterly (10-Q) filings and cover financial metrics, segment results, risk disclosures, balance sheet data, and management guidance — stress-testing the pipeline across divergent financial vocabularies.
+Questions span both annual (10-K) and quarterly (10-Q) filings and adhere to a structured **4-pillar distribution**:
+
+- **MD&A & Strategic Initiatives (~35%)**: Operational roadmaps, technological modernization (e.g. Blackwell GPU rollout for NVDA, supply chain automation for WMT, live events & ad-tier for NFLX, Optum Care value-based care for UNH).
+- **Risk Factors & Regulatory Disclosures (~25%)**: US export control restrictions, cyber incident recovery, healthcare/PBM regulation, retail shrink, and content amortization.
+- **Segment & Core Financials (~30%)**: Segment revenue breakdowns, operating margin shifts, regional membership/ARM metrics.
+- **Capital Allocation & Cash Flow (~10%)**: Share buybacks, capex allocation, and liquidity management.
+
+All questions are **100% self-contained**, explicitly naming the target company and precise fiscal period (*FY2025*, *Q1 2026 Form 10-Q*, etc.).
+
+#### Reproducing / Regenerating the Dataset
+The dataset can be regenerated or scaled at any time via the unified multi-threaded generator:
+```bash
+poetry run python -m scripts.generate_golden_dataset
+```
 
 The adversarial evaluation harness also tests out-of-corpus resilience: CRAG-enabled queries for companies not in the knowledge base should correctly signal `grounded=False` and invoke web search fallback rather than hallucinating an answer.
 

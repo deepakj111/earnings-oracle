@@ -159,7 +159,11 @@ curl -s -X POST http://localhost:8000/query \
 ### 5. Run E2E Evaluation Suite
 Execute the automated MLOps statistical evaluation suite:
 ```bash
+# Evaluate against the curated 130-question balanced dataset
 poetry run python -m evaluation.harness --metrics faithfulness answer_relevancy
+
+# (Optional) Re-generate the 130-question Golden Dataset from raw SEC filings
+poetry run python -m scripts.generate_golden_dataset
 ```
 
 ### 6. Run Granular 6-Arm Ablation Studies

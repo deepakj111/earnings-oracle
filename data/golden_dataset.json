@@ -1,1042 +1,1042 @@
 [
   {
-    "sample_id": "nflx_2024_streaming_geography_segments",
-    "question": "What geographic regions does Netflix report for its Streaming segment in the fiscal year ended December 31, 2024?",
-    "ground_truth": "Netflix reports Streaming segment metrics by region for United States and Canada, EMEA, Latin America, and Asia Pacific.",
+    "sample_id": "nflx_2025_annual_operating_segment_revenue",
+    "question": "How does Netflix describe its operating segment structure and the primary source of its revenues in the 2025 Form 10\u2011K?",
+    "ground_truth": "Netflix reports that it operates as one operating segment. Its revenues are primarily derived from monthly membership fees for services related to streaming content to its members.",
     "ticker": "NFLX",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "nflx_2025_aug_2024_senior_notes_coupons",
-    "question": "Which senior notes did Netflix issue in August 2024, and what are their stated interest rates?",
-    "ground_truth": "Netflix issued 4.90% Senior Notes (Issued August 2024) and 5.40% Senior Notes (Issued August 2024).",
+    "sample_id": "nflx_2025_annual_membership_geography",
+    "question": "As stated in the 2025 Form 10\u2011K, how many paid memberships does Netflix have and in how many countries are they available?",
+    "ground_truth": "Netflix states it has approximately 302 million paid memberships in over 190 countries.",
     "ticker": "NFLX",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "nflx_2025_fx_hedging_designations_and_items",
-    "question": "What foreign exchange hedging designations did Netflix use in 2024, and which financial statement line items were hedged?",
-    "ground_truth": "In 2024, Netflix used foreign exchange contracts designated as cash flow hedges, fair value hedges, and net investment hedges, and also entered into nondesignated foreign exchange contracts. Hedged line items include revenues, cost of revenues, and nonoperating income/expense.",
+    "sample_id": "nflx_2025_annual_strategy_and_service_expansion",
+    "question": "Summarize Netflix's core strategy and the key service expansions and pricing approaches Netflix highlights in Netflix's 2025 Form 10-K.",
+    "ground_truth": "Netflix's core strategy is to grow its business globally within the parameters of its operating margin target and to continuously improve member experience by offering compelling content. The company aims to offer a range of pricing plans, including its ad-supported subscription plan, and states it has expanded its offering to include games and, more recently, live programming. Netflix also highlights ongoing investment in consumer products and live experiences and continuous enhancements to its user interface to help members more easily choose content.",
     "ticker": "NFLX",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "nflx_2025_revolver_benchmark_rates_apr_12_2024",
-    "question": "As of April 12, 2024, what benchmark rates were referenced under Netflix\u2019s revolving credit facility?",
-    "ground_truth": "The revolving credit facility referenced a Base Rate and the Secured Overnight Financing Rate (SOFR) Overnight Index Swap rate as of April 12, 2024.",
+    "sample_id": "nflx_2025_annual_regulatory_content_risks",
+    "question": "What regulatory risks related to content and local requirements does Netflix identify in the 2025 Form 10\u2011K?",
+    "ground_truth": "Netflix identifies increasing regulatory action where some countries are updating legacy frameworks to address services like theirs. The filing states some countries are updating cultural support legislation to include services like Netflix, including content quotas, levies and investment obligations; some even restrict the extent of ownership rights Netflix can have in its service and in its content. It also notes certain countries' regulators are looking at restrictions that could require formal reviews of and/or adjustments to content that appears on the service. The filing specifically calls out that individual EU Member States have imposed and others may impose financial and regulatory obligations (for example, levies) on media operators providing services in their jurisdiction.",
     "ticker": "NFLX",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "nflx_2025_non_income_tax_assessments_brazil",
-    "question": "Which non-income tax assessment matter does Netflix disclose and with which authority?",
-    "ground_truth": "Netflix discloses non-income tax assessments involving the Brazilian tax authorities.",
+    "sample_id": "nflx_2025_annual_seasonality_content_costs_effects",
+    "question": "How does Netflix describe the seasonality of its membership growth and what does Netflix warn could happen to margins if membership growth slows given its content cost structure for FY2025?",
+    "ground_truth": "Netflix states its membership growth exhibits a seasonal pattern that reflects variations when consumers buy internet-connected screens and when they tend to increase their viewing, and that historically the fourth quarter represents its greatest streaming membership growth. The company warns that if it does not grow as expected, given that its content costs are largely fixed in nature, it may not be able to adjust its expenditures or increase its (per membership) revenues (including by adjusting membership pricing) commensurate with the lowered growth rate such that its margins, liquidity and results of operations may be adversely impacted.",
     "ticker": "NFLX",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "NFLX_2025_aug_2024_senior_notes_coupons",
-    "question": "What coupon rates were on Netflix\u2019s senior notes issuances from August 2024 referenced in the Q1 2025 10-Q?",
-    "ground_truth": "The filing lists two August 2024 issuances: 4.90% Senior Notes and 5.40% Senior Notes.",
+    "sample_id": "nflx_2026_annual_segments",
+    "question": "How does Netflix report its business segments and what is Netflix's primary source of revenue according to the 2026 Form 10-K?",
+    "ground_truth": "Netflix operates as one operating segment. Its revenues are primarily derived from monthly membership fees for services related to streaming content to its members (see Note 13, Segment and Geographic Information).",
     "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "NFLX_2025_fair_value_hierarchy_cash_investments",
-    "question": "As of March 31, 2025, which instruments and fair value hierarchy levels does Netflix report for its cash equivalents and investments?",
-    "ground_truth": "Money market funds are classified as Level 1. Bank time deposits and U.S. government agencies debt securities are classified as Level 2. These appear across cash and cash equivalents, short\u2011term investments, and other current and noncurrent assets as of March 31, 2025.",
+    "sample_id": "nflx_2026_annual_strategy",
+    "question": "Summarize Netflix\u2019s core strategy and the key service expansions Netflix says it is pursuing in Netflix's 2026 Form 10-K.",
+    "ground_truth": "Netflix's core strategy is to grow its business globally within the parameters of its operating margin target. The company strives to improve members' experience by offering compelling content and enhancing its user interface. It aims to offer a range of pricing plans, including an ad-supported subscription plan, and is expanding its entertainment offering to include games and live programming. Netflix also continues to expand consumer products and live experiences and is enforcing limits on multi-household usage.",
     "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "NFLX_2025_fx_hedging_designations_and_pnl_lines",
-    "question": "How are Netflix\u2019s foreign exchange contracts designated in Q1 2025, and which financial statement line items do those hedges relate to?",
-    "ground_truth": "Netflix uses foreign exchange contracts designated as cash flow hedges, fair value hedges, and net investment hedges, and also employs nondesignated FX contracts. These hedges relate to Revenues, Cost of revenues, and Nonoperating income (expense).",
+    "sample_id": "nflx_2026_annual_regulatory_cultural_support",
+    "question": "What regulatory developments related to cultural support legislation does Netflix identify as a risk, and what specific obligations or restrictions does it say may result for FY2026?",
+    "ground_truth": "Netflix states that some countries are updating their cultural support legislation to include services like Netflix. This can include investment obligations, levies, and content catalog quotas. The company also notes that some laws may restrict the extent of ownership rights it can have in its service and content, and certain regulators may require formal reviews of and/or adjustments to content that appears on its service in those countries.",
     "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "NFLX_2025_reportable_streaming_regions",
-    "question": "Which reportable streaming geographic regions did Netflix disclose for the quarter ended March 31, 2025?",
-    "ground_truth": "United States and Canada, EMEA, Latin America, and Asia Pacific.",
+    "sample_id": "nflx_2026_annual_capital_allocation",
+    "question": "What forward-looking items related to capital allocation, liquidity and cash flow does Netflix disclose in the Form 10-K for FY2026?",
+    "ground_truth": "In its forward-looking statements, Netflix discloses expectations regarding revenues, deferred revenue, operating income and margin, net income, expenses, and profitability; liquidity, including the sufficiency of its capital resources and cash requirements; net cash provided by (used in) operating activities, access to financing sources, and free cash flows; and capital allocation strategies, including any stock repurchases or repurchase programs.",
     "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "NFLX_2025_non_income_tax_assessments_jurisdiction",
-    "question": "Which tax authority is referenced in Netflix\u2019s non\u2011income tax assessments in the Q1 2025 filing?",
-    "ground_truth": "Brazilian tax authorities.",
+    "sample_id": "nflx_2026_annual_content_costs_growth",
+    "question": "How does Netflix explain the relationship between membership growth rates and its content cost structure, and what consequence does it warn could occur if growth is slower than expected for FY2026?",
+    "ground_truth": "Netflix explains that its penetration and growth rates have fluctuated and vary across jurisdictions, with membership growth slower in countries where it is highly penetrated or has operated for many years. It states that its content costs are largely fixed in nature; consequently, if it does not grow as expected, it may not be able to adjust expenditures or increase revenues (including by adjusting membership pricing) commensurate with the lowered growth rate, such that its margins, liquidity and results of operations may be adversely impacted.",
     "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "nflx_2025_q3_geographic_streaming_segments",
-    "question": "Which geographic streaming segments did Netflix report in Q3 2025?",
-    "ground_truth": "In Q3 2025, Netflix reported streaming segments for United States and Canada (UCAN), EMEA, Latin America, and Asia-Pacific, as indicated by the nflx:UnitedStatesAndCanadaMember, EMEAMember, Latin America segment, and AsiaPacificMember tags under nflx:StreamingMember for the three months ended September 30, 2025 and the nine months ended September 30, 2025 (with comparable 2024 periods shown).",
+    "sample_id": "nflx_2025_q1_segment_revenue",
+    "question": "What were Netflix's total U.S. revenues for Q1 2025 and Q1 2024, how much did consolidated revenues increase year-over-year for Q1 2025, and how much of hedging gains (losses) were included in revenues for each period?",
+    "ground_truth": "Total U.S. revenues were $4.3 billion for the three months ended March 31, 2025 and $3.9 billion for the three months ended March 31, 2024. Consolidated revenues for the three months ended March 31, 2025 increased 13% versus the prior-year period. Hedging gains (losses) included in \u201cRevenues\u201d were $165 million for the three months ended March 31, 2025 and $(11) million for the three months ended March 31, 2024.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nflx_2025_q1_core_strategy",
+    "question": "Summarize Netflix's stated core strategy and the key product/experience initiatives Netflix highlighted in its Q1 2025 MD&A.",
+    "ground_truth": "Netflix states its core strategy is to grow the business globally within the parameters of its operating margin target. Key initiatives highlighted in the MD&A include continuously improving members\u2019 experience by offering compelling content to attract and retain members, offering a range of pricing plans (including an ad-supported subscription plan), driving conversation around content to enhance member joy, and continuously enhancing the user interface to help members more easily choose content.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nflx_2025_q1_fx_and_tax_risks",
+    "question": "What foreign-currency exposure did Netflix report for Q1 2025 (percentage of revenue and operating expenses denominated in non-U.S. currencies), and quantify the reported impacts of a 10% adverse currency move on (a) AOCI for revenue hedges, (b) AOCI for content hedges, and (c) income before income taxes for monetary assets and liabilities? Also state Netflix's current estimated potential exposure to Brazilian non-income tax assessments.",
+    "ground_truth": "For the three months ended March 31, 2025, currencies other than the U.S. dollar accounted for 55% of revenue and 29% of operating expenses. If the U.S. dollar weakened by 10% as of March 31, 2025 and December 31, 2024, the amount recorded in AOCI related to foreign exchange contracts hedging forecasted revenues, before taxes, would have been approximately $1,908 million and $1,850 million lower, respectively. If the U.S. dollar strengthened by 10% as of March 31, 2025 and December 31, 2024, the amount recorded in AOCI related to foreign exchange contracts hedging content exposures, before taxes, would have been approximately $201 million and $187 million lower, respectively. If an adverse change in exchange rates of 10% was applied to monetary assets and liabilities denominated in currencies other than functional currencies as of March 31, 2025 and December 31, 2024, income before income taxes would have been approximately $46 million and $38 million lower, respectively, after considering offsetting hedges. Netflix estimates current potential exposure with respect to Brazilian non-income tax assessments is approximately $500 million.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nflx_2025_q1_capital_allocation",
+    "question": "Describe Netflix's Q1 2025 share repurchase activity and remaining authorization, and explain how stock repurchases and debt repayments affected net cash used in financing activities in Q1 2025 versus Q1 2024.",
+    "ground_truth": "During the three months ended March 31, 2025, Netflix repurchased 3,713,828 shares of common stock for an aggregate amount of $3.5 billion. As of March 31, 2025, $13.6 billion remained available for repurchases under the Company\u2019s authorization. Net cash used in financing activities for the three months ended March 31, 2025 increased $1,895 million compared to the corresponding period in 2024, primarily driven by a $1,536 million increase in repurchases of common stock and a $400 million increase in repayments of debt due to the repayment upon maturity of the $800 million aggregate principal amount of the Company\u2019s 5.875% Senior Notes in Q1 2025 versus the $400 million repayment of 5.750% Senior Notes in Q1 2024.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nflx_2025_q1_ops_cashflow_trends",
+    "question": "Why did Netflix's net cash provided by operating activities increase in Q1 2025 versus Q1 2024, and quantify the primary drivers cited (including the change in net income and any notable changes in content-related cash flows)?",
+    "ground_truth": "Net cash provided by operating activities for the three months ended March 31, 2025 increased $577 million versus the corresponding period in 2024. Management attributed this increase primarily to a $558 million (24%) increase in net income, an increase in adjustments for non-cash expenses, partially offset by unfavorable changes in working capital and a $43 million increase in payments for content assets. Reported net income was $2,890,351 for the three months ended March 31, 2025 compared with $2,332,209 for the three months ended March 31, 2024. Additionally, additions to content assets were $(3,549,657) in Q1 2025 versus $(3,728,967) in Q1 2024, and amortization of content assets was $3,823,112 in Q1 2025 versus $3,670,805 in Q1 2024, reflecting content-related cash flow dynamics.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nflx_2025_q2_us_revenue_trends",
+    "question": "What were Netflix's U.S. revenues for the three- and six-month periods ended June 30, 2025, how do those compare to the same periods in 2024, and what were the year-over-year percentage changes in total revenues for those periods?",
+    "ground_truth": "Total U.S. revenues were $4.6 billion and $8.9 billion for the three and six months ended June 30, 2025, respectively, compared with $4.0 billion and $7.9 billion for the three and six months ended June 30, 2024. Overall total revenues increased 16% for the three months and 14% for the six months ended June 30, 2025 versus the comparable 2024 periods.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nflx_2025_q2_core_strategy_initiatives",
+    "question": "Summarize Netflix\u2019s stated core strategy and the primary initiatives it cites in MD&A to drive growth and member engagement. for Q2 2025?",
+    "ground_truth": "Netflix states its core strategy is to grow its business globally within the parameters of its operating margin target. Primary initiatives cited include: continuously improving members' experience by offering compelling content that attracts and delights members; offering a range of pricing plans (including an ad-supported subscription plan) to meet varied consumer needs; driving conversation around content to enhance member joy; and continuously enhancing the user interface to help members more easily choose content.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nflx_2025_q2_forex_risk_aoci_sensitivity",
+    "question": "What foreign-currency exposure percentages does Netflix report for the six months ended June 30, 2025, and what AOCI sensitivity amounts does Netflix disclose for a 10% adverse change in the U.S. dollar related to (a) its foreign exchange forward contracts hedging forecasted revenues and (b) contracts hedging content licensing/production exposures?",
+    "ground_truth": "For the six months ended June 30, 2025, currencies denominated in other than the U.S. dollar accounted for 55% of revenue and 29% of operating expenses. If the U.S. dollar weakened by 10% as of June 30, 2025, the amount recorded in accumulated other comprehensive income (AOCI) related to the Company\u2019s foreign exchange contracts hedging forecasted revenues, before taxes, would have been approximately $2,224 million lower. Separately, if the U.S. dollar strengthened by 10% as of June 30, 2025, the amount recorded in AOCI related to foreign exchange contracts hedging content licensing/production exposures, before taxes, would have been approximately $195 million lower.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nflx_2025_q2_capital_allocation_repurchases_debt",
+    "question": "Provide the key capital allocation and cash-flow actions Netflix reported for the six months ended June 30, 2025: shares repurchased (shares and dollar amount), remaining repurchase authorization as of June 30, 2025, and the main drivers of the $2,909 million increase in cash used in financing activities versus the prior-year period.",
+    "ground_truth": "During the six months ended June 30, 2025, Netflix repurchased 5,238,736 shares of common stock for an aggregate amount of $5.2 billion (excluding the 1% excise tax). As of June 30, 2025, $12.0 billion remained available for repurchases. Net cash used in financing activities increased $2,909 million versus the corresponding period in 2024, primarily driven by a $1,591 million increase in repurchases of common stock and a $1,433 million increase in repayments of debt (reflecting approximately $1,833 million of debt repayments in the six months ended June 30, 2025 versus approximately $400 million in the six months ended June 30, 2024), partially offset by a $133 million increase in proceeds from issuance of common stock.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nflx_2025_q2_operating_cf_drivers",
+    "question": "Explain the causes of the $1,709 million increase in net cash provided by operating activities for the six months ended June 30, 2025 compared with the six months ended June 30, 2024. Include the specific contributing and offsetting amounts cited in Netflix's Q2 2025 SEC filing.",
+    "ground_truth": "Net cash provided by operating activities for the six months ended June 30, 2025 increased $1,709 million compared with the corresponding period in 2024, primarily driven by a $1,536 million (34%) increase in net income, a $323 million decrease in payments for content assets, and a $487 million increase in adjustments for non-cash expenses. These favorable items were partially offset by $637 million of unfavorable changes in working capital.",
+    "ticker": "NFLX",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nflx_2025_q3_us_revenue",
+    "question": "What were Netflix's total U.S. revenues for the three and nine months ended September 30, 2025, and how did those amounts compare to the same periods in 2024?",
+    "ground_truth": "Total U.S. revenues were $4.7 billion for the three months ended September 30, 2025 (compared with $4.0 billion for the three months ended September 30, 2024) and $13.6 billion for the nine months ended September 30, 2025 (compared with $11.9 billion for the nine months ended September 30, 2024).",
     "ticker": "NFLX",
     "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "nflx_2025_q3_fx_hedging_designations_and_pnl_lines",
-    "question": "What types of foreign exchange hedge designations did Netflix utilize in Q3 2025, and which P&L line items were they associated with?",
-    "ground_truth": "For Q3 2025, Netflix used foreign exchange contracts designated as cash flow hedges and fair value hedges, as well as nondesignated FX contracts and net investment hedges. The FX hedges were associated with Revenues, Cost of Revenues, and Non-operating income/expense, as shown by the foreign exchange contracts linked to nflx:RevenuesMember, nflx:CostOfRevenuesMember, and NonoperatingIncomeExpenseMember for the three months ended July 1\u2013September 30, 2025 and the nine months ended January 1\u2013September 30, 2025.",
+    "sample_id": "nflx_2025_q3_core_strategy_and_codm_metrics",
+    "question": "According to the MD&A, what is Netflix's stated core strategy and which financial metrics does Netflix's chief operating decision maker use to assess performance and allocate resources for Q3 2025?",
+    "ground_truth": "Netflix's core strategy is to grow the business globally within the parameters of its operating margin target, by improving content offerings and member experience and offering a range of pricing plans (including an ad-supported plan). The company's chief operating decision maker (the co\u2011Chief Executive Officers) reviews consolidated information and uses consolidated operating margin and net income to assess financial performance and allocate resources (including determining the rate at which the company seeks to grow global operating margin and allocating budget between cost of revenues, sales and marketing, technology and development, and general and administrative expenses).",
     "ticker": "NFLX",
     "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "nflx_2025_q3_fair_value_classification_cash_investments",
-    "question": "How were money market funds and bank time deposits classified within the fair value hierarchy as of September 30, 2025?",
-    "ground_truth": "As of September 30, 2025, Netflix classified money market funds as Level 1 within cash and cash equivalents, short-term investments, and other current and noncurrent assets, and classified bank time deposits as Level 2 within cash and cash equivalents, short-term investments, and other current and noncurrent assets (per MoneyMarketFundsMember\u2014FairValueInputsLevel1Member and BankTimeDepositsMember\u2014FairValueInputsLevel2Member tags dated 2025-09-30).",
+    "sample_id": "nflx_2025_q3_brazil_non_income_tax",
+    "question": "What amount did Netflix recognize as an operating expense in the current period related to non-income tax assessments with Brazilian tax authorities, and what deposit related to these assessments does Netflix expect to pay for Q3 2025?",
+    "ground_truth": "Netflix recognized a cumulative loss of approximately $619 million as an operating expense in the current period related to non-income tax assessments with the Brazilian tax authorities, and the company expects to pay deposits of $619 million related to these non-income tax assessments in Brazil.",
     "ticker": "NFLX",
     "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "nflx_2025_q3_aug_2024_senior_notes_coupons",
-    "question": "What coupon rates did Netflix's senior notes issued in August 2024 carry, as referenced in the Q3 2025 10-Q?",
-    "ground_truth": "The filing references two August 2024 senior notes: 4.90% Senior Notes and 5.40% Senior Notes (nflx:FourPointNineZeroPercentSeniorNotesIssuedAugust2024Member and nflx:FivePointFourZeroPercentSeniorNotesIssuedAugust2024Member).",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q3"
-  },
-  {
-    "sample_id": "nflx_2025_q3_non_income_tax_brazil",
-    "question": "What non-income tax matter involving Brazil did Netflix disclose in its Q3 2025 10-Q?",
-    "ground_truth": "Netflix disclosed non-income tax assessments involving Brazilian tax authorities, as indicated by the nflx:NonIncomeTaxAssessmentsMember and nflx:BrazilianTaxAuthoritiesMember tags dated September 30, 2025.",
+    "sample_id": "nflx_2025_q3_share_repurchases_and_authorization",
+    "question": "During the nine months ended September 30, 2025, how many shares did Netflix repurchase, for what aggregate amount, how much repurchase capacity remained as of September 30, 2025, and how did repurchases change versus the prior-year period?",
+    "ground_truth": "During the nine months ended September 30, 2025, Netflix repurchased 6,765,397 shares of common stock for an aggregate amount of $7.0 billion (excluding the 1% excise tax). As of September 30, 2025, $10.1 billion remained available for repurchases. Repurchases of common stock increased by $1,748 million in the nine months ended September 30, 2025 as compared to the corresponding period in 2024. (The Board originally authorized up to $10 billion in September 2023 and increased share repurchase authorization by an additional $15 billion in December 2024.)",
     "ticker": "NFLX",
     "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "nflx_2026_streaming_geographic_segments",
-    "question": "Which geographic regions does Netflix disclose for its Streaming segment in fiscal year 2025?",
-    "ground_truth": "Netflix reports the following Streaming geographic regions: United States and Canada, EMEA, Latin America, and Asia Pacific.",
+    "sample_id": "nflx_2025_q3_revenue_growth_fx_impact",
+    "question": "What drove Netflix's year-over-year revenue growth for the three and nine months ended September 30, 2025, and how did foreign exchange affect the nine-month results on a constant currency basis?",
+    "ground_truth": "Revenues increased 17% for the three months and 15% for the nine months ended September 30, 2025 versus the comparable 2024 periods, primarily due to growth in memberships, price increases, and increased advertising revenue. The nine-month results were unfavorably impacted by changes in foreign exchange rates (net of hedging); on a constant currency basis, revenues for the nine months ended September 30, 2025 would have been approximately $349 million higher than the reported revenues of $33,132 million.",
     "ticker": "NFLX",
     "year": 2025,
-    "quarter": null
+    "quarter": "Q3"
   },
   {
-    "sample_id": "nflx_2026_fair_value_classification_liquid_assets",
-    "question": "As of December 31, 2025, how are money market funds and bank time deposits classified within the fair value hierarchy, and in which balance sheet categories do they appear?",
-    "ground_truth": "At December 31, 2025, money market funds are classified as Level 1 and bank time deposits are classified as Level 2. Both appear across Cash and cash equivalents, Short-term investments, Other current assets, and Other noncurrent assets.",
+    "sample_id": "nflx_2026_q1_regional_revenue_us",
+    "question": "What were Netflix's total U.S. revenues for the three months ended March 31, 2026 and March 31, 2025?",
+    "ground_truth": "Total U.S. revenues were $4.9 billion for the three months ended March 31, 2026 and $4.3 billion for the three months ended March 31, 2025.",
     "ticker": "NFLX",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nflx_2026_fx_derivatives_designations_and_locations",
-    "question": "What types of foreign exchange derivative designations did Netflix use at December 31, 2025, and where are the related derivative assets and liabilities recorded?",
-    "ground_truth": "As of December 31, 2025, Netflix used foreign exchange contracts designated as cash flow hedges and fair value hedges, as well as nondesignated FX contracts. Related derivative assets are recorded in Other current assets and Other noncurrent assets, and related derivative liabilities are recorded in Other current liabilities and Other noncurrent liabilities.",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nflx_2026_level2_senior_notes_list",
-    "question": "List at least five specific senior notes series that Netflix classifies using Level 2 inputs at December 31, 2025.",
-    "ground_truth": "At December 31, 2025, the following Netflix senior notes are classified using Level 2 inputs: 3.00% Senior Notes (issued April 2020); 3.625% Senior Notes (issued April 2020); 4.375% Senior Notes; 4.875% Senior Notes; 4.625% Senior Notes; 3.875% Senior Notes; 5.375% Senior Notes (issued April 2019); 3.625% Senior Notes (issued October 2019); 4.875% Senior Notes (issued October 2019); 4.90% Senior Notes (issued August 2024); 5.40% Senior Notes (issued August 2024); 5.875% Senior Notes; 5.875% Senior Notes (2018); and 6.375% Senior Notes.",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nflx_2026_credit_facilities_and_reference_rates_dec2025",
-    "question": "Which revolving credit and term loan facilities did Netflix reference in December 2025, and what reference rates are specified for the revolving credit agreement?",
-    "ground_truth": "In December 2025, Netflix referenced a Revolving Credit Facility under the Transactions Revolving Credit Agreement (dated December 19, 2025) that specifies Base Rate and SOFR (Secured Overnight Financing Rate) reference rates (with minimum and maximum contexts). Netflix also referenced A2Y DDTL Facility and A3Y DDTL Facility (delayed-draw term loans), a Delayed Draw Term Loan Credit Agreement, a Bridge Term Loan Facility (Warner Bros. Discovery Inc. financing), and a Commercial Paper program (including as of December 31, 2025).",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": null
-  },
-  {
-    "sample_id": "NFLX_2025Q2_streaming_geographic_segments",
-    "question": "What geographic segments does Netflix report for its streaming business in Q2 2025?",
-    "ground_truth": "The filing identifies four streaming geographic segments: United States and Canada, EMEA, Latin America, and Asia Pacific.",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2025Q2_fx_hedge_designations_and_targets",
-    "question": "How are Netflix\u2019s foreign exchange derivatives designated in Q2 2025, and which financial statement components do they hedge?",
-    "ground_truth": "For the quarter ended June 30, 2025, Netflix uses foreign exchange contracts designated as cash flow hedges, fair value hedges, and net investment hedges, as well as non-designated FX contracts. These hedges relate to revenues, cost of revenues, and non-operating income/expense.",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2025Q2_fair_value_hierarchy_instruments",
-    "question": "As of June 30, 2025, which instruments are classified as Level 1 versus Level 2 in Netflix\u2019s fair value hierarchy?",
-    "ground_truth": "As of June 30, 2025, money market funds are classified as Level 1 and bank time deposits are classified as Level 2.",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2025Q2_senior_notes_tranches_list",
-    "question": "List at least four specific senior note tranches identified as outstanding in Netflix\u2019s capital structure as of June 30, 2025.",
-    "ground_truth": "The filing lists multiple tranches, including: 4.90% Senior Notes issued August 2024; 5.40% Senior Notes issued August 2024; 5.375% Senior Notes issued April 2019; 3.625% Senior Notes issued October 2019; and 4.875% Senior Notes issued October 2019. (Additional tranches referenced include 3.625% Senior Notes issued April 2020, 5.875% Senior Notes (2018), 4.375% Senior Notes, 4.625% Senior Notes, and 6.375% Senior Notes.)",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2025Q2_brazil_non_income_tax_assessments",
-    "question": "What type of tax assessments with the Brazilian tax authorities does Netflix disclose in the Q2 2025 10-Q?",
-    "ground_truth": "The filing references non-income tax assessments with the Brazilian tax authorities.",
-    "ticker": "NFLX",
-    "year": 2024,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "nvda_2025_market_value_non_affiliates",
-    "question": "What was NVIDIA's aggregate market value of voting stock held by non-affiliates as of July 26, 2024, and what exclusions did the company apply in that calculation?",
-    "ground_truth": "As of July 26, 2024, the aggregate market value of voting stock held by non-affiliates was approximately $2.7 trillion, based on the Nasdaq Global Select Market closing price. The calculation excludes 1.0 billion shares held by directors and executive officers and does not exclude shares held by organizations owning more than 5% that represented they are registered investment advisers or registered investment companies.",
-    "ticker": "NVDA",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2025_shares_outstanding",
-    "question": "How many shares of NVIDIA common stock were outstanding as of February 21, 2025?",
-    "ground_truth": "NVIDIA had 24.4 billion shares of common stock outstanding as of February 21, 2025.",
-    "ticker": "NVDA",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2025_reportable_segments",
-    "question": "What reportable operating segments does NVIDIA disclose in its fiscal 2025 Form 10-K?",
-    "ground_truth": "NVIDIA discloses two reportable operating segments: Compute and Networking, and Graphics.",
-    "ticker": "NVDA",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2025_par_value_and_listing",
-    "question": "What is the par value of NVIDIA's common stock, what is its trading symbol, and on which exchange is it listed?",
-    "ground_truth": "NVIDIA's common stock has a par value of $0.001 per share, trades under the symbol NVDA, and is listed on The Nasdaq Global Select Market.",
-    "ticker": "NVDA",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2025_fiscal_year_end_and_file_number",
-    "question": "When did NVIDIA's fiscal year end for the 2025 Form 10-K, and what is the company's Commission file number?",
-    "ground_truth": "The fiscal year ended on January 26, 2025, and the Commission file number is 0-23985.",
-    "ticker": "NVDA",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2026_shares_outstanding",
-    "question": "How many shares of NVIDIA common stock were outstanding as of February 20, 2026?",
-    "ground_truth": "24.3 billion shares were outstanding as of February 20, 2026.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2026_non_affiliate_market_value_2025_07_25",
-    "question": "What was the aggregate market value of NVIDIA\u2019s voting stock held by non-affiliates as of July 25, 2025, and what exclusions or inclusions did the calculation apply?",
-    "ground_truth": "Approximately $4.0 trillion as of July 25, 2025, based on the closing sales price on the Nasdaq Global Select Market that day. The calculation excludes 1.0 billion shares held by directors and executive officers and does not exclude shares held by organizations owning more than 5% that represented they are registered investment advisers or investment companies registered under Section 8 of the Investment Company Act of 1940.",
-    "ticker": "NVDA",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2026_reportable_segments",
-    "question": "What are NVIDIA\u2019s reportable operating segments in its fiscal 2026 Form 10-K?",
-    "ground_truth": "NVIDIA reports two operating segments: Compute and Networking, and Graphics.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2026_fair_value_hierarchy_classification",
-    "question": "Which categories of NVIDIA\u2019s marketable securities are classified as Level 1 versus Level 2 in the fair value hierarchy in the fiscal 2026 filing?",
-    "ground_truth": "Level 1: Money Market Funds and Publicly Held Equity Securities. Level 2: U.S. Treasury Securities, Corporate Debt Securities, U.S. Government Agencies Debt Securities, Foreign Government Debt Securities, and Certificates of Deposit.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "nvda_2026_fx_risk_management_derivatives",
-    "question": "What types of derivative instruments does NVIDIA use for foreign currency risk management, and how are they designated under hedge accounting?",
-    "ground_truth": "NVIDIA uses foreign exchange forward contracts, with positions designated as hedging instruments and positions that are nondesignated.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "NFLX_2026_q2_derivative_line_items",
-    "question": "In Q2 2026, which income statement line items did Netflix attribute derivative impacts to per its XBRL tags?",
-    "ground_truth": "For the quarter ended 2026-06-30 (and year-to-date 2026-01-01 to 2026-06-30), Netflix tagged derivative impacts (for both ForeignExchangeContractMember and InterestRateContractMember) to Revenues, Cost of Revenue, Interest Expense (Nonoperating), and Nonoperating Income (Expense).",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2026_q2_fair_value_levels_money_market_vs_time_deposits",
-    "question": "As of June 30, 2026, how does Netflix classify money market funds and bank time deposits within the fair value hierarchy?",
-    "ground_truth": "Money market funds are classified as Level 1 (FairValueInputsLevel1Member) and bank time deposits are classified as Level 2 (FairValueInputsLevel2Member) across cash and cash equivalents, short-term investments, and other current/noncurrent assets as of 2026-06-30.",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2026_q2_senior_notes_series_list",
-    "question": "Which specific senior notes (by coupon) are referenced as outstanding in Netflix\u2019s Q2 2026 10-Q?",
-    "ground_truth": "The filing references the following senior notes: 4.375%, 3.625%, 4.875%, 5.875% (2018), 4.625%, 6.375%, 3.875%, 5.375% (issued April 2019), 3.625% (issued October 2019), 4.875% (issued October 2019), 4.90% (issued August 2024), and 5.40% (issued August 2024).",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2026_q2_streaming_geographic_segments",
-    "question": "What streaming geographic segments does Netflix report in Q2 2026?",
-    "ground_truth": "Netflix reports streaming segments for United States and Canada (UCAN), EMEA, Latin America, and Asia Pacific in Q2 2026.",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "NFLX_2026_q2_derivative_hedge_designations",
-    "question": "What hedge designations did Netflix use for its derivative instruments in Q2 2026?",
-    "ground_truth": "Foreign exchange contracts were used as cash flow hedges, fair value hedges, and net investment hedges, and also on a nondesignated basis. Interest rate contracts were used as fair value hedges (including hedges of the 4.90% and 5.40% senior notes issued August 2024), as shown in the designated-as-hedging-instrument tags for 2026-06-30.",
-    "ticker": "NFLX",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "nvda_2026_q1_revenue_yoy_growth",
-    "question": "What was NVIDIA's revenue for the quarter ended April 27, 2025, and how much did it increase year over year versus the quarter ended April 28, 2024 (in dollars and percentage)?",
-    "ground_truth": "Revenue was $44.062 billion, up $18.018 billion (+69.2%) from $26.044 billion in the prior-year quarter.",
-    "ticker": "NVDA",
     "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "nvda_2026_q1_margins",
-    "question": "What were NVIDIA's gross margin and operating margin in Q1 2025?",
-    "ground_truth": "Gross margin was approximately 60.5% (gross profit $26.668 billion on revenue $44.062 billion). Operating margin was approximately 49.1% (operating income $21.638 billion on revenue $44.062 billion).",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q1_operating_cash_flow_change",
+    "question": "For Netflix, by how much did net cash provided by operating activities change year-over-year for Q1 2026, and what were the primary drivers and offsets noted by management?",
+    "ground_truth": "Net cash provided by operating activities for the three months ended March 31, 2026 increased $2,501 million compared to the corresponding period in 2025. Primary drivers were a $2,392 million (83%) increase in net income largely attributable to a $2.8 billion termination fee received in connection with the termination of the WBD transaction, a $749 million increase in adjustments for non-cash expenses, and $200 million in favorable changes in working capital. These were partially offset by an $841 million increase in payments for content assets. Changes in working capital included $729 million of non-routine payments related to non-income tax assessments in Brazil for prior periods.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "nvda_2026_q1_free_cash_flow",
-    "question": "What was NVIDIA\u2019s free cash flow in Q1 2025 if defined as cash from operations minus purchases related to property and equipment and intangible assets?",
-    "ground_truth": "Free cash flow was $26.187 billion, calculated as $27.414 billion of net cash provided by operating activities less $1.227 billion of purchases related to property and equipment and intangible assets.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q1_capital_allocation_repurchases",
+    "question": "What did Netflix repurchase in Q1 2026 and how much repurchase capacity remained as of March 31, 2026? Include the Board authorizations described.",
+    "ground_truth": "During the three months ended March 31, 2026, Netflix repurchased 13,497,098 shares of common stock for an aggregate amount of $1.3 billion. As of March 31, 2026, $6.8 billion remains available for repurchases. The Board had previously authorized up to $10 billion of repurchases in September 2023 and increased that authorization by an additional $15 billion in December 2024 (both with no expiration date).",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "nvda_2026_q1_buybacks_dividends",
-    "question": "How much capital did NVIDIA return to shareholders in Q1 2025 via share repurchases and cash dividends?",
-    "ground_truth": "NVIDIA paid $14.095 billion for share repurchases and $244 million in cash dividends ($0.01 per share), totaling $14.339 billion returned to shareholders in the quarter.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q1_fx_hedge_aoci",
+    "question": "Summarize Netflix's foreign currency exposure and quantify the reported hypothetical impact on accumulated other comprehensive income (AOCI) from a 10% U.S. dollar move as of March 31, 2026.",
+    "ground_truth": "Currencies other than the U.S. dollar accounted for 58% of Netflix's revenue and 30% of operating expenses for the three months ended March 31, 2026. Netflix enters into foreign exchange forward contracts designated as cash flow hedges of forecasted foreign currency revenue and of forecasted and firmly committed transactions for content; gains or losses on these derivatives are initially recorded in AOCI and reclassified into Revenues or Cost of Revenues when the hedged transactions affect earnings. If the U.S. dollar weakened by 10% as of March 31, 2026 (and December 31, 2025), the amount recorded in AOCI related to its foreign exchange contracts hedging revenue, before taxes, would have been approximately $2,263 million and $2,296 million lower, respectively. Separately, if the U.S. dollar strengthened by 10% as of March 31, 2026 (and December 31, 2025), the amount recorded in AOCI related to its foreign exchange contracts hedging content exposures, before taxes, would have been approximately $274 million and $237 million lower, respectively.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "nvda_2026_q1_operating_segments",
-    "question": "What operating segments did NVIDIA report in Q1 2025?",
-    "ground_truth": "NVIDIA reported two operating segments: Compute & Networking and Graphics.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q1_revenue_growth_and_content_investment",
+    "question": "What drove Netflix's 16% revenue growth in Q1 2026 and how did management say content investment patterns affect cash use and liquidity?",
+    "ground_truth": "Revenues for the three months ended March 31, 2026 increased 16% compared to the same period in 2025, primarily due to growth in memberships, price increases, and increased advertising revenue. Management stated that primary uses of cash include acquisition, licensing and production of content, marketing, streaming delivery, and personnel-related costs; investments in original content (content that Netflix produces and owns) require more cash upfront relative to licensed content because production costs are paid as the content is created, well in advance of when the content is available and amortized. Netflix expects to continue to significantly invest in global content, particularly original content, which will impact liquidity. Separately, cash, cash equivalents, restricted cash and short-term investments increased $3,228 million in Q1 2026, primarily due to cash provided by operations that included the $2.8 billion termination fee from the terminated WBD transaction, partially offset by repurchases of stock and cash paid for acquisitions.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "nvda_2026_q2_revenue_cost_gross_profit",
-    "question": "What were NVIDIA's revenue, cost of revenue, and gross profit for the three months ended July 27, 2025?",
-    "ground_truth": "For the quarter ended July 27, 2025, revenue was $46,743 million, cost of revenue was $12,890 million, and gross profit was $33,853 million.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q2_operating_cash_flow_breakdown",
+    "question": "For Netflix's six months ended June 30, 2026, by how much did net cash provided by operating activities change versus the six months ended June 30, 2025, and what were the primary components (with amounts) that drove that change?",
+    "ground_truth": "Net cash provided by operating activities for the six months ended June 30, 2026 increased $1,822 million compared to the corresponding period in 2025. The change was primarily driven by a $2,668 million increase in net income (largely attributable to a $2.8 billion termination fee received in connection with the termination of the WBD transaction in Q1 2026) and a $1,474 million increase in adjustments for non-cash expenses, partially offset by a $1,900 million increase in payments for content assets and $420 million in unfavorable changes in working capital (changes in working capital include $729 million of non-routine payments made in connection with non-income tax assessments in Brazil for prior tax periods).",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q2"
   },
   {
-    "sample_id": "nvda_2026_q2_net_income_and_eps",
-    "question": "What were NVIDIA's net income and diluted EPS for the quarter ended July 27, 2025, and what was the diluted weighted average share count?",
-    "ground_truth": "Net income was $26,422 million and diluted EPS was $1.08. The diluted weighted average shares outstanding were 24,532 million.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q2_cash_flow_and_capex_repurchases",
+    "question": "How did Netflix's investing and financing cash flows change in the six months ended June 30, 2026 compared with the prior year period \u2014 include the change in net cash used in investing, the primary reasons (including acquisition cash outflows and PP&E), the change in net cash used in financing, and the precise drivers such as debt repayments and stock repurchases?",
+    "ground_truth": "Net cash used in investing activities for the six months ended June 30, 2026 increased $2,255 million compared to the corresponding period in 2025, primarily because there were no cash flows related to investments in the six months ended June 30, 2026 versus $1,575 million in net cash inflows from maturities, sales and purchases of investments in the prior comparative period, and because of net cash outflows for acquisitions totaling $586 million in the six months ended June 30, 2026; purchases of property and equipment also increased $131 million. Net cash used in financing activities for the six months ended June 30, 2026 decreased $631 million compared to the prior year period, primarily driven by no repayments of debt in the six months ended June 30, 2026 versus $1,833 million in repayments of debt in the corresponding period in 2025, partially offset by a $794 million increase in repurchases of common stock; proceeds from issuance of common stock decreased $411 million.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q2"
   },
   {
-    "sample_id": "nvda_2026_q2_operating_expenses_breakdown",
-    "question": "Provide the breakdown of NVIDIA's operating expenses for the three months ended July 27, 2025 (R&D and SG&A) and the total operating expenses.",
-    "ground_truth": "For the quarter ended July 27, 2025, Research and Development expense was $4,291 million, Sales, General and Administrative expense was $1,122 million, and total operating expenses were $5,413 million.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q2_forex_exposure_aoci_impact",
+    "question": "What portion of Netflix's revenue and operating expenses were denominated in currencies other than the U.S. dollar for the six months ended June 30, 2026, and what were the reported constant-currency and AOCI sensitivities (provide the constant-currency revenue impact and the AOCI impact for a 10% U.S. dollar weakening)?",
+    "ground_truth": "For the six months ended June 30, 2026, currencies denominated in other than the U.S. dollar accounted for 57% of revenue and 30% of operating expenses. On a constant currency basis, revenues would have been approximately $535 million lower for the six months ended June 30, 2026 than the reported revenues of $24,810 million. If the U.S. dollar weakened by 10% as of June 30, 2026, the amount recorded in accumulated other comprehensive income (AOCI) related to the Company's foreign exchange forward contracts, before taxes, would have been approximately $2,490 million lower.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q2"
   },
   {
-    "sample_id": "nvda_2026_q2_filer_status_and_shell_company",
-    "question": "What is NVIDIA's filer status, and does the company indicate it is a shell company in its Q2 2025 10-Q?",
-    "ground_truth": "NVIDIA is a large accelerated filer and it indicates it is not a shell company.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q2_debt_swaps_sofr_sensitivity",
+    "question": "As of June 30, 2026, what was Netflix's total debt outstanding, how much notional was subject to interest rate swap fair value hedges, what is the SOFR sensitivity on that hedged notional (per 1% change), and how much principal and interest on outstanding notes is due in the next twelve months?",
+    "ground_truth": "As of June 30, 2026, Netflix had $14.4 billion of debt outstanding (fixed-rate unsecured debt in twelve tranches due between 2026 and 2054). The Company had entered into interest rate swap agreements with an aggregate notional amount of $1,400 million designated as fair value hedges. A 1% increase in SOFR as of June 30, 2026 would increase Netflix's annual interest expense by approximately $14 million on the hedged notional. The amount of principal and interest on the Company's outstanding notes due in the next twelve months is $3,149 million.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q2"
   },
   {
-    "sample_id": "nvda_2026_q2_reg_fd_social_media_channels",
-    "question": "Which channels does NVIDIA say it uses to disclose information under Regulation FD, and does it state that information posted there is part of the 10-Q?",
-    "ground_truth": "NVIDIA states it announces material information via its investor relations website, press releases, SEC filings, and public calls/webcasts, and also uses the following social media channels for Regulation FD: NVIDIA Corporate Blog (http://blogs.nvidia.com), NVIDIA Technical Blog (http://developer.nvidia.com/blog/), NVIDIA LinkedIn Page (http://www.linkedin.com/company/nvidia), NVIDIA Facebook Page (https://www.facebook.com/nvidia), NVIDIA Instagram Page (https://www.instagram.com/nvidia), NVIDIA X Account (https://x.com/nvidia), and NVIDIA Threads Page (https://www.threads.com/@nvidia); it also notes videos on YouTube (https://www.YouTube.com/nvidia). It further states that information posted through these channels may be deemed material but is not a part of the Quarterly Report on Form 10-Q.",
-    "ticker": "NVDA",
+    "sample_id": "nflx_2026_q2_revenue_drivers_and_us_revenue",
+    "question": "How did Netflix's revenues change for the three- and six-month periods ended June 30, 2026 compared with the same periods in 2025 (percentage changes and primary drivers), and what were the U.S. revenue amounts for both the three- and six-month periods in 2026 and 2025?",
+    "ground_truth": "Revenues for the three and six months ended June 30, 2026 increased 13% and 15%, respectively, compared to the three and six months ended June 30, 2025, primarily due to growth in memberships, price increases, and increased advertising revenue, and were also impacted by favorable changes in foreign exchange rates, net of hedging. Total U.S. revenues were $5.1 billion and $9.9 billion for the three and six months ended June 30, 2026, respectively, and $4.6 billion and $8.9 billion for the three and six months ended June 30, 2025, respectively.",
+    "ticker": "NFLX",
     "year": 2026,
     "quarter": "Q2"
   },
   {
-    "sample_id": "nflx_2026_q1_revenue_yoy_growth",
-    "question": "What was Netflix\u2019s total revenue in Q1 2026, and how did it change year over year versus Q1 2025?",
-    "ground_truth": "Revenue was $12,249,757,000 in Q1 2026 versus $10,542,801,000 in Q1 2025, an increase of $1,706,956,000 or approximately 16.2% year over year.",
-    "ticker": "NFLX",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nflx_2026_q1_operating_margin",
-    "question": "What was Netflix\u2019s Q1 2026 operating income and operating margin, and how did that margin compare to Q1 2025?",
-    "ground_truth": "Operating income was $3,956,997,000 in Q1 2026, implying an operating margin of about 32.3% on $12,249,757,000 of revenue. In Q1 2025, operating income was $3,346,999,000 on $10,542,801,000 of revenue, or roughly a 31.7% margin.",
-    "ticker": "NFLX",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nflx_2026_q1_net_income_eps",
-    "question": "Report Netflix\u2019s Q1 2026 net income and diluted EPS, with the prior-year Q1 for context.",
-    "ground_truth": "Net income was $5,282,791,000 and diluted EPS was $1.23 in Q1 2026, compared with net income of $2,890,351,000 and diluted EPS of $0.66 in Q1 2025.",
-    "ticker": "NFLX",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nflx_2026_q1_fx_hedging_designations",
-    "question": "What types of hedge designations did Netflix use for its foreign exchange contracts in Q1 2026, and where were related balances recorded?",
-    "ground_truth": "The filing shows foreign exchange contracts designated as cash flow hedges, fair value hedges, and net investment hedges, as well as nondesignated FX contracts. Related derivative balances were recorded in Other current assets, Other noncurrent assets, Other current liabilities, and Other noncurrent liabilities.",
-    "ticker": "NFLX",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nflx_2026_q1_debt_and_interest_expense",
-    "question": "Which debt instruments did Netflix have outstanding or available as of Q1 2026, and what was interest expense for the quarter?",
-    "ground_truth": "Interest expense was $262,077,000 in Q1 2026. The filing lists multiple senior notes outstanding, including 4.375% Senior Notes, 3.625% Senior Notes (including an October 2019 issuance), 4.875% Senior Notes (including an October 2019 issuance), 5.875% Senior Notes (2018), 6.375% Senior Notes, 5.375% Senior Notes (issued April 2019), and 4.90% Senior Notes (issued August 2024). Netflix also maintained an unsecured revolving credit facility (with Base Rate and SOFR OIS options) and a commercial paper program.",
-    "ticker": "NFLX",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nvda_2027_q1_shares_outstanding_may15",
-    "question": "How many shares of NVIDIA common stock were outstanding as of May 15, 2026?",
-    "ground_truth": "24.2 billion shares were outstanding as of May 15, 2026.",
-    "ticker": "NVDA",
-    "year": 2027,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nvda_2027_q1_operating_segments_list",
-    "question": "What operating segments does NVIDIA report in its Q1 2026 Form 10-Q?",
-    "ground_truth": "NVIDIA reports two operating segments: Compute and Networking, and Graphics.",
-    "ticker": "NVDA",
-    "year": 2027,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nvda_2027_q1_fx_forwards_designation",
-    "question": "Which derivative instruments does NVIDIA use to manage foreign currency risk this quarter, and how are they designated for accounting purposes?",
-    "ground_truth": "NVIDIA uses foreign exchange forward contracts, with some designated as hedging instruments and others not designated (nondesignated).",
-    "ticker": "NVDA",
-    "year": 2027,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nvda_2027_q1_subsequent_event_dates",
-    "question": "What dates are associated with subsequent events disclosed in NVIDIA\u2019s Q1 2026 Form 10-Q?",
-    "ground_truth": "The filing discloses subsequent events dated May 17, 2026 and May 18, 2026.",
-    "ticker": "NVDA",
-    "year": 2027,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nvda_2027_q1_reg_fd_disclosure_channels",
-    "question": "Which social media and web channels does NVIDIA state it uses for Regulation FD disclosure?",
-    "ground_truth": "NVIDIA lists the following channels: NVIDIA Corporate Blog (blogs.nvidia.com/), NVIDIA Technical Blog (developer.nvidia.com/blog/), NVIDIA LinkedIn, NVIDIA Facebook, NVIDIA Instagram, NVIDIA X (x.com/nvidia), NVIDIA Investor Relations (investor.nvidia.com), and NVIDIA YouTube (YouTube.com/nvidia).",
-    "ticker": "NVDA",
-    "year": 2027,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "nvda_2026_q3_income_statement_highlights",
-    "question": "What were NVIDIA\u2019s revenue, gross profit, operating income, and net income for the three months ended October 26, 2025?",
-    "ground_truth": "For the three months ended October 26, 2025, NVIDIA reported: Revenue of $57,006 million ($57.006 billion), Gross profit of $41,849 million, Operating income of $36,010 million, and Net income of $31,910 million.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": "Q3"
-  },
-  {
-    "sample_id": "nvda_2026_q3_eps_yoy",
-    "question": "What were NVIDIA\u2019s basic and diluted EPS in Q3 (three months ended October 26, 2025), and how do they compare to the year-ago quarter ended October 27, 2024?",
-    "ground_truth": "Basic EPS was $1.31 in Q3 2025 vs. $0.79 in Q3 2024. Diluted EPS was $1.30 in Q3 2025 vs. $0.78 in Q3 2024.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": "Q3"
-  },
-  {
-    "sample_id": "nvda_2026_q3_margins",
-    "question": "What were NVIDIA\u2019s gross margin and operating margin for the three months ended October 26, 2025?",
-    "ground_truth": "Gross margin was approximately 73.4% ($41,849m gross profit on $57,006m revenue). Operating margin was approximately 63.2% ($36,010m operating income on $57,006m revenue).",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": "Q3"
-  },
-  {
-    "sample_id": "nvda_2026_q3_balance_sheet_liquidity_inventory_changes",
-    "question": "What were NVIDIA\u2019s cash and cash equivalents, marketable securities, and inventories as of October 26, 2025, and how did each change versus January 26, 2025?",
-    "ground_truth": "As of October 26, 2025: Cash and cash equivalents were $11,486 million (up from $8,589 million; +$2,897 million). Marketable securities were $49,122 million (up from $34,621 million; +$14,501 million). Inventories were $19,784 million (up from $10,080 million; +$9,704 million).",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": "Q3"
-  },
-  {
-    "sample_id": "nvda_2026_q3_disclosure_channels_reg_fd",
-    "question": "Which web and social media channels does NVIDIA say it uses to disclose material information under Regulation FD?",
-    "ground_truth": "NVIDIA states it uses its Investor Relations website and the following channels: NVIDIA Corporate Blog, NVIDIA Technical Blog, NVIDIA LinkedIn Page, NVIDIA Facebook Page, NVIDIA Instagram Page, NVIDIA X Account, NVIDIA Threads Page, and NVIDIA videos on YouTube.",
-    "ticker": "NVDA",
-    "year": 2026,
-    "quarter": "Q3"
-  },
-  {
-    "sample_id": "UNH_2025_credit_facilities_size",
-    "question": "What is the committed capacity of each of UnitedHealth Group\u2019s revolving credit facilities disclosed in the 2025 10-K?",
-    "ground_truth": "The filing discloses three revolving credit facilities, each with $7.0 billion of committed capacity: a Five-Year $7.0 Billion Credit Facility, a Three-Year $7.0 Billion Credit Facility, and a 364-Day $7.0 Billion Credit Facility.",
-    "ticker": "UNH",
-    "year": 2024,
-    "quarter": null
-  },
-  {
-    "sample_id": "UNH_2024_reportable_segments_2024",
-    "question": "What reportable segments does UnitedHealth Group list for fiscal year 2024 in the filing?",
-    "ground_truth": "The filing lists four segments: UnitedHealthcare, Optum Health, Optum Insight, and Optum Rx.",
-    "ticker": "UNH",
-    "year": 2024,
-    "quarter": null
-  },
-  {
-    "sample_id": "UNH_2025_example_senior_notes",
-    "question": "Provide two examples of UnitedHealth Group\u2019s senior notes from the filing, including coupon and stated maturity month and year.",
-    "ground_truth": "Examples disclosed include 4.625% notes due July 2035 and 5.750% notes due July 2064.",
-    "ticker": "UNH",
-    "year": 2024,
-    "quarter": null
-  },
-  {
-    "sample_id": "UNH_2025_extraordinary_dividends_dates",
-    "question": "Which 2024 dates are associated with the 'Extraordinary Dividends' disclosure in the filing?",
-    "ground_truth": "The dates associated with Extraordinary Dividends in 2024 are March 19, 2024; June 25, 2024; September 24, 2024; and December 17, 2024.",
-    "ticker": "UNH",
-    "year": 2024,
-    "quarter": null
-  },
-  {
-    "sample_id": "UNH_2025_investment_securities_categories",
-    "question": "Which categories of debt securities does UnitedHealth Group list in its investment portfolio as of December 31, 2024?",
-    "ground_truth": "The filing lists U.S. Treasury and government, U.S. states and political subdivisions, corporate debt securities, mortgage-backed securities issued by U.S. government-sponsored enterprises, and mortgage-backed securities issued by private enterprises.",
-    "ticker": "UNH",
-    "year": 2024,
-    "quarter": null
-  },
-  {
-    "sample_id": "UNH_2026_reportable_segments_fy2025",
-    "question": "What reportable segments does UnitedHealth Group reference for fiscal year 2025?",
-    "ground_truth": "The filing references the following reportable segments for fiscal year 2025: UnitedHealthcare, Optum Health, Optum Insight, and Optum Rx.",
+    "sample_id": "unh_2025_annual_premium_mix",
+    "question": "What proportion of UnitedHealth Group's total consolidated revenues does UnitedHealth Group say is attributable to premium revenues from risk-based products for FY2025?",
+    "ground_truth": "In UnitedHealth Group's filing, premium revenues from risk-based products constitute nearly 80% of UnitedHealth Group's total consolidated revenues.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "UNH_2026_revolving_credit_facilities_commitments",
-    "question": "What revolving credit facilities and committed capacities does UnitedHealth Group disclose as of December 31, 2025?",
-    "ground_truth": "UnitedHealth Group discloses three revolving credit facilities as of December 31, 2025: a Five-Year $7.0 billion credit facility, a Three-Year $7.0 billion credit facility, and a 364-Day $7.0 billion credit facility.",
+    "sample_id": "unh_2025_annual_optum_value_based",
+    "question": "How does UnitedHealth describe Optum Health's use of value-based arrangements and what operational execution risk does UnitedHealth Group identify for those arrangements for FY2025?",
+    "ground_truth": "In UnitedHealth Group's filing, Optum Health enters into fully accountable value-based arrangements with payers. It warns that for Optum Health\u2019s fully accountable value-based care, any inability to provide higher-quality outcomes and better experiences at lower costs or to integrate UnitedHealth Group's care delivery models could impact the company's results of operations, financial positions and cash flows.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "UNH_2026_2026_maturing_notes_and_coupons",
-    "question": "Which UnitedHealth Group notes are scheduled to mature in 2026, and what are their stated coupon rates?",
-    "ground_truth": "The filing lists the following 2026 maturities: 1.250% Notes due January 2026, 3.100% Notes due March 2026, 1.150% Notes due May 2026, 4.750% Notes due July 2026, and Floating Rate Notes due July 2026.",
+    "sample_id": "unh_2025_annual_changehealthcare_cyberattack",
+    "question": "For UnitedHealth Group (UNH), which recently acquired UnitedHealth business was the subject of a reported cyberattack, in what year did it occur, and what type of data was involved for FY2025?",
+    "ground_truth": "The filing reports that the recently acquired Change Healthcare business was subject to a cyberattack in 2024, and the data involved contained protected health information or personally identifiable information.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "UNH_2026_equity_compensation_programs_2025",
-    "question": "Which stock-based compensation plans and employee equity programs were active during 2025?",
-    "ground_truth": "For 2025, the filing references the following programs: Restricted Stock, Restricted Stock Units (RSUs), Stock Options and Stock Appreciation Rights (SARs), and the Employee Stock Purchase Plan (ESPP).",
+    "sample_id": "unh_2025_annual_self_insured_litigation_risk",
+    "question": "For UnitedHealth Group (UNH), what does UnitedHealth disclose about its approach to litigation risk and the potential financial consequences of such risks for FY2025?",
+    "ground_truth": "UnitedHealth discloses that it is largely self-insured with regard to litigation risks. Although it records liabilities for its estimates of the probable costs resulting from self-insured matters, the filing cautions that the level of actual losses could significantly exceed the liabilities recorded and that unfavorable resolutions could result in substantial penalties or monetary damages and materially and adversely affect its results of operations, financial position and cash flows.",
     "ticker": "UNH",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "UNH_2026_extraordinary_dividends_2025_dates",
-    "question": "What dates in 2025 are associated with extraordinary dividends per the filing?",
-    "ground_truth": "The filing associates extraordinary dividends with the following 2025 dates: March 18, 2025; June 24, 2025; September 23, 2025; and December 16, 2025.",
+    "sample_id": "unh_2025_annual_acquisition_integration_vulnerabilities",
+    "question": "For UnitedHealth Group (UNH), how does UnitedHealth link recent acquisitions or non-integrated businesses to operational vulnerabilities, and what consequences does it say could follow if remediation efforts are unsuccessful for FY2025?",
+    "ground_truth": "In UnitedHealth Group's filing, there have previously been and may in the future be heightened vulnerabilities due to recently-acquired or non-integrated businesses. It explains that although UnitedHealth maintains business continuation and resiliency plans and remediation programs, if remediation efforts are not successful it may experience operational interruptions, delays, or cessation of service and loss of existing or potential customers, and that the costs to eliminate or address such security threats and vulnerabilities could be material.",
     "ticker": "UNH",
-    "year": 2024,
+    "year": 2025,
     "quarter": null
   },
   {
-    "sample_id": "UNH_2025_q3_reportable_segments_total_optum_composition",
-    "question": "What reportable segments did UnitedHealth Group present in Q3 2025, and what businesses comprise 'Total Optum'?",
-    "ground_truth": "In Q3 2025, UnitedHealth Group presented the UnitedHealthcare, Optum Health, Optum Insight, and Optum Rx segments. The filing also presents 'Total Optum,' which comprises Optum Health, Optum Insight, and Optum Rx. Corporate Non-Segment and Intersegment Eliminations are also shown.",
+    "sample_id": "unh_2026_annual_premium_revenue_share",
+    "question": "What portion of UnitedHealth Group's total consolidated revenues does the filing say comes from premium revenues from risk-based products for FY2026?",
+    "ground_truth": "In UnitedHealth Group's filing, premium revenues from risk-based products constitute nearly 80% of UnitedHealth Group's total consolidated revenues.",
     "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q3"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "UNH_2025_q3_disaggregation_by_product_and_service",
-    "question": "Does UNH disaggregate revenue to external customers by products and services for each segment in Q3 2025?",
-    "ground_truth": "Yes. For Q3 2025 the filing disaggregates external-customer revenues by product and by service for UnitedHealthcare, Optum Health, Optum Insight, Optum Rx, Total Optum, and Corporate Non-Segment, with intersegment activity and Intersegment Eliminations also identified.",
+    "sample_id": "unh_2026_annual_change_healthcare_cyberattack",
+    "question": "For UnitedHealth Group (UNH), which acquired business did UnitedHealth disclose was subject to a cyberattack in 2024, and what types of data were involved for FY2026?",
+    "ground_truth": "The filing discloses that the recently-acquired Change Healthcare business was subject to a cyberattack in 2024 and that the data involved contained protected health information or personally identifiable information.",
     "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q3"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "UNH_2025_q3_fair_value_hierarchy_debt_and_nonrecurring",
-    "question": "As of September 30, 2025, which fair value hierarchy levels did UNH apply to its debt securities, and did the filing include nonrecurring fair value measurements across those levels?",
-    "ground_truth": "As of September 30, 2025, UNH categorized debt securities using Level 1, Level 2, and Level 3 fair value inputs across categories including U.S. Treasury and Government, U.S. States and Political Subdivisions, Corporate Debt Securities, Mortgage-Backed Securities issued by U.S. Government-Sponsored Enterprises, and Mortgage-Backed Securities issued by private enterprises. The filing also discloses nonrecurring fair value measurements classified in Levels 1, 2, and 3 at September 30, 2025 (and at December 31, 2024).",
+    "sample_id": "unh_2026_annual_ai_strategy_and_risks",
+    "question": "How does the filing describe UnitedHealth Group's expected role for AI (including generative AI) and the primary risks UnitedHealth Group identifies from increasing AI use for FY2026?",
+    "ground_truth": "In UnitedHealth Group's filing, the company anticipates that fast-evolving AI technologies, including generative AI, will play an increasingly important role in its information systems and customer-facing technology products and that this will require ongoing commitment of significant development and operational resources. It also identifies legal, regulatory and business risks from increased AI use, warning that if an AI system does not operate as intended or produces an inaccurate, incomplete or biased output, it could impact operations, customer service or other functions and could have an adverse effect on the company's business, reputation, results of operations, financial position and cash flows.",
     "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q3"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "UNH_2025_q3_identified_senior_notes_and_commercial_paper",
-    "question": "Which specific senior notes and short-term borrowing instruments are identified in UNH\u2019s Q3 2025 filing?",
-    "ground_truth": "The filing identifies the following senior notes: 4.400% Notes due June 2028, 4.650% Notes due January 2031, 5.300% Notes due June 2035, and 5.950% Notes due June 2055. It also identifies commercial paper and long-term debt.",
+    "sample_id": "unh_2026_annual_optum_value_based_risk",
+    "question": "What risk does the filing highlight related to Optum Health's fully accountable value-based arrangements and how could that affect UnitedHealth Group's financial results for FY2026?",
+    "ground_truth": "The filing warns that for Optum Health\u2019s fully accountable value-based care, any inability to provide higher-quality outcomes and better experiences at lower costs or to integrate care delivery models could impact UnitedHealth Group\u2019s results of operations, financial position and cash flows.",
     "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q3"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "UNH_2025_q3_disposal_group_held_for_sale",
-    "question": "Did UNH report a disposal group held for sale as of September 30, 2025, and how was it classified?",
-    "ground_truth": "Yes. As of September 30, 2025, the filing identifies a Disposal Group Held for Sale classified as not discontinued operations.",
+    "sample_id": "unh_2026_annual_legal_actions_self_insured_exposure",
+    "question": "How does UnitedHealth Group describe its exposure and potential cash-flow impact from legal actions in UnitedHealth Group's FY2026 SEC filing?",
+    "ground_truth": "In UnitedHealth Group's filing, the company is largely self-insured with regard to legal actions and records liabilities for its estimates of the probable costs resulting from self-insured matters, but notes it is possible actual losses will significantly exceed the liabilities recorded. It also states that legal actions could result in substantial penalties or monetary damages and materially and adversely affect the company's results of operations, financial position and cash flows.",
     "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q3"
+    "year": 2026,
+    "quarter": null
   },
   {
-    "sample_id": "UNH_2025_q2_reporting_periods",
-    "question": "What exact fiscal periods do UNH's Q2 2025 consolidated results cover for the quarter and year-to-date?",
-    "ground_truth": "The Q2 2025 10-Q presents results for the three months from April 1, 2025 to June 30, 2025, and for the six months from January 1, 2025 to June 30, 2025.",
+    "sample_id": "unh_2025_q1_optumrx_scripts",
+    "question": "How many adjusted scripts did Optum Rx fulfill in the first quarter of 2025 compared with the first quarter of 2024, and what was the absolute change?",
+    "ground_truth": "Optum Rx fulfilled 408 million adjusted scripts in the first quarter of 2025 and 395 million adjusted scripts in the first quarter of 2024, an absolute increase of 13 million adjusted scripts.",
+    "ticker": "UNH",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "unh_2025_q1_medadv_rate_actions",
+    "question": "What did UnitedHealth Group disclose about Medicare Advantage rate pressures and which specific actions did management say they can take to partially offset those funding pressures for Q1 2025?",
+    "ground_truth": "UnitedHealth Group stated that Medicare Advantage industry base rates for numerous years have been well below the industry forward medical cost trend and that the Final Notice for 2026 is beginning to approach the industry forward medical cost trend, creating sustained pressure on the program. To partially offset these rate pressures, management said they can (1) intensify medical and operating cost management, (2) change the size and composition of care provider networks, (3) adjust member benefits, (4) implement or increase member premiums that supplement the monthly payments from the government, and (5) decide annually on a county-by-county basis where they will offer Medicare Advantage plans.",
+    "ticker": "UNH",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "unh_2025_q1_changehealthcare_impact",
+    "question": "Summarize how the Change Healthcare cyberattack affected UnitedHealth Group\u2019s 2024 results and how those impacts influenced the 2025 first-quarter results and cash flows as disclosed.",
+    "ground_truth": "UnitedHealth Group disclosed that its 2024 results were impacted by the Change Healthcare cyberattack. The company reported consolidated earnings from operations of $9.1 billion in Q1 2025 compared with $7.9 billion last year, noting 2024 was impacted by the cyberattack. Segment disclosures stated Optum Insight revenues and earnings increased in Q1 2025 due to decreased business disruption impacts and decreased direct response costs related to the Change Healthcare cyberattack, while Optum Health\u2019s earnings were partially offset by incremental medical costs for accommodations to support care providers made as a result of the 2024 cyberattack. In cash flow discussion, increased cash flows provided by operating activities were driven in part by the impacts of the Change Healthcare cyberattack incurred in 2024, including net repayments of loans to care providers made in response to the cyberattack.",
+    "ticker": "UNH",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "unh_2025_q1_capalloc_repurchases_dividend",
+    "question": "Describe UnitedHealth Group\u2019s reported share repurchase activity, board repurchase authorization remaining, and dividend policy position as of March 31, 2025.",
+    "ground_truth": "During the three months ended March 31, 2025, UnitedHealth Group repurchased approximately 6.0 million shares at an average price of $503.72 per share. As of March 31, 2025, the Board of Directors had authorization to purchase up to 27 million shares of common stock. The company\u2019s quarterly cash dividend to shareholders reflects an annual rate of $8.40.",
+    "ticker": "UNH",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "unh_2025_q1_mcr_drivers",
+    "question": "What specific drivers did UnitedHealth Group cite for the increase in its Medical Care Ratio (MCR) in the period, and which factors partially offset that increase for Q1 2025?",
+    "ground_truth": "UnitedHealth Group said the MCR increased due to the revenue effects of Medicare funding reductions, the member profile of newly added patients under value-based care arrangements, and elevated care patterns for seniors served through Medicare Advantage (including IRA-driven impacts on Medicare Part D and elevated care patterns). These increases were partially offset by the seasonal impacts of the Inflation Reduction Act (IRA) on Medicare Part D and by the incremental medical costs for accommodations made to care providers as a result of the Change Healthcare cyberattack incurred in 2024.",
+    "ticker": "UNH",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "unh_2025_q2_optumrx_scripts",
+    "question": "How many adjusted scripts did Optum Rx fulfill in Q2 2025 and Q2 2024, respectively?",
+    "ground_truth": "Optum Rx fulfilled 414 million adjusted scripts in the second quarter of 2025 and 399 million adjusted scripts in the second quarter of 2024.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": "Q2"
   },
   {
-    "sample_id": "UNH_2025_q2_reportable_segments",
-    "question": "Which reportable operating segments does UnitedHealth Group disclose in Q2 2025?",
-    "ground_truth": "UnitedHealth Group reports four operating segments: UnitedHealthcare, OptumHealth, OptumInsight, and OptumRx. The filing also presents Total Optum, Corporate (non-segment), and Intersegment Eliminations.",
+    "sample_id": "unh_2025_q2_medicare_advantage_mitigation",
+    "question": "According to the MD&A, what specific actions can UnitedHealth Group take to partially offset Medicare Advantage funding pressures and how does UnitedHealth Group decide where to offer Medicare Advantage plans for Q2 2025?",
+    "ground_truth": "To partially offset Medicare Advantage funding pressures, UnitedHealth Group can intensify medical and operating cost management, make changes to the size and composition of its care provider networks, adjust member benefits and implement or increase member premiums supplementing the monthly payments received from the government. The company decides annually on a county-by-county basis where it will offer Medicare Advantage plans.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": "Q2"
   },
   {
-    "sample_id": "UNH_2025_q2_fair_value_categories_and_levels",
-    "question": "Which investment categories are disclosed under UNH's fair value hierarchy as of June 30, 2025, and what input levels are used?",
-    "ground_truth": "As of June 30, 2025, UNH discloses U.S. Treasury and government securities, U.S. states and political subdivisions, corporate debt securities, mortgage-backed securities issued by U.S. government-sponsored enterprises, mortgage-backed securities issued by private enterprises, and aggregate debt securities. Valuations utilize Level 1, Level 2, and Level 3 inputs.",
+    "sample_id": "unh_2025_q2_medicaid_redetermination_risk",
+    "question": "What operational effects did the Medicaid redetermination process have in 2025 and what membership change does UnitedHealth Group expect in 2026 as a result of recent legislation?",
+    "ground_truth": "The Medicaid redetermination process caused a timing mismatch between the health status of people served through Medicaid and state rate updates; elevated care activity\u2014specifically related to behavioral, pharmacy and home health\u2014created a mismatch between the updated rates in 2025 and underlying member acuity, and the funding and payment rate environment remains insufficient, creating the risk of continued downward pressure on Medicaid margin percentages. UnitedHealth Group expects some Medicaid membership losses in 2026 as a result of early adoption of recent legislation.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": "Q2"
   },
   {
-    "sample_id": "UNH_2025_q2_long_term_notes_maturities",
-    "question": "What specific senior notes (coupon and maturity) does UNH list among its long-term debt in Q2 2025?",
-    "ground_truth": "The filing lists: 4.400% Notes due June 2028; 4.650% Notes due January 2031; 5.300% Notes due June 2035; and 5.950% Notes due June 2055.",
+    "sample_id": "unh_2025_q2_capital_allocation_and_liquidity",
+    "question": "Summarize UnitedHealth Group's share repurchases, dividend change, and operating cash flows reported for the six months ended June 30, 2025, including any parent dividends received from domestic insurance subsidiaries.",
+    "ground_truth": "During the six months ended June 30, 2025, UnitedHealth Group repurchased approximately 12.1 million shares at an average price of $454.82 per share, and as of June 30, 2025 had Board authorization to purchase up to 21.0 million shares. In June 2025 the Board increased the quarterly cash dividend to an annual rate of $8.84 per share compared to $8.40 per share. Cash flows from operations for the six months ended June 30, 2025 were $12.6 billion. During the six months ended June 30, 2025, the company's domestic insurance and HMO subsidiaries paid their parent companies dividends of $1.9 billion.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": "Q2"
   },
   {
-    "sample_id": "UNH_2025_q2_disposal_group_held_for_sale",
-    "question": "Did UNH report a disposal group classified as held for sale (not treated as discontinued operations) as of June 30, 2025?",
-    "ground_truth": "Yes. The filing includes a 'Disposal Group Held for sale, Not Discontinued Operations' classification as of June 30, 2025.",
+    "sample_id": "unh_2025_q2_earnings_mcr_operating_cost_dynamics",
+    "question": "For UnitedHealth Group (UNH), why did consolidated earnings from operations decline to $5.2 billion in Q2 2025 compared with $7.9 billion a year earlier, and what drove the change in the medical care ratio (MCR) and operating cost ratio?",
+    "ground_truth": "Consolidated earnings from operations were $5.2 billion in Q2 2025 compared to $7.9 billion in Q2 2024; 2025 results were impacted by elevated medical cost trend while 2024 was impacted by the Change Healthcare cyberattack. The MCR increased due to the revenue effects of Medicare funding reductions, elevated medical cost trend, the member profile of newly added patients under value-based care arrangements and impacts of market morbidity changes on individual exchange offerings (partially offset by incremental medical costs for accommodations to care providers because of the Change Healthcare cyberattack). For the three months ended June 30, 2025 the MCR also increased due to seasonal impacts of the Inflation Reduction Act on Medicare Part D. The operating cost ratio decreased primarily due to revenue impacts of government programs (including the IRA-driven impacts on Medicare Part D), operating cost management and direct response efforts to the Change Healthcare cyberattack, partially offset by investments to support future growth.",
     "ticker": "UNH",
     "year": 2025,
     "quarter": "Q2"
   },
   {
-    "sample_id": "UNH_2026_q1_revenue_breakdown",
-    "question": "What was UnitedHealth Group\u2019s total revenue in Q1 2026, and how did each revenue component (premiums, products, services, and investment/other income) compare to Q1 2025?",
-    "ground_truth": "For the three months ended March 31, 2026, total revenues were $111,721 million versus $109,575 million in Q1 2025, up $2,146 million (2.0%). Component detail: Premiums $87,561 million (vs. $86,534 million), Products $13,250 million (vs. $13,036 million), Services $9,779 million (vs. $8,972 million), and Investment and other income $1,131 million (vs. $1,033 million).",
-    "ticker": "UNH",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2026_q1_effective_tax_rate",
-    "question": "What was UnitedHealth Group\u2019s effective tax rate in Q1 2026, and how did it change versus Q1 2025?",
-    "ground_truth": "Q1 2026 provision for income taxes was $1,482 million on earnings before income taxes of $7,963 million, an effective tax rate of 18.6%. In Q1 2025, the provision was $1,632 million on $8,106 million of pre-tax earnings, an effective tax rate of 20.1%.",
-    "ticker": "UNH",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2026_q1_cash_and_debt_change",
-    "question": "How did UnitedHealth Group\u2019s cash and cash equivalents and long-term debt change from December 31, 2025 to March 31, 2026?",
-    "ground_truth": "Cash and cash equivalents increased from $24,365 million to $28,001 million (+$3,636 million). Long\u2011term debt (less current maturities) decreased from $72,320 million to $71,440 million (\u2212$880 million).",
+    "sample_id": "unh_2025_q3_revenue_and_ops",
+    "question": "What were the year-over-year revenue growth rates for consolidated UnitedHealth Group, UnitedHealthcare and Optum in Q3 2025, and how did consolidated earnings from operations compare to the prior year?",
+    "ground_truth": "Consolidated revenues grew 12% year-over-year, UnitedHealthcare revenues grew 16% and Optum revenues grew 8%. Consolidated earnings from operations were $4.3 billion in Q3 2025 compared to $8.7 billion in the prior-year period.",
     "ticker": "UNH",
     "year": 2025,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2026_reported_segments",
-    "question": "Which operating segments does UnitedHealth Group present in this filing?",
-    "ground_truth": "The filing presents the following operating segments: UnitedHealthcare; Optum Health; Optum Insight; and Optum Rx. The presentation also includes Total Optum, Corporate Non\u2011segment, and Intersegment eliminations for reconciliation.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "UNH_2026_shares_and_filer_status",
-    "question": "As of April 30, 2026, how many UnitedHealth Group common shares were outstanding, and what were the company\u2019s SEC filer and shell company statuses?",
-    "ground_truth": "As of April 30, 2026, there were 908,144,404 common shares outstanding. The company is a Large Accelerated Filer and is not a shell company.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "UNH_2025_q1_total_revenue_yoy",
-    "question": "What were UnitedHealth Group\u2019s total revenues in Q1 2025, and how did they change versus Q1 2024?",
-    "ground_truth": "Total revenues were $109.575 billion in Q1 2025, up $9.779 billion or 9.8% from $99.796 billion in Q1 2024.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2025_q1_operating_margin",
-    "question": "What were earnings from operations and the operating margin in Q1 2025, and how do they compare to Q1 2024?",
-    "ground_truth": "Earnings from operations were $9.119 billion in Q1 2025, for an operating margin of 8.3% (9,119 / 109,575). In Q1 2024, earnings from operations were $7.931 billion with a 7.9% margin (7,931 / 99,796), a year-over-year increase of $1.188 billion (~15.0%).",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2025_q1_cash_and_short_term_debt_change",
-    "question": "How did cash and cash equivalents and short-term borrowings change from December 31, 2024 to March 31, 2025?",
-    "ground_truth": "Cash and cash equivalents rose to $30.717 billion from $25.312 billion (+$5.405 billion). Short-term borrowings and current maturities of long-term debt increased to $9.986 billion from $4.545 billion (+$5.441 billion).",
-    "ticker": "UNH",
-    "year": 2024,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2025_q1_reportable_segments",
-    "question": "Which operating segments does UnitedHealth Group present in this filing?",
-    "ground_truth": "The company presents the following operating segments: UnitedHealthcare, Optum Health, Optum Insight, and Optum Rx.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "UNH_2025_q1_filing_compliance_and_filer_status",
-    "question": "Did UnitedHealth Group state that it had filed all required reports and submitted every Interactive Data File in the preceding 12 months, and what filer status did it indicate? Is it a shell company?",
-    "ground_truth": "Yes\u2014UNH indicated it had filed all required reports and submitted every Interactive Data File in the preceding 12 months. It identified as a large accelerated filer and indicated it is not a shell company.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "unh_2026_q2_reportable_segments_list",
-    "question": "Which operating segments did UnitedHealth Group report in Q2 2026, and how many reportable segments are there?",
-    "ground_truth": "UnitedHealth Group reported four operating segments in Q2 2026: UnitedHealthcare, OptumHealth, OptumInsight, and OptumRx.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "unh_2026_q2_subsequent_events_dates_and_elements",
-    "question": "What subsequent event dates are identified in the Q2 2026 10-Q, and which elements are associated with the July 2, 2026 event?",
-    "ground_truth": "The filing identifies subsequent event dates of March 17, 2026; June 23, 2026; July 1, 2026; and July 2, 2026. The July 2, 2026 subsequent event is associated with Cash and Cash Equivalents, Consideration Payable, and a Disposal Group Held for Sale (not discontinued operations).",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "unh_2026_q2_held_for_sale_classifications",
-    "question": "As of June 30, 2026, did UNH classify any businesses as held for sale, and how were they characterized?",
-    "ground_truth": "Yes. As of June 30, 2026, the filing tags include a Disposal Group Held for Sale, Not Discontinued Operations, and Other Businesses Held for Sale, Not Discontinued Operations.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "unh_2026_q2_fair_value_hierarchy_debt_securities",
-    "question": "Which fair value hierarchy levels and classes of debt securities does UNH disclose as of June 30, 2026?",
-    "ground_truth": "As of June 30, 2026, UNH discloses fair value hierarchy Levels 1, 2, and 3 for debt securities. The classes include: U.S. Treasury and Government; U.S. States and Political Subdivisions; Corporate Debt Securities; Mortgage-Backed Securities issued by U.S. Government-Sponsored Enterprises; and Mortgage-Backed Securities issued by Private Enterprises (with an aggregate Debt Securities category also presented).",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "unh_2026_q2_revenue_disaggregation_product_service",
-    "question": "Does the Q2 2026 filing show revenue disaggregated by product and service for external customers across UNH\u2019s operating segments?",
-    "ground_truth": "Yes. The XBRL includes Product and Service members for External Customers across UnitedHealthcare, OptumHealth, OptumInsight, and OptumRx (with Total Optum, Intersegment Eliminations, and Corporate Non-Segment also shown) for the periods April 1\u2013June 30, 2026 and January 1\u2013June 30, 2026.",
-    "ticker": "UNH",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "WMT_2025_fiscal_year_end",
-    "question": "What is Walmart\u2019s fiscal year-end date reported in this 10-K?",
-    "ground_truth": "Walmart\u2019s fiscal year ended on January 31, 2025.",
-    "ticker": "WMT",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "WMT_2025_listing_and_par_value",
-    "question": "On which exchange is Walmart\u2019s common stock listed, what is the ticker, and what is the par value per share? Also, which series of notes is listed and what are its terms?",
-    "ground_truth": "Walmart\u2019s common stock is listed on the New York Stock Exchange under the ticker WMT, with a par value of $0.10 per share. The company also has 2.550% Notes due 2026 listed (ticker WMT26) on the New York Stock Exchange.",
-    "ticker": "WMT",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "WMT_2025_reportable_segments",
-    "question": "What reportable operating segments does Walmart disclose for fiscal 2025?",
-    "ground_truth": "Walmart discloses three reportable operating segments: Walmart U.S., Walmart International, and Sam\u2019s Club U.S.",
-    "ticker": "WMT",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "WMT_2025_derivative_hedging",
-    "question": "What types of derivative hedging instruments and hedge accounting designations does Walmart report?",
-    "ground_truth": "Walmart reports interest rate swaps designated as fair value hedges and cross-currency interest rate contracts designated as cash flow hedges. These derivatives are measured using Level 2 inputs in recurring fair value measurements.",
-    "ticker": "WMT",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "WMT_2025_legal_matters_overview",
-    "question": "Which significant legal matters are highlighted in the filing, and what statuses or dates are noted?",
-    "ground_truth": "The filing references Opioids Litigation (including Canada Opioids Class Action Complaints) with \u2018Settled Litigation\u2019 noted on December 20, 2024 and December 24, 2024; a Mexico Antitrust Matter designated as \u2018Pending Litigation\u2019 noted on December 12, 2024; and Asda Equal Value Claims noted on January 9, 2025.",
-    "ticker": "WMT",
-    "year": 2025,
-    "quarter": null
-  },
-  {
-    "sample_id": "wmt_2026_q1_total_revenues_breakdown",
-    "question": "What were Walmart's total revenues for the three months ended April 30, 2025, and how were they split between net sales and membership and other income?",
-    "ground_truth": "For the three months ended April 30, 2025, total revenues were $165,609 million, comprised of net sales of $163,981 million and membership and other income of $1,628 million.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "wmt_2026_q1_net_income_eps",
-    "question": "What was Walmart's consolidated net income attributable to Walmart and diluted EPS for the quarter ended April 30, 2025?",
-    "ground_truth": "Consolidated net income attributable to Walmart was $4,487 million, and diluted net income per common share was $0.56 for the quarter ended April 30, 2025.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "wmt_2026_q1_operating_cash_flow_yoy",
-    "question": "How much net cash did Walmart generate from operating activities in the three months ended April 30, 2025, and how does that compare to the prior-year period?",
-    "ground_truth": "Net cash provided by operating activities was $5,411 million for the three months ended April 30, 2025, compared to $4,249 million in the prior-year period.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "wmt_2026_q1_share_repurchases_cash_usage",
-    "question": "How much cash did Walmart use to repurchase its stock during the quarter ended April 30, 2025?",
-    "ground_truth": "Walmart used $4,555 million of cash for the purchase of Company stock during the quarter ended April 30, 2025 (cash flows from financing activities).",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q1"
-  },
-  {
-    "sample_id": "wmt_2025_reporting_lag_policy",
-    "question": "How does Walmart consolidate its non-U.S. and non-Canada operations, and were there any significant intervening events in April 2025 related to this reporting lag?",
-    "ground_truth": "Walmart consolidates U.S. and Canadian operations on a fiscal year ending January 31 and consolidates all other operations generally using a one-month lag based on a calendar year. There were no significant intervening events during April 2025 related to the lagged operations that materially affected the Condensed Consolidated Financial Statements.",
-    "ticker": "WMT",
-    "year": 2025,
-    "quarter": "Q4"
-  },
-  {
-    "sample_id": "wmt_2026_registered_debt_securities_section_12b",
-    "question": "Which debt securities does Walmart list as registered under Section 12(b) in its FY2026 10-K, including coupon rates, maturities, and the exchange?",
-    "ground_truth": "- 2.550% Notes due 2026 (ticker: WMT26) \u2014 The Nasdaq Stock Market LLC\n- 1.050% Notes due 2026 (ticker: WMT26A) \u2014 The Nasdaq Stock Market LLC\n- 1.500% Notes due 2028 (ticker: WMT28C) \u2014 The Nasdaq Stock Market LLC\n- 4.875% Notes due 2029 (ticker: WMT29B) \u2014 The Nasdaq Stock Market LLC\n- 5.750% Notes due 2030 (ticker: WMT30B) \u2014 The Nasdaq Stock Market LLC\n- 1.800% Notes due 2031 (ticker: WMT31A) \u2014 The Nasdaq Stock Market LLC\n- 5.625% Notes due 2034 (ticker: WMT34) \u2014 The Nasdaq Stock Market LLC\n- 5.250% Notes due 2035 (ticker: WMT35A) \u2014 The Nasdaq Stock Market LLC\n- 4.875% Notes due 2039 (ticker: WMT39) \u2014 The Nasdaq Stock Market LLC",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "wmt_2026_reportable_operating_segments",
-    "question": "What reportable operating segments does Walmart disclose for FY2026?",
-    "ground_truth": "Walmart discloses three reportable operating segments: Walmart U.S., Walmart International, and Sam\u2019s Club U.S.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "wmt_2026_common_stock_listing_and_par_value",
-    "question": "On which exchange is Walmart\u2019s common stock listed, and what is its par value per share?",
-    "ground_truth": "Walmart\u2019s common stock is listed on The Nasdaq Stock Market LLC, and the par value is $0.10 per share.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "wmt_2026_key_legal_matters",
-    "question": "What significant litigation or regulatory matters are identified in Walmart\u2019s FY2026 filing?",
-    "ground_truth": "The filing identifies: Opioids Litigation (including Canada Opioids Class Action Complaints); Asda Equal Value Claims; Driver Platform Matters (noted with a subsequent event dated 2026-03-03); and the Mexico Antitrust Matter.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "wmt_2026_corporate_details_and_compliance",
-    "question": "What are Walmart\u2019s state of incorporation, EIN, headquarters address and phone number, and its Exchange Act compliance status for FY2026?",
-    "ground_truth": "State of incorporation: Delaware; EIN: 71-0415188; Principal executive offices: 1 Customer Drive, Bentonville, AR 72716; Phone: (479) 273-4000. The company is a well-known seasoned issuer (Yes), is not exempt from filing reports (No), and it has filed all required reports and has been subject to the filing requirements for at least the past 90 days (Yes to both).",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": null
-  },
-  {
-    "sample_id": "wmt_2026_q2_total_revenues",
-    "question": "What were Walmart\u2019s total revenues for the three months ended July 31, 2025?",
-    "ground_truth": "Total revenues were $177,402 million, comprised of $175,750 million in net sales and $1,652 million in membership and other income.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q2"
-  },
-  {
-    "sample_id": "wmt_2026_q2_diluted_eps",
-    "question": "What was Walmart\u2019s diluted net income per common share for Q2 2025 (three months ended July 31, 2025)?",
-    "ground_truth": "Diluted net income per common share attributable to Walmart was $0.88.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q2"
-  },
-  {
-    "sample_id": "wmt_2026_q2_other_gains_losses_comp",
-    "question": "How much did Walmart record in 'Other (gains) and losses' in Q2 2025, and what was the comparable amount in Q2 2024?",
-    "ground_truth": "Walmart recorded net other gains of $(2,708) million in Q2 2025 versus net other losses of $1,162 million in Q2 2024.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q2"
-  },
-  {
-    "sample_id": "wmt_2026_q2_long_term_debt_profile",
-    "question": "As of July 31, 2025, what were Walmart\u2019s long-term debt and long-term debt due within one year?",
-    "ground_truth": "As of July 31, 2025, long-term debt was $35,640 million and long-term debt due within one year was $4,011 million.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q2"
-  },
-  {
-    "sample_id": "wmt_2026_q2_settled_legal_matter_money_transfer",
-    "question": "Which legal matter was disclosed as settled on June 23, 2025 in Walmart\u2019s Q2 2025 10-Q?",
-    "ground_truth": "The Money Transfer Agent Services Matters were disclosed as settled litigation on June 23, 2025.",
-    "ticker": "WMT",
-    "year": 2026,
-    "quarter": "Q2"
-  },
-  {
-    "sample_id": "wmt_2026_q3_total_revenues_yoy_change",
-    "question": "What were Walmart's total revenues for the quarter ended October 31, 2025, and how did that compare year over year?",
-    "ground_truth": "Total revenues were $179.496 billion for the three months ended October 31, 2025, up $9.908 billion, or 5.8%, from $169.588 billion in the prior-year quarter.",
-    "ticker": "WMT",
-    "year": 2026,
     "quarter": "Q3"
   },
   {
-    "sample_id": "wmt_2026_q3_net_income_and_diluted_eps",
-    "question": "What were Walmart's consolidated net income attributable to Walmart and diluted EPS for the quarter ended October 31, 2025?",
-    "ground_truth": "Consolidated net income attributable to Walmart was $6.143 billion and diluted EPS was $0.77 for the three months ended October 31, 2025.",
-    "ticker": "WMT",
-    "year": 2026,
+    "sample_id": "unh_2025_q3_optum_health_drivers",
+    "question": "According to the MD&A, what operational factors drove the decline in Optum Health's revenues and earnings in 2025, and what partial offsets or mitigation actions were identified?",
+    "ground_truth": "Optum Health revenues decreased primarily due to the conversion of risk-based contracts, Medicare Advantage funding reductions and the profile of members served, partially offset by growth in patients served under value-based arrangements. Earnings from operations decreased due to Medicare Advantage funding reductions, the member profile of newly added patients under value-based care arrangements, elevated medical cost trends and decreased gains related to business portfolio refinement, partially offset by cost management initiatives. For the three months ended September 30, 2025, decreased earnings were also due to lower investment income, partially offset by decreased contractual settlements. For the nine months ended September 30, 2025, decreased earnings were also partially offset by incremental medical costs for accommodations to support care providers in 2024 as a result of the Change Healthcare cyberattack.",
+    "ticker": "UNH",
+    "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "wmt_2026_q3_operating_income_and_margin",
-    "question": "What was Walmart\u2019s operating income and operating margin for the quarter ended October 31, 2025?",
-    "ground_truth": "Operating income was $6.696 billion on total revenues of $179.496 billion, implying an operating margin of approximately 3.73% for the quarter.",
-    "ticker": "WMT",
-    "year": 2026,
+    "sample_id": "unh_2025_q3_medicaid_medicare_and_ira_risks",
+    "question": "What regulatory and legislative developments did UnitedHealth Group identify as creating sustained pressure on Medicare Advantage funding and plan costs in 2025, and what actions can UnitedHealth Group take to partially offset those pressures?",
+    "ground_truth": "The company identified multi-year Medicare Advantage base rates that have been well below the industry forward medical cost trend and substantial revisions to the risk adjustment model that have resulted and will continue to result in reduced funding. The Inflation Reduction Act (IRA) also altered the Medicare Part D model and benefits, shifting more risk to plans, increasing premiums and medical costs and changing the seasonal relationship of medical costs to premiums. To partially offset these rate pressures and reductions, the company can intensify medical and operating cost management, change the size and composition of its care provider networks, adjust member benefits, implement or increase member premiums and decide annually on a county-by-county basis where to offer Medicare Advantage plans.",
+    "ticker": "UNH",
+    "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "wmt_2026_q3_other_gains_and_net_interest",
-    "question": "How did 'Other (gains) and losses' and net interest expense affect results in the quarter ended October 31, 2025?",
-    "ground_truth": "Walmart recorded $2.081 billion of other gains (presented as $(2,081) million) and net interest expense of $591 million in the three months ended October 31, 2025.",
-    "ticker": "WMT",
-    "year": 2026,
+    "sample_id": "unh_2025_q3_capital_allocation_and_liquidity",
+    "question": "Summarize UnitedHealth Group's share repurchase activity, dividend change in 2025, and its cash and marketable securities balances and amount available for general corporate use as of September 30, 2025.",
+    "ground_truth": "During the nine months ended September 30, 2025, UnitedHealth Group repurchased approximately 12.1 million shares of common stock at an average price of $454.82 per share. As of September 30, 2025, the Board had authorization to purchase up to 21.0 million shares. In June 2025 the Board increased the quarterly cash dividend to an annual rate of $8.84 per share compared to $8.40 per share previously. As of September 30, 2025, the company\u2019s cash, cash equivalents, available-for-sale debt securities and marketable equity securities balances totaled $76.3 billion, which included approximately $27.2 billion of cash and cash equivalents (of which $1.2 billion was available for general corporate use), $46.8 billion of debt securities and $2.2 billion of investments in marketable equity securities.",
+    "ticker": "UNH",
+    "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "wmt_2026_q3_dividend_and_shares_outstanding",
-    "question": "What dividend per share did Walmart declare for the quarter ended October 31, 2025, and how many common shares were outstanding as of December 2, 2025?",
-    "ground_truth": "Dividends declared were $0.94 per common share for the quarter, and 7,970,166,964 common shares were outstanding as of December 2, 2025.",
-    "ticker": "WMT",
-    "year": 2026,
+    "sample_id": "unh_2025_q3_mcr_and_operating_cost_trends",
+    "question": "For UnitedHealth Group (UNH), explain the multi-period drivers described by management that increased the medical care ratio (MCR) in 2025 and how the 2024 Change Healthcare cyberattack affected MCR and the operating cost ratio.",
+    "ground_truth": "Management stated the MCR increased due to the revenue effects of Medicare funding reductions, elevated medical cost trend, the member profile of newly added patients under value-based care arrangements, the seasonal impacts of the IRA on Medicare Part D and impacts of market morbidity changes on the individual exchange offerings. For the nine months ended September 30, 2025, the MCR also increased due to decreased favorable reserve development, partially offset by the incremental medical costs for accommodations made to care providers in 2024 as a result of the Change Healthcare cyberattack. The acceleration of anticipated future losses related to individual exchange offerings recorded in Q2 2025 decreased the MCR for the three months ended September 30, 2025 and increased the MCR for the nine months. Regarding operating cost ratio, for the three months ended September 30, 2025 it increased primarily due to decreased gains related to business portfolio refinement, business mix and investments to support future growth, partially offset by revenue impacts of government programs (including IRA-driven impacts on Medicare Part D) and operating cost management. For the nine months ended September 30, 2025 the operating cost ratio decreased due to revenue impacts of government programs (including IRA-driven impacts on Medicare Part D), operating cost management and direct response efforts to the Change Healthcare cyberattack in 2024, partially offset by business mix, investments to support future growth and decreased gains related to business portfolio refinement.",
+    "ticker": "UNH",
+    "year": 2025,
     "quarter": "Q3"
   },
   {
-    "sample_id": "wmt_2027_q1_total_revenue_operating_margin",
-    "question": "What were Walmart\u2019s total revenues and operating income in Q1 FY2026, and what was its operating margin for the quarter?",
-    "ground_truth": "For the three months ended April 30, 2026, total revenues were $177,751 million and operating income was $7,493 million, implying an operating margin of approximately 4.2% (7,493 \u00f7 177,751).",
-    "ticker": "WMT",
-    "year": 2027,
+    "sample_id": "unh_2026_q1_segment_divestitures",
+    "question": "What were the net gains/losses from UnitedHealth Group's net portfolio divestitures in Q1 2026, and how did they break down by segment?",
+    "ground_truth": "In the first quarter of 2026 the Company recorded a net gain of $230 million from net portfolio divestitures. By segment, the results included gains of $528 million at Optum Insight and $8 million at Optum Rx, partially offset by a net loss of $306 million at Optum Health. Gains and losses on portfolio actions were recorded within operating costs.",
+    "ticker": "UNH",
+    "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "wmt_2027_q1_cash_returns_dividends_and_buybacks",
-    "question": "How much cash did Walmart return to shareholders in Q1 FY2026 via dividends and share repurchases?",
-    "ground_truth": "In Q1 FY2026, Walmart paid $1,972 million in dividends and used $2,080 million to purchase company stock, for a combined $4,052 million of cash returned to shareholders.",
-    "ticker": "WMT",
-    "year": 2027,
+    "sample_id": "unh_2026_q1_people_served_and_pricing_actions",
+    "question": "For UnitedHealth Group (UNH), management reported UnitedHealthcare served 1.1 million fewer people in Q1 2026. What specific actions and market factors did the filing attribute to this decline and to the contraction in Medicare Advantage and value-based care arrangements?",
+    "ground_truth": "In UnitedHealth Group's filing, UnitedHealthcare served 1.1 million fewer people due to benefit design and pricing actions and reduced Medicaid eligibility. It also attributes contraction in Medicare Advantage membership to ongoing Medicare Advantage funding pressures (including base rates below forward medical cost trend and revisions to the risk adjustment model), increased care patterns and higher health care unit costs. For value-based care, Optum Health\u2019s fully accountable value-based care businesses were impacted by Medicare funding reductions and medical cost trend pressures; increased pricing in response to anticipated care patterns, exits from certain markets and decreased people served through UnitedHealthcare Medicare Advantage offerings caused the number of people served under value-based care arrangements to contract in the first quarter and be expected to continue to contract throughout 2026.",
+    "ticker": "UNH",
+    "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "wmt_2027_q1_supplier_financing_obligations",
-    "question": "What were Walmart\u2019s outstanding obligations under its supplier financing programs at April 30, 2026, January 31, 2026, and April 30, 2025?",
-    "ground_truth": "Outstanding payment obligations to financial institutions under supplier financing programs were $5.9 billion as of April 30, 2026; $6.0 billion as of January 31, 2026; and $5.6 billion as of April 30, 2025.",
-    "ticker": "WMT",
-    "year": 2027,
+    "sample_id": "unh_2026_q1_medicare_advantage_risk_actions",
+    "question": "What did UnitedHealth Group disclose about Medicare Advantage funding, risk adjustment changes and UnitedHealth Group actions it can take to respond to those pressures for Q1 2026?",
+    "ground_truth": "UnitedHealth Group disclosed that Medicare Advantage rate notices for numerous years resulted in industry base rates well below the industry forward medical cost trend; although the Final Notice for 2027 moved toward the expected forward trend it remains below. Substantial revisions to the risk adjustment model have resulted and will continue to result in reduced funding and potentially reduced benefits for people with significant health and social challenges. To partially offset these rate pressures, the Company can intensify medical and operating cost management, change the size and composition of care provider networks, adjust member benefits, implement or increase member premiums supplementing monthly government payments, and decide annually on a county-by-county basis where to offer Medicare Advantage plans.",
+    "ticker": "UNH",
+    "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "wmt_2027_q1_seasonality_commentary",
-    "question": "What seasonality pattern does Walmart highlight about its business in the Q1 FY2026 10-Q?",
-    "ground_truth": "Walmart notes that historically its highest sales volume occurs in the fiscal quarter ending January 31.",
-    "ticker": "WMT",
-    "year": 2027,
+    "sample_id": "unh_2026_q1_liquidity_and_cash_balances",
+    "question": "As of March 31, 2026, what were UnitedHealth Group\u2019s balances of cash, cash equivalents, available-for-sale debt securities and marketable equity securities, and how much of cash and cash equivalents was available for general corporate use?",
+    "ground_truth": "As of March 31, 2026, UnitedHealth Group reported combined balances of $80.0 billion of cash, cash equivalents, available-for-sale debt securities and marketable equity securities. This included approximately $28.0 billion of cash and cash equivalents (of which $1.1 billion was available for general corporate use), $50.1 billion of debt securities and $1.9 billion of investments in marketable equity securities. The Company also reported $10.3 billion of loan receivables as of that date.",
+    "ticker": "UNH",
+    "year": 2026,
     "quarter": "Q1"
   },
   {
-    "sample_id": "wmt_2027_q1_legal_matters_referenced",
-    "question": "Which notable legal matters did Walmart reference in its Q1 FY2026 10-Q?",
-    "ground_truth": "Referenced matters include the Canada Opioids Class Action Complaints, Asda Equal Value Claims, Driver Platform Matters, and a Mexico Antitrust Matter.",
+    "sample_id": "unh_2026_q1_mcr_and_medical_cost_trends",
+    "question": "For UnitedHealth Group (UNH), the filing says medical costs were consistent in Q1 2026 but the Medical Care Ratio (MCR) decreased. What drivers did management cite for medical costs being consistent and for the decrease in the MCR?",
+    "ground_truth": "Management noted medical costs were consistent because expected elevated medical cost trend was offset by decreased people served across UnitedHealthcare and Optum Health and by increased favorable reserve development. The MCR decreased due to increased favorable reserve development, affordability initiatives and pricing trends, partially offset by the expected elevated medical cost trend.",
+    "ticker": "UNH",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "unh_2026_q2_revenue_segment",
+    "question": "How did UnitedHealth Group's consolidated and reportable segment revenues change in the second quarter of 2026 versus the second quarter of 2025?",
+    "ground_truth": "Consolidated revenues were consistent year-over-year. By segment, UnitedHealthcare revenues were flat and Optum revenues were lower by 2% in the second quarter of 2026 versus the second quarter of 2025.",
+    "ticker": "UNH",
+    "year": 2026,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "unh_2026_q2_realignment_optum_financial",
+    "question": "What organizational realignment involving Optum Financial took effect on January 1, 2026 and how was prior-period reporting treated?",
+    "ground_truth": "Effective January 1, 2026, UnitedHealth Group realigned certain businesses such that Optum Financial, including Optum Bank (historically included in Optum Health), is now included in Optum Insight. Prior period segment financial information, including people served by Optum, was recast to conform to the 2026 presentation.",
+    "ticker": "UNH",
+    "year": 2026,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "unh_2026_q2_medicare_advantage_rates",
+    "question": "What did UnitedHealth Group disclose about Medicare Advantage rate trends and what actions can UnitedHealth Group take in response to ongoing funding pressures for Q2 2026?",
+    "ground_truth": "UnitedHealth Group disclosed that Medicare Advantage rate notices for numerous years have resulted in industry base rates well below the industry forward medical cost trend; the Final Notice for 2027 moved toward the expected industry forward medical cost trend but remains below, and the compounding impact of multi\u2011year rate shortfalls has created sustained pressure on the Medicare Advantage program. In response to ongoing funding pressures, the company can intensify medical and operating cost management, change the size and composition of its care provider networks, adjust member benefits and implement or increase member premiums that supplement monthly government payments, and it decides annually on a county\u2011by\u2011county basis where it will offer Medicare Advantage plans.",
+    "ticker": "UNH",
+    "year": 2026,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "unh_2026_q2_share_repurchases",
+    "question": "Summarize UnitedHealth Group's share repurchase activity and board authorization as of June 30, 2026.",
+    "ground_truth": "During the six months ended June 30, 2026, UnitedHealth Group repurchased approximately 10.5 million shares at an average price of $344.08 per share. This total included 6.4 million shares purchased and held by a counterparty at an average price of $312.73 per share pursuant to forward share repurchase contracts that were settled on July 1, 2026. As of June 30, 2026, the Board of Directors had authorized purchases of up to 10.6 million shares of the Company's common stock.",
+    "ticker": "UNH",
+    "year": 2026,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "unh_2026_q2_medical_costs_drivers",
+    "question": "What primary factors did UNH cite for the year\u2011over\u2011year decrease in medical costs and the change in the medical care ratio (MCR) in Q2 2026?",
+    "ground_truth": "UNH stated medical costs decreased primarily due to fewer people served across UnitedHealthcare and Optum Health and favorable prior period reserve development, partially offset by an elevated medical cost trend that remains above historical levels and is affected by higher provider reimbursement under the No Surprises Act and increased service and coding intensity in commercial. The MCR decreased due to favorable prior period reserve development, affordability and medical cost management initiatives, and pricing trends, partially offset by the above\u2011historical medical cost trend and higher provider reimbursement and increased service and coding intensity in commercial.",
+    "ticker": "UNH",
+    "year": 2026,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nvda_2025_annual_supply_leadtime",
+    "question": "What lead-time risk does NVIDIA report in the FY2025 10-K and what actions has NVIDIA taken to secure future supply?",
+    "ground_truth": "NVIDIA discloses that it has experienced and may continue to experience \"extended lead times of more than 12 months.\" To secure future supply and capacity it has \"paid premiums, provided deposits, and entered into long-term supply agreements and capacity commitments,\" actions the company says have increased its product costs and may continue to do so.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2025_annual_dgx_cloud_strategy",
+    "question": "Summarize NVIDIA's cloud and software strategic initiatives described in the FY2025 10-K and any related timing or execution risks NVIDIA highlights.",
+    "ground_truth": "NVIDIA offers enterprise customers NVIDIA DGX Cloud services (cloud-based infrastructure, software and services for training and deploying AI models) and has \"partnered with CSPs to host such software and services in their data centers\" and \"entered and may continue to enter into multi-year cloud service agreements\" to support these offerings. The company also states it offers or plans to offer standalone software solutions, including \"NVIDIA AI Enterprise, NVIDIA Omniverse, NVIDIA DRIVE, and other software products.\" NVIDIA warns that the timing and availability of cloud services \"have changed and may continue to shift, impacting our revenue, expenses, and development timelines,\" that these new business models \"may not be successful and will take time, resources, and investment,\" and that it \"may incur significant costs and may not achieve any significant revenue from these offerings.\"",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2025_annual_blackwell_inventory",
+    "question": "How did Blackwell material affect NVIDIA's reported results in FY2025, and how does the filing link product transition complexity to inventory or margin risk?",
+    "ground_truth": "In NVIDIA's filing, \"our gross margins in the second quarter of fiscal year 2025 were negatively impacted by inventory provisions for low-yielding Blackwell material.\" More broadly, NVIDIA explains that increased frequency and complexity of product and architecture transitions (it seeks to \"complete new computing solutions each year\" and provide a \"greater variety of Data Center offerings\") can \"magnify the challenges associated with managing our supply and demand,\" potentially resulting in \"unanticipated quality or production issues\" that could increase inventory provisions, warranty or other costs, or result in product delays that negatively impact financial results.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2025_annual_export_geopolitical_risks",
+    "question": "What regulatory and geopolitical concentration risks does NVIDIA identify in the FY2025 10-K related to exports and specific regions?",
+    "ground_truth": "NVIDIA discloses it is \"subject to restrictions on the export of our products,\" and that \"government actions or changes in governmental policies, such as export controls, increased restrictions on gaming usage, or tariffs\" could affect demand and revenue. The company also warns that geopolitical tensions \"such as those involving Taiwan and China, which comprise a significant portion of our revenue and where we have suppliers, contract manufacturers, and assembly partners who are critical to our supply continuity, could have a material adverse impact on us.\"",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2025_annual_prepaids_cashflow",
+    "question": "What does NVIDIA disclose about prepaid manufacturing and capacity agreements and their implications for costs, purchase obligations, and supply-related balance sheet items for FY2025?",
+    "ground_truth": "NVIDIA states that it \"has entered and may continue to enter into prepaid manufacturing and capacity agreements to supply both current and future products.\" To secure supply it \"has paid premiums, provided deposits, and entered into long-term supply agreements and capacity commitments, which have increased our product costs and this may continue.\" The filing further warns that \"purchase obligations and prepaids have grown and are expected to continue to grow and become a greater portion of our total supply,\" which can amplify the financial impact if demand is overestimated (including inventory write-downs, cancellation penalties, impairments, and negative gross margin effects).",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2026_annual_gaming_supply_headwind",
+    "question": "Which NVIDIA business segment did NVIDIA say would face supply-constraint headwinds, and when did it expect those headwinds to begin for FY2026?",
+    "ground_truth": "NVIDIA stated that supply constraints were expected to be a headwind to the Gaming segment beginning in the first quarter of fiscal year 2027 and beyond.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2026_annual_groq_cloud_software",
+    "question": "What disclosures did NVIDIA make about its arrangement with Groq, its multi-year cloud service agreements, and its standalone software offerings for FY2026?",
+    "ground_truth": "NVIDIA disclosed that it entered into an intellectual property license arrangement with Groq that required significant, nonrefundable payments and that successfully incorporating the licensed technology into NVIDIA architectures and product roadmaps requires significant engineering effort, may not occur on expected timelines or at all, may not achieve the desired results, and the economic outcomes depend on NVIDIA's ability to translate the licensed technology into commercially viable products (and it may be unable to recover the associated costs). NVIDIA also disclosed that it entered into multi-year cloud service agreements to support its R&D, that the timing and availability of these cloud services have changed and may continue to shift (impacting revenue, expenses, and development timelines), and that it offers or plans to offer standalone software solutions including NVIDIA AI Enterprise, NVIDIA Omniverse, and NVIDIA DRIVE (noting these business models may not be successful, may incur significant costs, and may not generate meaningful standalone revenue).",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2026_annual_lead_times_supply_risks",
+    "question": "How long has NVIDIA experienced extended manufacturing lead times, and what procurement actions and resulting risks did NVIDIA describe for FY2026?",
+    "ground_truth": "NVIDIA stated it has previously experienced and may continue to experience extended lead times of more than 12 months. To secure future supply and capacity it has paid premiums, provided deposits, and entered into long-term supply agreements and capacity commitments, which have increased product costs. NVIDIA warned these conditions can lead to mismatches between supply and demand (resulting in both product shortages and excess inventory), reduced gross margins, inventory write-downs or impairments, cancellation penalties, and other adverse effects on financial results if demand is over- or under-estimated.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2026_annual_prepaid_capacity_and_capex",
+    "question": "What types of prepaid or capacity commitments has NVIDIA entered into and how did NVIDIA say these commitments affect supply complexity and financial risk for FY2026?",
+    "ground_truth": "NVIDIA has entered into prepaid manufacturing and capacity agreements to supply both current and future products and has increased its supply and capacity purchases with existing and new suppliers. The company said increased purchase volumes and integration of new suppliers and contract manufacturers create more complexity in managing production planning, execution and logistics; that increased purchase volumes and prepaids have grown and are expected to continue to grow and become a greater portion of total supply; and that these commitments could result in inventory provisions or impairments if inventory or supply or capacity commitments exceed demand and could negatively impact gross margins and financial results.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2026_annual_product_transitions_blackwell",
+    "question": "How did NVIDIA describe the impact of product architecture transitions on revenue and supply/demand management, and what specific example did it cite that harmed gross margins for FY2026?",
+    "ground_truth": "NVIDIA described product architecture transitions as complex, noting it often ships both new and prior architecture products simultaneously and that an increased frequency of transitions and a larger number of products can magnify challenges managing supply and demand and create volatility in revenue (e.g., qualification time for new products and channel partners reducing inventory can reduce or create volatility in revenue). As a specific example, NVIDIA stated that its gross margins in the second quarter of fiscal year 2025 were negatively impacted by inventory provisions for low-yielding Blackwell material.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "nvda_2025_q1_h20_sales",
+    "question": "How much did NVIDIA sell in H20 products in the first quarter of fiscal 2026 prior to the new export licensing requirements, and what business area drove revenue growth in the quarter for Q1 2025?",
+    "ground_truth": "Sales of H20 products were $4.6 billion for the first quarter of fiscal year 2026 prior to the new export licensing requirements. Revenue growth in the first quarter of fiscal year 2026 was driven by data center compute and networking platforms for accelerated computing and AI solutions.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2025_q1_blackwell_ultra_timing",
+    "question": "When does NVIDIA expect to begin shipping samples and production units of its new Blackwell Ultra platforms for Q1 2025?",
+    "ground_truth": "NVIDIA expects to begin shipping samples and production units of its new Blackwell Ultra platforms in the second quarter of fiscal year 2026.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2025_q1_h20_export_license_risk",
+    "question": "Summarize the U.S. government action on April 9, 2025 related to H20 chips, the jurisdictions affected, the charge NVIDIA recorded, and NVIDIA's stated business risk from that action.",
+    "ground_truth": "On April 9, 2025 the U.S. government informed NVIDIA that a license is required for export of H20 integrated circuits (and any other circuits achieving H20's memory bandwidth, interconnect bandwidth, or combination thereof) to China (including Hong Kong and Macau) and D:5 countries, and to companies headquartered or with an ultimate parent in those jurisdictions. As a result of these new requirements, NVIDIA incurred a $4.5 billion charge in the first quarter of fiscal year 2026 associated with H20 excess inventory and purchase obligations as demand for H20 products diminished. Sales of H20 products were $4.6 billion for the first quarter prior to the new export licensing requirements. NVIDIA stated the export licensing requirements have impacted current revenue and will negatively affect future revenue, and that it may be unable to create a competitive product for China's data center market that receives U.S. government approval; if so, it would effectively be foreclosed from competing in China's data center compute market, with a material and adverse impact on its business, operating results, and financial condition.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2025_q1_liquidity_and_taxes",
+    "question": "What short-term commercial paper program and status did NVIDIA report as of April 27, 2025, and what amount of unrecognized tax benefits was recorded?",
+    "ground_truth": "NVIDIA has a $575 million commercial paper program to support general corporate purposes, and as of April 27, 2025 it had no commercial paper outstanding. Unrecognized tax benefits were $2.5 billion, which includes related interest and penalties, and were recorded in non-current income tax payable as of April 27, 2025.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2025_q1_product_transitions_impact",
+    "question": "How does NVIDIA describe the effect of its product transition cadence and supply chain lead times on revenue volatility and margins, and provide the specific example NVIDIA gave of a recent margin impact for Q1 2025?",
+    "ground_truth": "NVIDIA describes its Data Center compute product introductions on a one-year product cadence and notes that product transitions are complex because it often ships both new and prior architecture products simultaneously. Qualification time for new products and customers anticipating transitions can reduce or create volatility in revenue, and increased frequency and complexity of transitions may magnify supply and demand challenges, potentially resulting in inventory provisions, warranty costs, product delays, and revenue timing impacts. NVIDIA also states it has long manufacturing lead times and has previously experienced extended lead times of more than 12 months, and that prepaid and non-cancellable supply commitments have increased product costs and the risk of inventory write-downs or impairments. As a concrete example, NVIDIA reported that its gross margins in the second quarter of fiscal year 2025 were negatively impacted by inventory provisions for low-yielding Blackwell material.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2025_q2_operating_segments",
+    "question": "What operating segments does NVIDIA report in NVIDIA's Q2 2025 Form 10-Q?",
+    "ground_truth": "NVIDIA reports two operating segments: \"Compute & Networking\" and \"Graphics\", as described in Note 13 of the Notes to Condensed Consolidated Financial Statements.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nvda_2025_q2_blackwell_ramp",
+    "question": "Summarize NVIDIA's product cadence and recent Blackwell Ultra ramp discussed in the MD&A. for Q2 2025?",
+    "ground_truth": "NVIDIA states it executes Data Center compute product introductions on a one-year product cadence. The Blackwell GPU revenue ramp continued in the first half of fiscal 2026, including its transition to Blackwell Ultra platforms. NVIDIA began shipping production units of its new Blackwell Ultra platforms, including GB300, in the second quarter of fiscal year 2026.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nvda_2025_q2_h20_export_charge_and_q2_release",
+    "question": "Describe the timeline and financial impact of USG export actions on NVIDIA's H20 product through Q2 fiscal 2026.",
+    "ground_truth": "In April 2025 the U.S. government informed NVIDIA that a license is required for exports of H20 into the China market; as a result, NVIDIA incurred a $4.5 billion charge in the first quarter of fiscal 2026 associated with H20 for excess inventory and purchase obligations because demand diminished. In August 2025 the USG granted licenses that would allow shipment of certain H20 products to certain China-based customers, but NVIDIA has not generated any revenue or shipped any H20 products under those licenses to date. USG officials have expressed an expectation that the USG will receive 15% of the revenue generated from licensed H20 sales, but the USG has not published a regulation codifying such requirement. In the second quarter NVIDIA recognized approximately $650 million of H20 revenue from sales to an unrestricted customer outside of China, which resulted in a $180 million release of previously reserved H20 inventory. There were no H20 sales to China-based customers in the second quarter.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nvda_2025_q2_export_controls_and_ifr_risk",
+    "question": "What recent US government rulemaking and export-control risks does NVIDIA identify that could affect its data center products for Q2 2025?",
+    "ground_truth": "NVIDIA explains that in January 2025 the USG published the \"AI Diffusion\" interim final rule (IFR) which would have imposed a worldwide licensing requirement on its popular data center products such as H200, GB200 and GB300. In May 2025 the USG announced it would rescind the AI Diffusion IFR and implement a replacement rule; the scope, timing and requirements of the forthcoming rule remain uncertain. NVIDIA warns the replacement rule may impose new restrictions or licensing requirements that could have a material impact on its business, and more broadly describes that evolving export controls, tariffs and other trade measures have added complexity, increased costs, could disrupt supply chain and distribution channels, and may negatively affect demand, inventory levels and its ability to serve customers in certain markets.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nvda_2025_q2_liquidity_cp_and_tax_positions",
+    "question": "What short-term liquidity program and material tax liability disclosures does NVIDIA report as of July 27, 2025?",
+    "ground_truth": "NVIDIA has a $575 million commercial paper program to support general corporate purposes. As of July 27, 2025, NVIDIA had no commercial paper outstanding under that program. NVIDIA also disclosed unrecognized tax benefits of $2.9 billion, which includes related interest and penalties, recorded in non-current income tax payable as of July 27, 2025, and stated it is unable to estimate the timing of any potential tax liability, interest payments, or penalties in individual years.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "nvda_2025_q3_blackwell_majority",
+    "question": "Which architecture comprised the majority of NVIDIA's Data Center revenue in the third quarter of fiscal 2026, and which new Data Center platform did NVIDIA begin shipping production units of (including timing) for Q3 2025?",
+    "ground_truth": "NVIDIA stated that its Blackwell architectures are the majority of its Data Center revenue. It also began shipping production units of its new Blackwell Ultra platforms, including the GB300, in the second quarter of fiscal year 2026 (while continuing to sell prior generation architecture).",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q3"
+  },
+  {
+    "sample_id": "nvda_2025_q3_us_mfg_cadence",
+    "question": "What did NVIDIA describe in MD&A about its product cadence for Data Center compute solutions and its plans for U.S.-based manufacturing for Q3 2025?",
+    "ground_truth": "NVIDIA described that it continues to execute Data Center compute product introductions, bringing new advanced architectures on a one-year product cadence. It is increasing U.S.-based manufacturing and investing in specialized equipment and processes to support domestic production to strengthen its supply chain, add resiliency and redundancy, and meet growing demand; however, the ability to increase manufacturing capabilities depends on the domestic manufacturing ecosystem's capacity to ramp production supply to the required volume and on a timely basis.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q3"
+  },
+  {
+    "sample_id": "nvda_2025_q3_h20_export_controls",
+    "question": "Summarize the disclosures related to U.S. export controls on NVIDIA's H20 product, including charges taken, license developments, and revenue received under licenses as of NVIDIA's Q3 2025 filing.",
+    "ground_truth": "NVIDIA disclosed that in April 2025 the U.S. government informed the company that a license is required for exports of its H20 product into China. As a result, NVIDIA incurred a $4.5 billion charge in the first quarter of fiscal year 2026 associated with H20 for excess inventory and purchase obligations due to diminished demand. In August 2025 the U.S. government granted licenses allowing shipment of certain H20 products to certain China-based customers, but NVIDIA has generated approximately $50 million in H20 revenue under those licenses. U.S. government officials have expressed an expectation that the U.S. government will receive 15% or more of the revenue generated from licensed sales, but no regulation codifying such a requirement has been published to date.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q3"
+  },
+  {
+    "sample_id": "nvda_2025_q3_capital_commitments",
+    "question": "What short-term liquidity facility and major strategic investment commitments did NVIDIA report as of October 26, 2025, and what tax-related contingent liability did it disclose?",
+    "ground_truth": "NVIDIA reported a $575 million commercial paper program to support general corporate purposes and stated that as of October 26, 2025 it had no commercial paper outstanding. It disclosed strategic investment commitments including a commitment to invest $5 billion in Intel Corporation (subject to regulatory approval), a letter of intent with an opportunity to invest in OpenAI, and an agreement entered in November 2025, subject to certain closing conditions, to invest up to $10 billion in Anthropic (with no assurance any investment will be completed). NVIDIA also disclosed unrecognized tax benefits of $3.2 billion, including related interest and penalties, recorded in non-current income tax payable as of October 26, 2025, and stated it is unable to estimate the timing of any potential tax liability or related payments.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q3"
+  },
+  {
+    "sample_id": "nvda_2025_q3_supply_leadtime_impact",
+    "question": "Explain the chain of cause-and-effect NVIDIA describes linking long manufacturing lead times and frequent product transitions to impacts on revenue timing and gross margins, and provide the specific example NVIDIA cites. for Q3 2025?",
+    "ground_truth": "NVIDIA explains that long manufacturing lead times (it has previously experienced lead times of more than 12 months) and build-to-forecast practices require paying premiums, deposits, and entering long-term, non-cancellable supply and capacity agreements, which increase product costs and raise the risk of supply/demand mismatches. When demand is overestimated, the company may be unable to reduce supply commitments in time, leading to excess inventory, inventory provisions, write-downs, cancellation penalties and impaired gross margins. Frequent product transitions and a new one-year cadence increase complexity because NVIDIA often ships new and prior architecture products simultaneously; qualification time, customers delaying purchases until new architectures, and channel inventory reductions can create revenue volatility and timing shifts. As a specific example, NVIDIA states its gross margins in the second quarter of fiscal year 2025 were negatively impacted by inventory provisions for low-yielding Blackwell material.",
+    "ticker": "NVDA",
+    "year": 2025,
+    "quarter": "Q3"
+  },
+  {
+    "sample_id": "nvda_2026_q1_commercial_paper",
+    "question": "What is the size of NVIDIA's commercial paper program and how much commercial paper was outstanding as of April 26, 2026?",
+    "ground_truth": "NVIDIA's commercial paper program allows issuance of unsecured paper notes up to $25.0 billion for general corporate purposes. As of April 26, 2026, no commercial paper was outstanding.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2026_q1_unrecognized_tax_liability",
+    "question": "What unrecognized tax benefits and related interest and penalties were reported on NVIDIA's balance sheet as of April 26, 2026, and are there any ongoing tax examinations?",
+    "ground_truth": "Unrecognized tax benefits were $4.5 billion, which includes related interest and penalties of $439 million, and were recorded in non-current income tax payable as of April 26, 2026. NVIDIA is currently under examination by the Internal Revenue Service for its fiscal years 2023 and 2024.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2026_q1_rubin_and_manufacturing_initiatives",
+    "question": "What near-term product roadmap milestone and manufacturing investments does NVIDIA describe in NVIDIA's Q1 2026 SEC filing that could affect future shipments and supply strategy?",
+    "ground_truth": "NVIDIA stated it seeks to complete new computing solutions each year and expects its Rubin platform to start shipping in the second half of fiscal year 2027. The company also said it is increasing its U.S.-based manufacturing and investing in specialized equipment and processes to support domestic production, and that it has entered and may continue to enter prepaid manufacturing and capacity agreements and increased supply and capacity purchases to support demand projections.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2026_q1_export_controls_history",
+    "question": "Summarize the key export control and regulatory actions since 2022 that NVIDIA identifies as impacting its products and markets, including specific products or dates mentioned. for Q1 2026?",
+    "ground_truth": "NVIDIA describes a series of export control actions: in August 2022 the U.S. government announced restrictions impacting exports of certain chips and related technology that specifically affected A100 and H100 integrated circuits and DGX or other systems/boards incorporating those chips; in July 2023 the U.S. government informed NVIDIA of an additional licensing requirement for a subset of A100 and H100 products destined to certain customers and regions, including some countries in the Middle East; and in October 2023 the U.S. government announced new licensing requirements for exports to China and Country Groups D:1, D:4, and D:5 of products exceeding certain performance thresholds, including but not limited to A100, A800, H100, H800, L4, L40, L40S, RTX 4090, and GB200 NVL72. The filing also notes other regulatory inquiries, including the French Competition Authority and a September 15, 2025 preliminary finding by China's antitrust regulators regarding NVIDIA's compliance with conditions of the Mellanox acquisition.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "nvda_2026_q1_supply_chain_blackwell_impact",
+    "question": "How have supply-chain lead times and product transitions affected NVIDIA's financial results in prior periods, and what concrete example does the filing provide for Q1 2026?",
+    "ground_truth": "In NVIDIA's filing, NVIDIA has experienced long manufacturing lead times (previously more than 12 months) and that mismatches between supply and demand have resulted in both product shortages and excess inventory, harming financial results. To secure supply it has paid premiums, provided deposits, and entered into long-term supply agreements and capacity commitments, increasing product costs. As a concrete example, NVIDIA disclosed that its gross margins in the second quarter of fiscal year 2025 were negatively impacted by inventory provisions for low-yielding Blackwell material.",
+    "ticker": "NVDA",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "wmt_2025_annual_strategic_investments",
+    "question": "Which strategic investments and initiatives does Walmart identify as part of its omni-channel strategy in the 2025 Form 10-K?",
+    "ground_truth": "Walmart identifies investments in eCommerce, technology (including the use of AI and generative AI technologies), talent, supply chain automation and enhancements, advertising, acquisitions, joint ventures, store remodels and other customer initiatives as components of its omni-channel strategy. The filing also notes investments tied to strategic alliances and examples such as ONE, the Company's fintech venture.",
     "ticker": "WMT",
-    "year": 2027,
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2025_annual_segments_competition",
+    "question": "According to the 2025 Form 10-K, in what ways do Walmart's reportable segments compete in the market?",
+    "ground_truth": "In Walmart's filing, each of Walmart's segments competes for customers, employees, digital prominence, products and services and in other important aspects of its business with many local, regional, national and global physical, eCommerce and omni-channel retailers, social commerce platforms, wholesale club operators and retail intermediaries, as well as companies that offer services in digital advertising, data analytics/insights, fulfillment and delivery, health and wellness and financial services. It further notes competition across price, merchandise selection and availability, services offered to customers, location, store hours, in-store amenities, shopping convenience and experience, digital platform attractiveness and ease of use, quality and accessibility of data, and cost, speed and options for delivery.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2025_annual_marketplace_and_product_risk",
+    "question": "What risks does Walmart disclose related to products sold by third-party sellers on its online marketplace for FY2025?",
+    "ground_truth": "Walmart discloses that third-party marketplace transactions pose risks including potential direct liability, loss of customers, regulatory enforcement and reputational harm. The filing notes unsettled law and that some regulators and courts view a retailer as potentially responsible for marketplace transactions, which could expose Walmart to product liability or intellectual property claims. Walmart acknowledges marketplace arrangements are complex (including fulfillment, inventory management, tax collection, payment processing and content) and that its compliance controls and contractual terms may not prevent sellers from offering prohibited or non-compliant items, or allow full recovery from sellers. These failures could result in reputational, financial and other risks and could materially adversely impact Walmart's business and impede execution of its eCommerce growth strategy.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2025_annual_capex_allocation_impact",
+    "question": "How does Walmart describe the impact of capital allocation to eCommerce, technology and automation on its short-term financial performance in the 2025 Form 10-K?",
+    "ground_truth": "Walmart states there is an increasing allocation of capital expenditures focused on eCommerce, technology (including AI and generative AI), talent and automation initiatives, and that the cost of certain investments in these areas, including any operating losses incurred, will adversely impact its financial performance in the short-term. The filing warns that failure to realize benefits from these investments may also adversely impact financial performance over the longer term and that unsuccessful execution could result in impairment charges to intangible assets or other long-lived assets.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2025_annual_ecommerce_store_traffic_and_weather",
+    "question": "Explain the operational cause-and-effect Walmart describes between growing eCommerce (including online grocery) and store/club performance, and give the filing's specific example of recent weather-related operational impacts. for FY2025?",
+    "ground_truth": "Walmart explains that a greater concentration of eCommerce sales, including increasing online grocery sales, could reduce traffic in its stores and clubs; that reduced traffic would, in turn, reduce opportunities for cross-store or cross-club sales created by such traffic and could reduce sales within stores and clubs, materially adversely affecting financial performance. As a recent operational example, the filing states that in fiscal 2025 Hurricanes Helene and Milton impacted Walmart's stores, operations and supply chains in the Southeastern U.S., although such events did not materially impact consolidated financial performance.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2026_annual_segment_net_sales_mix",
+    "question": "What were Walmart's net sales by reportable segment for fiscal 2026 and what percentage of consolidated net sales did each segment represent?",
+    "ground_truth": "For fiscal 2026 Walmart reported net sales of $483.0 billion for Walmart U.S., which represented 68% of consolidated net sales; $130.4 billion for Walmart International, which represented 19% of consolidated net sales; and $93.0 billion for Sam's Club U.S., which represented 13% of consolidated net sales. (Company consolidated net sales for fiscal 2026 were $706.4 billion.)",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2026_annual_omnichannel_and_investments",
+    "question": "Which omnichannel capabilities and membership benefits does Walmart emphasize in Walmart's FY2026 SEC filing, and what enterprise investments does Walmart say will support omnichannel growth?",
+    "ground_truth": "Walmart emphasizes omnichannel capabilities including same-day pickup and delivery substantially across its stores, expedited delivery options (including in\u2011home delivery and digital pharmacy fulfillment), and use of its store and club footprint to fulfill eCommerce orders (over 8,400 pickup/delivery locations globally). Membership benefits highlighted include Walmart+ (unlimited free shipping on eligible items with no order minimum, unlimited delivery from store, fuel discounts, mobile Scan & Go and access to additional member benefits) and Sam's Club membership tiers (Club $50 annual fee; Plus $110 annual fee) with benefits such as free curbside pickup (Club) and free delivery-from-club and free shipping on orders of $50 or greater (Plus). To support omnichannel growth the Company cites continued heavy investment in eCommerce, technology (including the use of artificial intelligence), automation, supply chain and fulfillment/delivery capabilities, plus expansion of advertising, marketplace and fulfillment services.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2026_annual_trade_and_supply_chain_risks",
+    "question": "What specific international trade and supply chain-related risks does Walmart identify in its forward-looking and business disclosures for FY2026?",
+    "ground_truth": "Walmart identifies risks that include the impact of supply chain challenges, tariffs and recessionary pressures; changes or modifications in tariff rates, exemptions therefrom or the imposition of new tariffs or new taxes on imports; changes or modifications in trade restrictions or the imposition of new trade restrictions; and supply chain logistics matters such as containers or port access that can affect in\u2011stock levels. The filing also notes general geopolitical and macroeconomic risks that could affect the markets in which it operates.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2026_annual_capital_allocation_and_liquidity_statements",
+    "question": "What forward-looking statements does Walmart include in Walmart's FY2026 SEC filing regarding capital allocation, shareholder returns and liquidity?",
+    "ground_truth": "Walmart states forward\u2011looking expectations that include continuing to provide returns to shareholders through share repurchases and dividends (including reference to use of share repurchase authorization and sources of funding for repurchases); statements about cash flows from operations, current cash position and access to capital markets or credit being sufficient to meet anticipated operating cash needs; and statements regarding investments and capital expenditures the Company will make and how certain of those investments and capital expenditures are expected to be financed. The Company cautions these are forward\u2011looking and subject to risks and uncertainties.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2026_annual_multi_year_sales_trends_and_drivers",
+    "question": "How did net sales for Walmart U.S., Walmart International and Sam's Club U.S. trend from fiscal 2024 through fiscal 2026, and which company initiatives does the filing cite as supporting the observed expansion?",
+    "ground_truth": "Net sales trended upward across the three segments from fiscal 2024 to fiscal 2026: Walmart U.S. net sales increased from $441.8 billion (fiscal 2024) to $462.4 billion (fiscal 2025) to $483.0 billion (fiscal 2026); Walmart International net sales increased from $114.6 billion (fiscal 2024) to $121.9 billion (fiscal 2025) to $130.4 billion (fiscal 2026); and Sam's Club U.S. net sales increased from $86.2 billion (fiscal 2024) to $90.2 billion (fiscal 2025) to $93.0 billion (fiscal 2026). The filing attributes and supports this expansion through initiatives such as expanding omnichannel offerings (pickup/delivery and leveraging stores for fulfillment), investments in eCommerce, technology and AI, supply chain automation and fulfillment capabilities, expansion of marketplace, advertising and fulfillment services, membership and other service offerings (e.g., Walmart+ and Sam's Club memberships), and leveraging its global ecosystem and local market expertise.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": null
+  },
+  {
+    "sample_id": "wmt_2025_q2_samsclub_ecommerce",
+    "question": "For Sam's Club U.S., what were the eCommerce-related net sales for the three months ended April 30, 2025 and April 30, 2024 as disclosed in Walmart's Q2 2025 SEC filing?",
+    "ground_truth": "In Walmart's filing, of Sam's Club U.S.'s total net sales, approximately $3.3 billion related to eCommerce for the three months ended April 30, 2025, and approximately $2.6 billion related to eCommerce for the three months ended April 30, 2024.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_mda_financial_priorities",
+    "question": "According to the MD&A 'Company Performance Metrics' section, what are Walmart's defined financial priorities and what specific actions does Walmart say it will take to pursue 'Growth' for Q2 2025?",
+    "ground_truth": "Walmart defines its financial priorities as: (1) Growth - serve customers through a seamless omnichannel experience; (2) Margin - improve operating income margin through productivity initiatives as well as category and business mix; and (3) Returns - improve Return on Investment through margin improvement and disciplined capital spend. To pursue 'Growth' the company says it will focus on serving customers and members however they want to shop through its omnichannel model, including increasing comparable store and club sales by growing membership at Sam's Club U.S. and through Walmart+, accelerating eCommerce sales growth, and expanding omnichannel initiatives that complement the strategy.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_opioid_settlement_status",
+    "question": "What did Walmart disclose about the opioid-related settlement liability it had accrued in fiscal 2023 and the status of those payments as of January 31, 2025? Are there deadlines for remaining entities to join the settlement?",
+    "ground_truth": "Walmart disclosed that in fiscal year 2023 it accrued a liability of approximately $3.3 billion for opioid-related settlements. As of January 31, 2025, all of that accrued liability had been paid. The filing states that remaining eligible political subdivisions have until July 15, 2025, and remaining eligible federally recognized Native American tribes have until February 24, 2026, to join the settlements, and the Company will owe no additional funds for any eligible political subdivision or tribe that elects to join the settlement.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_liquidity_dividends_repurchases",
+    "question": "What forward-looking statements did Walmart make about its liquidity and funding of dividends and its share repurchase program in Walmart's Q2 2025 Form 10-Q?",
+    "ground_truth": "Walmart stated that its sources of liquidity will be adequate to fund its operations, finance its investment activities, pay dividends and fund share repurchases. The filing includes a forward-looking statement regarding the payment of annual dividends in fiscal 2026 and a statement regarding funding of the Company's share repurchase program. It also states management's expectations that cash flows from operations, current cash position, short-term borrowings and access to capital markets will continue to be sufficient to meet anticipated cash requirements and contractual obligations, and that the Company's commercial paper and long-term debt ratings will continue to enable it to refinance its debts at favorable rates (subject to factors that could affect those ratings).",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_opioid_mdl_judgment_sequence",
+    "question": "Describe the sequence of court actions and their effects on the approximately $0.7 billion MDL judgment described in Walmart's Q2 2025 SEC filing, including dates and outcomes.",
+    "ground_truth": "The filing explains that a trial in the MDL resulted in a judgment on August 17, 2022, ordering all three defendants including Walmart to pay an aggregate amount of approximately $0.7 billion over 15 years and granting injunctive relief. The monetary aspect of that judgment was stayed pending appeal, and the injunctive aspect went into effect on February 20, 2023. Walmart appealed; the Sixth Circuit Court of Appeals certified certain questions to the Supreme Court of Ohio, and on December 10, 2024, the Supreme Court of Ohio issued an order holding that the Ohio Product Liability Act bars all common law public nuisance claims arising from the sale of a product. Following that, on January 31, 2025, the Sixth Circuit Court of Appeals entered an order vacating the approximately $0.7 billion judgment, dissolving the injunction, and remanding the case back to the MDL for further proceedings.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_samsclub_ecommerce_sales",
+    "question": "How much of Walmart's Sam's Club segment U.S.'s net sales related to eCommerce for the three- and six-month periods ended July 31, 2025 and 2024?",
+    "ground_truth": "Of Sam's Club U.S.'s total net sales, approximately $3.7 billion and $3.0 billion related to eCommerce for the three months ended July 31, 2025 and 2024, respectively, and approximately $7.1 billion and $5.6 billion related to eCommerce for the six months ended July 31, 2025 and 2024, respectively.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_mdna_omnichannel_growth",
+    "question": "What specific omnichannel growth initiatives does Walmart highlight in its MD&A as priorities to drive comparable sales and growth for Q2 2025?",
+    "ground_truth": "In MD&A, Walmart states its growth objective includes \"increasing comparable store and club sales through increasing membership at Sam's Club U.S. and through Walmart+, accelerating eCommerce sales growth and expansion of omnichannel initiatives that complement our strategy.\"",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_section13r_embassy_sales",
+    "question": "What did Walmart disclose under Section 13(r) about sales to the Embassy of Iran in Pretoria \u2014 which division was involved, the time period and the dollar value for Q2 2025?",
+    "ground_truth": "Walmart disclosed transactions between Builders (which specializes in retail home improvement and construction materials and is a division of its subsidiary Massmart Retail (Pty) Ltd.) and a customer that appears to be the Embassy of Iran in Pretoria. The Company became aware that beginning in June 2021 and continuing during the fiscal quarter ended July 31, 2025, it had multiple ordinary retail sales of general construction materials to the Embassy valued at approximately $9,300 (based on current exchange rates), including a small amount in August 2025. Walmart said it is unable to accurately calculate net profit (but that it would be significantly less than the gross sales amount) and does not plan to continue selling to the Embassy in the future.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_opioid_accruals_and_payments",
+    "question": "What amount did Walmart accrue for the opioid settlements in fiscal 2023, and what was the status of that accrued liability as of January 31, 2025?",
+    "ground_truth": "Walmart accrued a liability of approximately $3.3 billion in fiscal year 2023 for opioid-related settlements (including amounts for remediation, attorneys' fees and costs). As of January 31, 2025, all of the accrued liability had been paid. Remaining federally recognized Native American tribes have until February 24, 2026 to join the settlement, but the Company will owe no additional funds for any that join.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q2_taxact_effects_on_taxes",
+    "question": "What did Walmart say about the July 2025 Tax Act and its impact on Walmart's tax expense, effective tax rate and cash tax payments for the quarter ended July 31, 2025?",
+    "ground_truth": "Walmart said the Tax Act enacted in July 2025 introduced 100% bonus depreciation on qualified property and full expensing for research and development expenditures. The impacts of the Tax Act are reflected in results for the fiscal quarter ended July 31, 2025, and \"there was no material impact to our income tax expense or effective tax rate.\" Walmart expects certain provisions will \"decrease cash taxes paid in the current fiscal year and may change the timing of cash tax payments in future periods.\"",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q2"
+  },
+  {
+    "sample_id": "wmt_2025_q4_rainey_10b5-1",
+    "question": "What were the terms of John David Rainey's Rule 10b5-1 trading plan disclosed in Walmart's Q4 2025 Form 10-Q (dates, aggregate shares, and termination date)?",
+    "ground_truth": "On September 5, 2025, John David Rainey, Executive Vice President and Chief Financial Officer, entered into a Rule 10b5-1 stock trading plan under which he is scheduled to sell an aggregate of 40,000 shares of common stock in trades scheduled in February and March 2026. The plan will terminate on March 2, 2026.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q4"
+  },
+  {
+    "sample_id": "wmt_2025_q4_samsclub_ecommerce",
+    "question": "How much of Sam's Club U.S. total net sales related to eCommerce for the three- and nine-month periods ended October 31, 2025 and 2024, as reported in Walmart's Q4 2025 filing?",
+    "ground_truth": "Of Sam's Club U.S.'s total net sales, approximately $3.8 billion related to eCommerce for the three months ended October 31, 2025 and $3.1 billion for the three months ended October 31, 2024; and approximately $10.8 billion related to eCommerce for the nine months ended October 31, 2025 and $8.7 billion for the nine months ended October 31, 2024.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q4"
+  },
+  {
+    "sample_id": "wmt_2025_q4_phonepe_sharebased_charge",
+    "question": "What financial impact did the September 2025 modification of PhonePe share\u2011based arrangements have on Walmart's results and how did it affect Walmart's ownership percentage in PhonePe?",
+    "ground_truth": "Upon modification of certain PhonePe share-based payment arrangements in September 2025, Walmart recorded a non-cash charge of $0.7 billion (a portion of which was based on grant-date fair value) in operating, selling, general and administrative expenses within the Walmart International segment. Following the modification and subsequent vesting/exercise of certain options, Walmart's ownership in PhonePe decreased from approximately 84% to approximately 73%.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q4"
+  },
+  {
+    "sample_id": "wmt_2025_q4_massmart_embassy_transactions",
+    "question": "Summarize Walmart's disclosure about identified transactions between Massmart divisions and the Embassy of Iran or an individual appearing to act for the Embassy, including amounts and Walmart's planned course of action. for Q4 2025?",
+    "ground_truth": "During a review the Company identified ordinary retail sales transactions in South Africa: Builders (a division of Massmart) had multiple ordinary retail sales to the Embassy of Iran in Pretoria in August 2025 valued at approximately $85; Makro (a separate Massmart division) had multiple ordinary retail sales with an individual apparently purchasing on behalf of the Embassy totaling approximately $74,000 from April 2019 through October 1, 2025, including approximately $3,500 during the fiscal quarter ended October 31, 2025. The Company stated it is unable to accurately calculate net profit attributable to these transactions but that it would be significantly less than the gross sales amounts, and the Company does not plan to continue selling to the Embassy or this individual.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q4"
+  },
+  {
+    "sample_id": "wmt_2025_q4_opioid_settlement_paid_accrual",
+    "question": "What accrual did Walmart record related to opioid settlements, what had been paid as of January 31, 2025, and what deadline remains for federally recognized Native American tribes to join the settlement?",
+    "ground_truth": "In fiscal year 2023, Walmart accrued a liability of approximately $3.3 billion to resolve opioid-related claims (including remediation, attorneys' fees and costs). As of January 31, 2025, all of that accrued liability had been paid. Remaining federally recognized Native American tribes have until February 24, 2026 to join the settlement, and the Company will owe no additional funds for any that join.",
+    "ticker": "WMT",
+    "year": 2025,
+    "quarter": "Q4"
+  },
+  {
+    "sample_id": "wmt_2026_q1_samsclub_ecom_levels",
+    "question": "For Walmart's Sam's Club segment, U.S., how much of total net sales related to eCommerce for the three months ended April 30, 2026 and April 30, 2025?",
+    "ground_truth": "Of Sam's Club U.S.'s total net sales, approximately $4.1 billion related to eCommerce for the three months ended April 30, 2026, and approximately $3.3 billion related to eCommerce for the three months ended April 30, 2025.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "wmt_2026_q1_financial_priorities_omnichannel",
+    "question": "According to Management's Discussion and Analysis, what are Walmart's stated financial priorities and what specific omnichannel growth initiatives does Walmart say it will focus on for Q1 2026?",
+    "ground_truth": "Walmart defines its financial priorities as: Growth, Margin and Returns. For Growth, the Company says it will focus on serving customers through a seamless omnichannel experience, including increasing comparable store and club sales by increasing membership through Walmart+ and at Sam's Club U.S., accelerating eCommerce sales growth, and expanding omnichannel initiatives that complement its strategy.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "wmt_2026_q1_tariff_refund_disclosure",
+    "question": "What did Walmart disclose about its participation in the tariff refund process and how were any potential refunds treated in the three months ended April 30, 2026?",
+    "ground_truth": "Walmart disclosed that it is participating in the process established by U.S. Customs and Border Protection for refunds of tariffs the Company paid as importer of record under the International Emergency Economic Powers Act. The timing, amounts and ultimate resolution of any refunds remain uncertain, and accordingly the Company did not recognize any amounts related to these claims in the three months ended April 30, 2026.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "wmt_2026_q1_driver_platform_settlement",
+    "question": "Summarize Walmart's settlement and accrual for its Spark Driver platform matters, including the total judgment agreed, suspended amount, accrual as of January 31, 2026, and any continuing obligations.",
+    "ground_truth": "Walmart and the FTC and certain states reached a settlement pursuant to a stipulated order entered on March 3, 2026, under which the Company agreed to entry of a judgment of $100 million. Approximately $63 million of the judgment was suspended (reflecting amounts already paid to drivers and other considerations), and the Company accrued the remainder of approximately $37 million as of January 31, 2026. Under the settlement, without admitting liability, the Company agreed to maintain certain programmatic practices and reporting obligations for a period of 10 years.",
+    "ticker": "WMT",
+    "year": 2026,
+    "quarter": "Q1"
+  },
+  {
+    "sample_id": "wmt_2026_q1_samsclub_ecom_trend",
+    "question": "How much did Walmart's Sam's Club segment U.S. eCommerce net sales increase year-over-year for the three months ended April 30, 2026 versus April 30, 2025, both in absolute dollars and approximately in percent?",
+    "ground_truth": "Sam's Club U.S. eCommerce net sales increased from approximately $3.3 billion for the three months ended April 30, 2025 to approximately $4.1 billion for the three months ended April 30, 2026 \u2014 an increase of approximately $0.8 billion, which represents roughly a 24% year-over-year increase (approximately $800 million / $3.3 billion \u2248 24%).",
+    "ticker": "WMT",
+    "year": 2026,
     "quarter": "Q1"
   }
 ]
