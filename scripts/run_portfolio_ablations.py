@@ -35,7 +35,7 @@ from rag_pipeline import FinancialRAGPipeline
 def make_pipeline() -> FinancialRAGPipeline:
     """Factory to create a new default pipeline for the experiment."""
     try:
-        client = QdrantClient(url=settings.infra.qdrant_url, timeout=5.0, check_compatibility=False)
+        client = QdrantClient(url=settings.infra.qdrant_url, timeout=5, check_compatibility=False)
         cols = {c.name for c in client.get_collections().collections}
         if settings.embedding.collection_name in cols:
             pt_count = client.count(settings.embedding.collection_name).count
@@ -326,6 +326,7 @@ def run_granular_ablations(
                 d_f = d_p = d_r = d_tf1 = d_r1 = d_sim = "0.000"
                 d_lat = "+0.00s"
             else:
+                assert prev_res is not None
                 d_f_val = res.avg("faithfulness") - prev_res.avg("faithfulness")
                 d_p_val = res.avg("context_precision") - prev_res.avg("context_precision")
                 d_r_val = res.avg("context_recall") - prev_res.avg("context_recall")

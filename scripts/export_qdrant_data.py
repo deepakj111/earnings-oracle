@@ -17,6 +17,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 # ── Ensure repo root is on sys.path ─────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,15 +50,15 @@ def export_qdrant(output_path: Path = OUTPUT_PATH, include_vectors: bool = True)
     fetched_count = 0
 
     while True:
-        batch, offset = client.scroll(
+        points, offset = client.scroll(
             COLLECTION,
             limit=250,
             offset=offset,
             with_payload=True,
             with_vectors=include_vectors,
         )
-        for pt in batch:
-            point_dict = {
+        for pt in points:
+            point_dict: dict[str, Any] = {
                 "id": str(pt.id),
                 "payload": pt.payload or {},
             }
@@ -65,11 +66,13 @@ def export_qdrant(output_path: Path = OUTPUT_PATH, include_vectors: bool = True)
                 # pt.vector can be a list[float] or a dict (named vectors)
                 if isinstance(pt.vector, dict):
                     point_dict["vector"] = {k: list(v) for k, v in pt.vector.items()}
-                else:
+                    point_dict["vector_dim"] = None
+                elif isinstance(pt.vector, list):
                     point_dict["vector"] = list(pt.vector)
-                point_dict["vector_dim"] = (
-                    len(point_dict["vector"]) if isinstance(point_dict["vector"], list) else None
-                )
+                    point_dict["vector_dim"] = len(pt.vector)
+                else:
+                    point_dict["vector"] = list(pt.vector)  # type: ignore[arg-type]
+                    point_dict["vector_dim"] = None
 
             all_points.append(point_dict)
             fetched_count += 1

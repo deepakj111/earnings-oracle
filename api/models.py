@@ -81,7 +81,7 @@ class AskRequest(BaseModel):
         ...,
         min_length=3,
         max_length=2000,
-        description="Natural language financial question about SEC 8-K earnings filings.",
+        description="Natural language financial question about SEC 10-K/10-Q financial filings.",
         examples=["What was Apple's total revenue in Q4 2024?"],
     )
     filter: MetadataFilterIn | None = Field(

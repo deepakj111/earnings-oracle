@@ -1,8 +1,8 @@
 """
 Prompt templates for Layer 2 — Query Transformation.
 
-All prompts are tuned specifically for SEC 8-K earnings releases and press
-releases. Generic prompts produce generic embeddings — financial domain
+All prompts are tuned specifically for SEC 10-K Annual Reports and 10-Q Quarterly
+Filings. Generic prompts produce generic embeddings — financial domain
 specificity here is what makes HyDE work for this project.
 
 Each technique has a SYSTEM prompt (persona + rules) and a USER template
@@ -10,8 +10,8 @@ Each technique has a SYSTEM prompt (persona + rules) and a USER template
 """
 
 # ── HyDE: Hypothetical Document Embeddings ────────────────────────────────────
-# Goal: produce a passage whose embedding is close to real earnings chunk embeddings.
-# The model must write in the register of an actual 8-K exhibit — formal, metric-dense.
+# Goal: produce a passage whose embedding is close to real 10-K/10-Q chunk embeddings.
+# The model must write in the register of an actual SEC filing — formal, metric-dense.
 
 HYDE_SYSTEM = """\
 You are a senior financial analyst generating reference passages for a semantic \

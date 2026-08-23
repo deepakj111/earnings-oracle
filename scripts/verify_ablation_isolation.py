@@ -181,7 +181,7 @@ def run_verification(base_dir: Path = Path("data/ablation_results")) -> bool:
         return False
 
     all_passed = True
-    results_summary = []
+    results_summary: list[dict[str, Any]] = []
 
     for arm_path in arm_dirs:
         # Extract arm number
@@ -225,9 +225,10 @@ def run_verification(base_dir: Path = Path("data/ablation_results")) -> bool:
 
     # Print Violations if any
     for r in results_summary:
-        if r["violations"]:
-            print(f"\n🚨 [ARM {r['arm']}] VIOLATIONS DETECTED ({len(r['violations'])}):")
-            for v in r["violations"]:
+        arm_violations: list[str] = r["violations"]  # type: ignore[assignment]
+        if arm_violations:
+            print(f"\n🚨 [ARM {r['arm']}] VIOLATIONS DETECTED ({len(arm_violations)}):")
+            for v in arm_violations:
                 print(f"   • {v}")
 
     if all_passed:

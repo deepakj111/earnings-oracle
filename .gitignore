@@ -6,6 +6,8 @@ venv/
 ENV/
 
 data/transcripts/
+data/*.bak
+data/*backup*.txt
 
 repo_code.py
 repo_export.txt

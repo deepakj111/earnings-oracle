@@ -3,7 +3,7 @@
 Core data models for the Financial Knowledge Graph.
 
 The knowledge graph captures entities and relationships extracted from
-SEC 8-K earnings filings. Entities represent real-world objects mentioned
+SEC 10-K Annual Reports and 10-Q Quarterly Filings. Entities represent real-world objects mentioned
 in the filings (people, products, metrics, competitors, risk factors),
 and relationships capture the connections between them.
 

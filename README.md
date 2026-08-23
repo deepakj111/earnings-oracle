@@ -1,6 +1,6 @@
 # 📊 Financial Earnings Oracle: Production-Grade RAG System
 
-> **A production-ready Retrieval-Augmented Generation (RAG) system for querying SEC 8-K earnings filings.** Built from the ground up for the modern AI/ML Engineer portfolio, demonstrating **Hybrid Retrieval**, **Corrective RAG (CRAG)**, **GraphRAG Entity Injection**, and **LLMOps Observability** with rigorous statistical evaluation.
+> **A production-ready Retrieval-Augmented Generation (RAG) system for querying SEC 10-K Annual Reports and 10-Q Quarterly Filings.** Built from the ground up for the modern AI/ML Engineer portfolio, demonstrating **Hybrid Retrieval**, **Corrective RAG (CRAG)**, **GraphRAG Entity Injection**, and **LLMOps Observability** with rigorous statistical evaluation.
 
 [![CI](https://github.com/deepakj111/earnings-oracle/actions/workflows/ci.yml/badge.svg)](https://github.com/deepakj111/earnings-oracle/actions/workflows/ci.yml)
 [![CD](https://github.com/deepakj111/earnings-oracle/actions/workflows/cd.yml/badge.svg)](https://github.com/deepakj111/earnings-oracle/actions/workflows/cd.yml)
@@ -14,7 +14,7 @@
 This project is tailored to demonstrate senior-level competencies in **Applied AI, Machine Learning Engineering, and MLOps**:
 
 - **Rigorous LLM Evaluation**: Uses an automated LLM-as-a-judge harness to measure *Faithfulness* and *Context Relevancy*. Employs **Bootstrap Resampling (95% CIs)** and paired **Wilcoxon signed-rank tests** to prove architectural improvements are statistically significant, avoiding "vibe checks".
-- **Corrective RAG (CRAG)**: An autonomous meta-model grades chunk relevance. If local context is inadequate (e.g. data outside the 8-K corpus), it falls back to a web search aggregator (Tavily/DDG).
+- **Corrective RAG (CRAG)**: An autonomous meta-model grades chunk relevance. If local context is inadequate (e.g. data outside the 10-K/10-Q corpus), it falls back to a web search aggregator (Tavily/DDG).
 - **Advanced Context Engineering**: Mitigates the *Lost-in-the-Middle* phenomenon via U-shaped "valley reordering" of contexts. Utilizes token-aware parent-child chunking to guarantee bounded NLP context limits.
 - **Deterministic & Store-State Auto-Checkpointing**: Generates 100% deterministic UUID v5 chunk IDs (`ticker:date`) and inspects Qdrant Vector DB, BM25, and Knowledge Graph directly in memory. Eliminates sidecar checkpoint files while guaranteeing zero redundant embeddings or duplicate points across incremental runs.
 - **Production Observability & Audit Trail**: Asynchronous FastAPI deployment with custom **Prometheus** metrics and an always-on **Per-Query Audit Log** (`data/audit_logs/`). Writes detailed trace JSONs (HyDE text, query variants, chunk scores/excerpts, LLM model/tokens/cost, answer) in daily subdirectories alongside a compact append-only `audit.jsonl`. See [LLMOps Guide](docs/LLMOPS.md#per-query-audit-trail-dataaudit_logs) for details.
@@ -23,20 +23,27 @@ This project is tailored to demonstrate senior-level competencies in **Applied A
 
 ## 🗂️ Data Strategy & Scope: Controlled Domain Specialization
 
-Instead of scraping a massive, noisy assortment of random tickers, this system's ingestion pipeline is deliberately scoped to the **latest Annual Reports (SEC Form 10-K)** of two fundamentally contrasting Fortune 50 companies: **NVIDIA (NVDA)** and **Walmart (WMT)**.
+Instead of scraping a massive, noisy assortment of random tickers, this system's ingestion pipeline is deliberately scoped to **SEC Form 10-K Annual Reports and 10-Q Quarterly Filings** of four fundamentally contrasting Fortune 50 companies spanning distinct industry sectors:
+
+| Ticker | Company | Sector | Fiscal Year End |
+|:---:|:---|:---|:---:|
+| **NVDA** | NVIDIA | Technology / Semiconductors | January |
+| **WMT** | Walmart | Consumer Staples / Retail | January |
+| **NFLX** | Netflix | Communication Services / Streaming | December |
+| **UNH** | UnitedHealth Group | Healthcare / Managed Care | December |
 
 This represents a deliberate ML engineering choice to optimize for **pipeline depth and architectural stress-testing over dataset width.**
 
-A single SEC Form 10-K is a 150+ page behemoth of highly regulated financial prose, dense MD&A (Management's Discussion and Analysis), and complex HTML tables. Ingesting just two recent 10-Ks produces tens of thousands of tokens of high-entropy text.
+A single SEC Form 10-K is a 150+ page document of highly regulated financial prose, dense MD&A (Management's Discussion and Analysis), and complex HTML tables. Ingesting filings across four sectors produces a high-entropy, cross-domain corpus spanning divergent financial vocabularies (semiconductor yield, pharmacy benefit ratios, streaming ARPU, and retail comparable-store sales).
 
 This provides a rigorous stress-test to prove the efficacy of:
 *   **Parent-Child Chunking:** Ensuring complex financial tables remain atomic while maintaining tight semantic retrieval windows.
-*   **GraphRAG Entity Extraction:** Proving the LLM can map and traverse complex entity relationships across a massive single-document context.
-*   **Lost-in-the-Middle Mitigation:** Testing if the system can accurately synthesize an answer using a single risk-factor footnote buried on page 104.
+*   **GraphRAG Entity Extraction:** Proving the LLM can map and traverse complex entity relationships across multi-document, cross-sector contexts.
+*   **Lost-in-the-Middle Mitigation:** Testing if the system can accurately synthesize an answer using a single risk-factor footnote buried on page 104 of a 200-page filing.
 
 In production MLOps, managing compute budgets and evaluation variance is a core competency.
 
-A tightly constrained dataset acts as a **controlled laboratory environment**. It allows the automated evaluation harness to run rigorous, repeated, and statistically significant A/B tests (e.g., paired t-tests and Wilcoxon signed-rank tests) on pipeline variants.
+A tightly constrained, cross-sector dataset acts as a **controlled laboratory environment**. It allows the automated evaluation harness to run rigorous, repeated, and statistically significant A/B tests (e.g., paired t-tests and Wilcoxon signed-rank tests) on pipeline variants.
 
 This proves the exact quantitative impact of adding CRAG or FlashRank to the architecture without introducing unmanageable data variance or unnecessary LLM token burn.
 
@@ -73,7 +80,7 @@ The pipeline consists of six distinct execution layers, parallelized via `asynci
 
 | Pipeline Mode | Active Layers | Typical Latency | Primary Use Case |
 | :--- | :--- | :--- | :--- |
-| **Fast Path (Default)** | **L1 Router** → **L2 Transformation** → **L3 Hybrid Search + FlashRank** → **L3.5 GraphRAG** → **L4 Generator** | **~2.0s** | **Default mode.** Optimized for low-latency, high-precision retrieval on SEC 8-K/10-K filings. |
+| **Fast Path (Default)** | **L1 Router** → **L2 Transformation** → **L3 Hybrid Search + FlashRank** → **L3.5 GraphRAG** → **L4 Generator** | **~2.0s** | **Default mode.** Optimized for low-latency, high-precision retrieval on SEC 10-K/10-Q filings. |
 | **Corrective Path (CRAG)** | Fast Path + **L5 CRAG**: LLM relevance grading → Web search fallback if ungrounded → Re-generation | **~4.5s** | **On-demand fallback mode** (`use_crag=true` in API / UI toggle). Activated when retrieval confidence is low or query is out-of-corpus. |
 
 > **Architectural Rationale**: Stacking CRAG on every request introduces unnecessary latency (~2.5s overhead) and cost for closed-domain financial queries. Exposing CRAG as an on-demand fallback layer preserves low P95 latency for standard queries while guaranteeing recall resilience when retrieval context is weak or incomplete.
@@ -82,11 +89,11 @@ The pipeline consists of six distinct execution layers, parallelized via `asynci
 
 ## 🛠 Tech Stack
 
-- **ML Frameworks**: OpenAI Embeddings (`text-embedding-3-small`), `FlashRank` (`ms-marco-TinyBERT-L-2-v2` cross-encoder)
+- **ML Frameworks**: OpenAI Embeddings (`text-embedding-3-small`), `FlashRank` (`ms-marco-MiniLM-L-12-v2` cross-encoder)
 - **Vector Search**: `Qdrant` (Dense), `rank-bm25` (Sparse)
 - **Generative AI**: `OpenAI SDK` (`gpt-5-mini` standardized across Query Routing, Query Transformation, Generation, CRAG Grading, KG Extraction, and Evaluation)
 - **Infrastructure**: `FastAPI`, `Streamlit`, `Docker Compose`, `Prometheus`, `Grafana`
-- **Code Quality**: Strict `mypy` typing, `ruff` checks, `bandit` security scanning, `pytest` suite (883+ tests with high coverage).
+- **Code Quality**: Strict `mypy` typing, `ruff` checks, `bandit` security scanning, `pytest` suite (821+ tests with high coverage).
 
 ---
 
@@ -224,7 +231,7 @@ poetry run python scripts/verify_ablation_isolation.py
 ---
 
 ## 🧪 Testing & CI/CD
-This repository boasts a robust testing apparatus with **883+ unit tests** passing with excellent coverage.
+This repository boasts a robust testing apparatus with **821+ unit tests** passing with **84% code coverage**.
 ```bash
 poetry run pytest tests/
 ```

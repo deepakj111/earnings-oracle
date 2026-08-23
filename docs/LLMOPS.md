@@ -35,22 +35,18 @@ The evaluation harness closes the loop: offline evaluation against a golden data
 
 ### Golden Dataset
 
-`evaluation/dataset.py` contains 16 curated QA pairs drawn from real SEC 8-K earnings filings:
+`evaluation/dataset.py` loads a **130-question curated QA dataset** drawn from real SEC 10-K Annual Reports and 10-Q Quarterly Filings across four Fortune 50 companies:
 
-| Company | # Samples | Topics |
-|---------|-----------|--------|
-| Apple | 3 | Revenue, Services, EPS |
-| NVIDIA | 2 | Data Center revenue, Total revenue |
-| Microsoft | 2 | Intelligent Cloud, Total revenue |
-| Amazon | 1 | AWS revenue |
-| Meta | 2 | Ad revenue, DAP |
-| JPMorgan | 1 | NII |
-| Tesla | 2 | Revenue, Deliveries |
-| Walmart | 1 | Total net sales |
-| ExxonMobil | 1 | Earnings |
-| Out-of-scope | 1 | Berkshire (should return ungrounded) |
+| Company | Ticker | Sector | # Samples |
+|---------|--------|--------|-----------|
+| NVIDIA | NVDA | Technology / Semiconductors | 30 |
+| Walmart | WMT | Consumer Staples / Retail | 30 |
+| Netflix | NFLX | Communication Services / Streaming | 35 |
+| UnitedHealth Group | UNH | Healthcare / Managed Care | 35 |
 
-The adversarial out-of-scope sample tests that the system correctly signals `grounded=False` rather than hallucinating an answer for a company not in the knowledge base.
+Questions span both annual (10-K) and quarterly (10-Q) filings and cover financial metrics, segment results, risk disclosures, balance sheet data, and management guidance — stress-testing the pipeline across divergent financial vocabularies.
+
+The adversarial evaluation harness also tests out-of-corpus resilience: CRAG-enabled queries for companies not in the knowledge base should correctly signal `grounded=False` and invoke web search fallback rather than hallucinating an answer.
 
 ### Metrics
 

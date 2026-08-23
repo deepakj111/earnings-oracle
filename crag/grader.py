@@ -38,7 +38,7 @@ from retrieval.models import SearchResult
 _GRADER_PROMPT = """\
 You are a financial document relevance grader for a RAG retrieval system.
 
-Given a financial question and a document chunk from an SEC 8-K earnings filing,
+Given a financial question and a document chunk from a SEC 10-K or 10-Q financial filing,
 assess whether the document chunk contains information that DIRECTLY helps answer
 the question.
 

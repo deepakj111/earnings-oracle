@@ -158,7 +158,7 @@ def create_app() -> FastAPI:
         title="Financial RAG API",
         description=(
             "Production-grade Retrieval-Augmented Generation system for querying "
-            "SEC 8-K earnings filings from 10 major public companies.\n\n"
+            "SEC 10-K Annual Reports and 10-Q Quarterly Filings from 4 major public companies.\n\n"
             "Uses a hybrid retrieval approach — dense vector search (OpenAI text-embedding-3-small + "
             "Qdrant) combined with sparse keyword search (BM25) — fused via Reciprocal Rank "
             "Fusion and reranked with a FlashRank cross-encoder.  Query transformation uses "
@@ -172,7 +172,7 @@ def create_app() -> FastAPI:
             {
                 "name": "Query",
                 "description": (
-                    "Ask financial questions over SEC 8-K earnings filings. "
+                    "Ask financial questions over SEC 10-K/10-Q financial filings. "
                     "Supports structured JSON responses and streaming SSE."
                 ),
             },

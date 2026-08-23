@@ -106,7 +106,7 @@ if "last_response" not in st.session_state:
 
 with st.sidebar:
     st.title("📊 Financial RAG")
-    st.caption("SEC 8-K Earnings Intelligence")
+    st.caption("SEC 10-K/10-Q Financial Intelligence")
     st.divider()
 
     # --- Filters ---

@@ -79,14 +79,15 @@ def info(msg: str) -> None:
 def inspect_source_files() -> dict:
     header("Source Files  (data/company_filings/)")
     files = sorted(FILINGS_DIR.glob("*.htm"))
-    result = {"count": len(files), "files": []}
+    files_list: list[dict[str, object]] = []
+    result = {"count": len(files), "files": files_list}
     if not files:
         warn("No .htm files found — run ingestion.download_filings first.")
         return result
     for f in files:
         size_kb = f.stat().st_size // 1024
         info(f"{f.name}  ({size_kb:,} KB)")
-        result["files"].append({"name": f.name, "size_kb": size_kb})
+        files_list.append({"name": f.name, "size_kb": size_kb})
     ok(f"{len(files)} source filing(s) on disk")
     info(
         "Ingestion status is automatically derived in-memory from Qdrant, BM25, and Knowledge Graph."

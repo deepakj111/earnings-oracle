@@ -86,7 +86,7 @@ if TYPE_CHECKING:
 
 class FinancialRAGPipeline:
     """
-    Four-layer Financial RAG pipeline for SEC 8-K earnings filings.
+    Four-layer Financial RAG pipeline for SEC 10-K Annual Reports and 10-Q Quarterly Filings.
 
     Composes:
       QueryTransformer  →  TransformedQuery   (HyDE + multi-query + step-back)

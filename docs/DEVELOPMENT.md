@@ -81,7 +81,7 @@ docker run -d \
 ### 5. Ingest data
 
 ```bash
-# Download SEC 8-K filings (one-time, ~5–10 min)
+# Download SEC 10-K/10-Q filings (one-time, ~5–10 min)
 poetry run python -m ingestion.download_filings
 
 # Build Qdrant + BM25 index (computes OpenAI embeddings and constructs BM25 & KG index)

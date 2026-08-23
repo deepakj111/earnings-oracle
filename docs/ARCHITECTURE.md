@@ -56,7 +56,7 @@ GenerationResult / CRAGResult
 ```
 SEC EDGAR API (JSON submissions endpoint)
         │
-        │ CIK lookup → 8-K filing list → accession numbers
+        │ CIK lookup → 10-K/10-Q filing list → accession numbers
         ▼
 Filing Index HTML (https://www.sec.gov/Archives/.../accession-index.htm)
         │
@@ -187,7 +187,7 @@ The pipeline validates this invariant before writing. Breaking it would cause th
 
 ### Motivation
 
-The **query-document semantic gap** is the core challenge in RAG: a user's natural language question lives in a different part of embedding space than a formal 8-K press release passage. Layer 2 bridges this gap with three complementary techniques.
+The **query-document semantic gap** is the core challenge in RAG: a user's natural language question lives in a different part of embedding space than a formal 10-K/10-Q filing passage. Layer 2 bridges this gap with three complementary techniques.
 
 ### Architecture
 
@@ -213,7 +213,7 @@ user question: "What was Apple's revenue in Q4 2024?"
 
 **HyDE (Hypothetical Document Embeddings)**
 
-Generates a passage that mimics an actual 8-K exhibit in register and vocabulary. When embedded with OpenAI `text-embedding-3-small`, this synthetic passage maps into the same region of embedding space as real document chunks — closing the semantic gap at the source.
+Generates a passage that mimics an actual SEC 10-K/10-Q filing section in register and vocabulary. When embedded with OpenAI `text-embedding-3-small`, this synthetic passage maps into the same region of embedding space as real document chunks — closing the semantic gap at the source.
 
 Temperature: `0.3` — moderate creativity to generate plausible-sounding passages without hallucinating too wildly.
 
@@ -647,3 +647,17 @@ Naive RAG silently returns hallucinated answers when retrieval quality is poor. 
 - **Diagnostic visibility**: `action`, `relevance_ratio`, `web_search_triggered` are all observable
 
 The cost is ~N additional LLM calls for grading (N = number of retrieved chunks, typically 5). At `gpt-5-mini` pricing, this adds minimal latency and cost per query — acceptable for production use.
+
+### Knowledge Graph: Current Implementation & Enterprise Scalability Path
+
+The current `EntityStore` loads the full knowledge graph from `data/knowledge_graph.json` into memory as a `KnowledgeGraph` object at startup and caches it as a module-level singleton. This approach is deliberately simple and is well-suited to the current corpus size (4 companies, ~26 filings, ~21 MB serialized graph).
+
+**For enterprise deployments spanning >100k entities or multi-tenant corpora**, the `EntityStore` interface is designed to be backed by a managed graph database without changing the retrieval contract:
+
+| Deployment Scale | Recommended Backend | Migration Path |
+| :--- | :--- | :--- |
+| **Single-machine / portfolio** | In-memory JSON (current) | No change needed |
+| **100k–10M entities** | **Neo4j** (self-hosted) | Swap `EntityStore.load()` / `save()` with Bolt driver queries |
+| **>10M entities / multi-region** | **AWS Neptune** or **Google Cloud Spanner Graph** | Same interface, managed infrastructure |
+
+The `KnowledgeGraph.find_entity()`, `find_relationships()`, and `get_chunks_for_entity()` methods in `knowledge_graph/models.py` define the retrieval contract. Any graph backend that implements these three methods can be swapped in transparently without modifying the `GraphRetriever` or pipeline layers.

@@ -550,7 +550,7 @@ class TestAuditWriter:
             total_candidates=10,
             final_count=1,
             reranked=True,
-            reranker_model="ms-marco-TinyBERT-L-2-v2",
+            reranker_model="ms-marco-MiniLM-L-12-v2",
             results=[MockResult()],
         )
         tracer.record_retrieval(trace, ret_span)

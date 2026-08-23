@@ -444,7 +444,7 @@ def score_all(
                 results[m] = future.result()
             except Exception as exc:
                 logger.warning(f"Metric calculation failed for {m}: {exc}")
-                results[m] = MetricScore(metric_name=m, score=0.0, reasoning=f"Error: {exc}")
+                results[m] = MetricScore(metric=m, score=0.0, reasoning=f"Error: {exc}")
 
     # Return in original requested order
     return [results[m] for m in selected if m in results]

@@ -34,7 +34,7 @@ def reset_all(wipe_kg: bool = False) -> None:
     logger.info(f"Connecting to Qdrant at {qdrant_url}...")
 
     try:
-        client = QdrantClient(url=qdrant_url, timeout=30.0, check_compatibility=False)
+        client = QdrantClient(url=qdrant_url, timeout=30, check_compatibility=False)
         existing = {c.name for c in client.get_collections().collections}
         if collection_name in existing:
             client.delete_collection(collection_name=collection_name)

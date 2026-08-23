@@ -288,9 +288,7 @@ if __name__ == "__main__":
 
     _settings.validate()
     try:
-        client = QdrantClient(
-            url=_settings.infra.qdrant_url, timeout=2.0, check_compatibility=False
-        )
+        client = QdrantClient(url=_settings.infra.qdrant_url, timeout=2, check_compatibility=False)
         client.get_collections()
     except Exception:
         client = QdrantClient(path="data/qdrant_user_storage")
