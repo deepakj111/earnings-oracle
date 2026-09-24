@@ -359,8 +359,17 @@ class QueryRouter:
                 False,
             )
 
+        ticker_pattern, ticker_map = _build_ticker_resolver()
+        ticker_match = ticker_pattern.search(question)
+        has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
+
         greeting_patterns = ("hello", "hi ", "hey ", "thanks", "thank you", "what is your")
-        if any(lower.startswith(p) for p in greeting_patterns) and len(words) < 6:
+        if (
+            any(lower.startswith(p) for p in greeting_patterns)
+            and len(words) < 6
+            and not ticker_match
+            and not has_financial_kw
+        ):
             return (
                 QueryIntent.OUT_OF_SCOPE,
                 0.95,
@@ -381,9 +390,7 @@ class QueryRouter:
             "cookie",
             "chocolate",
         )
-        if any(t in lower for t in out_of_scope_topics) and not any(
-            kw in lower for kw in _FINANCIAL_KEYWORDS
-        ):
+        if any(t in lower for t in out_of_scope_topics) and not has_financial_kw:
             return (
                 QueryIntent.OUT_OF_SCOPE,
                 0.95,
@@ -393,10 +400,6 @@ class QueryRouter:
                 None,
                 False,
             )
-
-        ticker_pattern, ticker_map = _build_ticker_resolver()
-        ticker_match = ticker_pattern.search(question)
-        has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
 
         if ticker_match and has_financial_kw:
             raw_match = ticker_match.group(0).upper()

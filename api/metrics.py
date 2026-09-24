@@ -102,6 +102,13 @@ rag_retrieval_failed_total = Counter(
     registry=RAG_REGISTRY,
 )
 
+rag_citations_total = Counter(
+    "rag_citations_total",
+    "Cumulative citations generated, labeled by validity",
+    ["valid"],
+    registry=RAG_REGISTRY,
+)
+
 
 # ── Pipeline layer latency ─────────────────────────────────────────────────────
 rag_pipeline_latency_seconds = Histogram(
@@ -205,6 +212,10 @@ def record_generation_result(result: GenerationResult) -> None:
 
     if retrieval_failed:
         rag_retrieval_failed_total.inc()
+
+    citations = getattr(result, "citations", []) or []
+    if citations:
+        rag_citations_total.labels(valid="true").inc(len(citations))
 
     if context_tokens is not None:
         rag_context_tokens_used.observe(context_tokens)
