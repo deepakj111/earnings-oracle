@@ -123,3 +123,19 @@ class TestRerankEnabled:
             results = rerank("q", candidates)
         assert len(results) == 2
         assert results[0].rerank_score >= results[1].rerank_score
+
+    def test_get_ranker_and_warmup_reranker(self) -> None:
+        import retrieval.reranker as rr
+
+        with (
+            patch("flashrank.Ranker", return_value=MagicMock()),
+            patch("flashrank.RerankRequest", return_value=MagicMock()),
+        ):
+            old_ranker = rr._ranker
+            try:
+                rr._ranker = None
+                ranker, req_cls = rr._get_ranker()
+                assert ranker is not None
+                rr.warmup_reranker()
+            finally:
+                rr._ranker = old_ranker

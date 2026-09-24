@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from config.settings import settings
 from generation.models import GenerationResult
 from retrieval.semantic_cache import SemanticCache
 
@@ -149,3 +150,77 @@ class TestSemanticCache:
         assert stats["evictions"] == 1
         assert stats["total_lookups"] == 10
         assert stats["hit_rate"] == 0.8
+
+    async def test_dimension_mismatch_recreates_collection(self) -> None:
+        from types import SimpleNamespace
+
+        cache = SemanticCache()
+        mock_client = AsyncMock()
+        mock_client.collection_exists.return_value = True
+
+        coll_info = SimpleNamespace(
+            config=SimpleNamespace(
+                params=SimpleNamespace(
+                    vectors=SimpleNamespace(size=settings.embedding.vector_dim + 100)
+                )
+            )
+        )
+        mock_client.get_collection.return_value = coll_info
+        cache.client = mock_client
+
+        await cache._ensure_collection()
+        assert mock_client.delete_collection.await_count == 1
+        assert mock_client.create_collection.await_count == 1
+
+    async def test_get_cached_response_exception_handled(self) -> None:
+        cache = SemanticCache()
+        cache.client = MagicMock()
+        cache.client.collection_exists = AsyncMock(return_value=True)
+        cache.client.query_points = AsyncMock(side_effect=RuntimeError("Qdrant unavailable"))
+
+        cached = await cache.get_cached_response([0.1] * 1536)
+        assert cached is None
+        assert cache._misses == 1
+
+    async def test_set_cached_response_exception_handled(
+        self, mock_gen_result: GenerationResult
+    ) -> None:
+        cache = SemanticCache()
+        cache.client = MagicMock()
+        cache.client.collection_exists = AsyncMock(return_value=True)
+        cache.client.upsert = AsyncMock(side_effect=RuntimeError("Qdrant write failed"))
+
+        # Should not raise exception
+        await cache.set_cached_response("What was Apple's revenue?", [0.1] * 1536, mock_gen_result)
+
+    async def test_invalidate_ticker_exception_handled(self) -> None:
+        cache = SemanticCache()
+        cache.client = MagicMock()
+        cache.client.collection_exists = AsyncMock(return_value=True)
+        cache.client.delete = AsyncMock(side_effect=RuntimeError("Delete failed"))
+
+        result = await cache.invalidate_ticker("AAPL")
+        assert result == 0
+
+    async def test_expired_entry_eviction_error_handled(self) -> None:
+        from types import SimpleNamespace
+
+        cache = SemanticCache()
+        cache.client = MagicMock()
+        cache.client.collection_exists = AsyncMock(return_value=True)
+
+        expired_hit = SimpleNamespace(
+            id="point-123",
+            score=0.99,
+            payload={
+                "query": "old query",
+                "created_at": time.time() - 999999,
+                "generation_result": "{}",
+            },
+        )
+        cache.client.query_points = AsyncMock(return_value=SimpleNamespace(points=[expired_hit]))
+        cache.client.delete = AsyncMock(side_effect=RuntimeError("Eviction delete failed"))
+
+        result = await cache.get_cached_response([0.1] * 1536)
+        assert result is None
+        assert cache._evictions == 1

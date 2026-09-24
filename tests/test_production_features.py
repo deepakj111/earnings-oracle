@@ -102,10 +102,23 @@ class TestAdaptiveReranker:
             )
             for i in range(5)
         ]
-        # Candidates are all tables -> should trigger 50/50 blend without error
-        reranked = rerank("What was the revenue?", candidates)
-        assert len(reranked) <= 5
-        assert all(r.rerank_score > float("-inf") for r in reranked)
+        from unittest.mock import MagicMock, patch
+
+        mock_ranker = MagicMock()
+        mock_ranker.rerank.return_value = [{"id": i, "score": 0.5 + i * 0.1} for i in range(5)]
+        mock_rrc = MagicMock()
+
+        with (
+            patch("retrieval.reranker.settings") as mock_settings,
+            patch("retrieval.reranker._get_ranker", return_value=(mock_ranker, mock_rrc)),
+        ):
+            mock_settings.reranker.enabled = True
+            mock_settings.reranker.ce_weight = 0.65
+            mock_settings.reranker.rrf_weight = 0.35
+            mock_settings.retrieval.top_k_final = 5
+            reranked = rerank("What was the revenue?", candidates)
+            assert len(reranked) == 5
+            assert all(r.rerank_score > float("-inf") for r in reranked)
 
 
 class TestSettingsValidationAndDescribe:
@@ -132,6 +145,24 @@ class TestRouterSoftRefuseProbability:
         decision = router.route("What is the recipe for chocolate cake?")
         assert decision.should_refuse is True
         assert decision.refuse_probability >= 0.80
+
+    def test_out_of_scope_query_with_mocked_llm(self) -> None:
+        from unittest.mock import patch
+
+        router = QueryRouter()
+        with patch.object(
+            router,
+            "_llm_classify",
+            return_value={
+                "intent": "OUT_OF_SCOPE",
+                "confidence": 0.95,
+                "detected_ticker": None,
+                "reasoning": "Off-topic query",
+            },
+        ):
+            decision = router.route("Explain how to play basketball in detail")
+            assert decision.should_refuse is True
+            assert decision.refuse_probability >= 0.90
 
     def test_financial_query_has_low_refuse_prob(self) -> None:
         router = QueryRouter()

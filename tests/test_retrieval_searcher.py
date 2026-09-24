@@ -407,3 +407,89 @@ def test_warmups() -> None:
     with patch("retrieval.searcher._load_bm25") as m2:
         warmup_bm25()
         m2.assert_called_once()
+
+
+class TestRetrieveFunction:
+    def test_retrieve_pipeline_end_to_end(self) -> None:
+        from retrieval import retrieve
+
+        query = TransformedQuery(
+            original="What was Apple Q3 revenue?",
+            hyde_document="Apple Q3 revenue doc",
+            multi_queries=["What was Apple Q3 revenue?"],
+            stepback_query="Apple financial revenue",
+        )
+        client = Mock()
+        meta = MetadataFilter(ticker="AAPL", year=2024, quarter="Q3")
+
+        mock_sr = SearchResult(
+            chunk_id="chunk_1",
+            parent_id=None,
+            text="Revenue was $85B",
+            parent_text="Revenue was $85B",
+            rrf_score=0.9,
+            rerank_score=0.9,
+            ticker="AAPL",
+            company="Apple Inc.",
+            date="2024-06-29",
+            year=2024,
+            quarter="Q3",
+            fiscal_period="Q3 2024",
+            section_title="Financial Results",
+            doc_type="10-Q",
+            source="hybrid",
+        )
+
+        with (
+            patch("retrieval.search", return_value=[mock_sr]),
+            patch("retrieval._fetch_parent_texts", return_value=[mock_sr]),
+            patch("retrieval.rerank", return_value=[mock_sr]),
+            patch("knowledge_graph.graph_retriever.graph_retrieve", return_value=([], None)),
+            patch("ingestion.facts_store.FactStore.query", return_value=[]),
+        ):
+            result = retrieve(query, client, metadata_filter=meta)
+
+            assert result.query == query.original
+            assert len(result.results) == 1
+            assert result.results[0].chunk_id == "chunk_1"
+            assert result.metadata_filter == meta
+
+    def test_retrieve_with_facts_injection(self) -> None:
+        from types import SimpleNamespace
+
+        from retrieval import retrieve
+
+        query = TransformedQuery(
+            original="Apple net sales",
+            hyde_document="Apple net sales doc",
+            multi_queries=["Apple net sales"],
+            stepback_query="Apple sales",
+        )
+        client = Mock()
+        meta = MetadataFilter(ticker="AAPL", year=2024, quarter="Q3")
+
+        mock_fact = SimpleNamespace(
+            ticker="AAPL",
+            fiscal_year=2024,
+            quarter="Q3",
+            period_end="2024-06-29",
+            metric="Revenues",
+            value=85777000000.0,
+            unit="USD",
+        )
+
+        with (
+            patch("retrieval.search", return_value=[]),
+            patch("retrieval._fetch_parent_texts", return_value=[]),
+            patch("retrieval.rerank", return_value=[]),
+            patch("knowledge_graph.graph_retriever.graph_retrieve", return_value=([], None)),
+            patch("ingestion.facts_store.FactStore.query", return_value=[mock_fact]),
+            patch(
+                "ingestion.facts_store.FactStore.format_as_context", return_value="Revenues: $85.7B"
+            ),
+        ):
+            result = retrieve(query, client, metadata_filter=meta)
+
+            assert len(result.results) == 1
+            assert result.results[0].source == "facts"
+            assert "Authoritative SEC Financial Statements" in result.results[0].section_title

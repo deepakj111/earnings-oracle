@@ -371,6 +371,29 @@ class QueryRouter:
                 False,
             )
 
+        out_of_scope_topics = (
+            "recipe",
+            "weather",
+            "poem",
+            "joke",
+            "cook",
+            "cake",
+            "cookie",
+            "chocolate",
+        )
+        if any(t in lower for t in out_of_scope_topics) and not any(
+            kw in lower for kw in _FINANCIAL_KEYWORDS
+        ):
+            return (
+                QueryIntent.OUT_OF_SCOPE,
+                0.95,
+                None,
+                "Out-of-scope general topic detected",
+                None,
+                None,
+                False,
+            )
+
         ticker_pattern, ticker_map = _build_ticker_resolver()
         ticker_match = ticker_pattern.search(question)
         has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
