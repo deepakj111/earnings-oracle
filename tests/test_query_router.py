@@ -39,6 +39,20 @@ class TestHeuristicClassification:
         assert decision.intent == QueryIntent.OUT_OF_SCOPE
         assert decision.should_refuse is True
 
+    def test_greeting_with_ticker_and_strategy_is_specific(self, router: QueryRouter) -> None:
+        decision = router.route("Hello explain netflix strategy")
+        assert decision.intent == QueryIntent.FINANCIAL_SPECIFIC
+        assert decision.detected_ticker == "NFLX"
+        assert decision.should_refuse is False
+        assert decision.used_heuristic is True
+
+    def test_greeting_with_financial_query_is_not_refused(self, router: QueryRouter) -> None:
+        decision = router.route("Hi what is Apple's revenue?")
+        assert decision.intent == QueryIntent.FINANCIAL_SPECIFIC
+        assert decision.detected_ticker == "AAPL"
+        assert decision.should_refuse is False
+        assert decision.used_heuristic is True
+
     def test_aapl_revenue_is_specific(self, router: QueryRouter) -> None:
         decision = router.route("What was Apple's revenue in Q4 2024?")
         assert decision.intent == QueryIntent.FINANCIAL_SPECIFIC

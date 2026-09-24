@@ -109,6 +109,20 @@ _FINANCIAL_KEYWORDS = frozenset(
         "fy",
         "yoy",
         "qoq",
+        "sales",
+        "strategy",
+        "capex",
+        "debt",
+        "cash",
+        "balance sheet",
+        "subscribers",
+        "subscription",
+        "risk",
+        "risks",
+        "competition",
+        "cost",
+        "expenses",
+        "spend",
     ]
 )
 
