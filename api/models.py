@@ -10,6 +10,8 @@ Design principles:
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 # ── Domain constants ───────────────────────────────────────────────────────────
@@ -98,13 +100,6 @@ class AskRequest(BaseModel):
             "and retrieval_summary (ranked chunk diagnostics). Adds negligible overhead."
         ),
     )
-    use_crag: bool = Field(
-        default=False,
-        description=(
-            "When true, runs Layer 5 Corrective RAG (CRAG) loop: grades chunk relevance, "
-            "and triggers web-search fallback if retrieval is insufficient or ungrounded."
-        ),
-    )
 
 
 # ── Response sub-models ────────────────────────────────────────────────────────
@@ -154,8 +149,7 @@ class AskResponse(BaseModel):
     Full pipeline output returned by POST /query.
 
     grounded=False signals the model could not ground its answer in the
-    retrieved context — a CRAG layer should trigger a web-search fallback
-    on this flag.
+    retrieved context — triggers calibrated abstention or reflexion self-correction.
     """
 
     question: str
@@ -164,9 +158,15 @@ class AskResponse(BaseModel):
     grounded: bool = Field(
         ...,
         description=(
-            "False if the model signalled insufficient context in the retrieved documents. "
-            "Use as a CRAG trigger for web-search fallback."
+            "False if the model signalled insufficient context or grounding verification failed. "
+            "Triggers calibrated abstention."
         ),
+    )
+    confidence_score: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Calibrated confidence score (0.0 to 1.0) combining NLI verification, rerank relevance, and citation density.",
     )
     retrieval_failed: bool = Field(
         ..., description="True if zero documents were retrieved from the index."
@@ -185,6 +185,22 @@ class AskResponse(BaseModel):
             "Ready to render in a UI sources list."
         ),
     )
+    calculations: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Deterministic PAL mathematical calculations executed to verify arithmetic.",
+    )
+    numerical_hallucination_warnings: list[str] = Field(
+        default_factory=list,
+        description="Warnings from NumericalHallucinationFence for ungrounded quantitative claims.",
+    )
+    citation_integrity_warnings: list[str] = Field(
+        default_factory=list,
+        description="Warnings from CitationIntegrityValidator for cross-company citation contamination.",
+    )
+    reflexion_attempts: int = Field(
+        default=0,
+        description="Number of Agentic Reflexion self-correction attempts executed.",
+    )
     # Verbose diagnostics — None unless AskRequest.verbose=True
     query_summary: str | None = Field(
         default=None,
@@ -193,19 +209,6 @@ class AskResponse(BaseModel):
     retrieval_summary: str | None = Field(
         default=None,
         description="Retrieval diagnostics: candidate counts, rerank scores, sources.",
-    )
-    # CRAG diagnostics — None unless AskRequest.use_crag=True or CRAG is run
-    crag_action: str | None = Field(
-        default=None,
-        description="CRAG quality assessment action: 'CORRECT' | 'INCORRECT' | 'AMBIGUOUS'",
-    )
-    was_corrected: bool | None = Field(
-        default=None,
-        description="True if CRAG re-generated the answer using web search or filtered context.",
-    )
-    web_search_triggered: bool | None = Field(
-        default=None,
-        description="True if external web search fallback was executed during CRAG.",
     )
 
 

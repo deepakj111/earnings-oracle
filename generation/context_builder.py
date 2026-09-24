@@ -105,15 +105,25 @@ def _format_block(index: int, result: SearchResult) -> str:
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 
+def _token_jaccard_similarity(text1: str, text2: str) -> float:
+    """Fast lexical overlap similarity between two text blocks."""
+    tokens1 = set(text1.lower().split())
+    tokens2 = set(text2.lower().split())
+    if not tokens1 or not tokens2:
+        return 0.0
+    return len(tokens1 & tokens2) / len(tokens1 | tokens2)
+
+
 def build_context(
     results: list[SearchResult],
     max_context_tokens: int,
+    mmr_threshold: float = 1.0,
 ) -> tuple[str, list[SearchResult], int]:
     """
     Build a numbered context block from a list of SearchResults.
 
     Pipeline:
-      1. Deduplicate by parent_id — keep highest-rerank_score result per parent
+      1. Deduplicate by parent_id and near-duplicate MMR lexical overlap
       2. Valley-reorder for lost-in-the-middle mitigation
       3. Greedy token-budget allocation — add blocks until budget exhausted
       4. Format as numbered [1]..[N] blocks
@@ -121,31 +131,40 @@ def build_context(
     Args:
         results            : SearchResults from Layer 3 (sorted best→worst by rerank_score)
         max_context_tokens : hard token budget for the entire context block
+        mmr_threshold      : lexical similarity threshold above which near-duplicates are skipped (1.0 = disabled)
 
     Returns:
         context_text    : complete formatted context string with [N] blocks
         citation_results: SearchResults in citation order (citation_results[i-1] = block [i])
         token_count     : exact token count of context_text
-
-    Notes:
-        - citation_results[0] corresponds to [1] in the answer, etc. (1-based)
-        - The returned list may be shorter than `results` if the budget is exhausted
-        - If even the first chunk alone exceeds budget, it is hard-truncated to fit
     """
     if not results:
         return "", [], 0
 
-    # ── 1. Deduplicate by parent_id ──────────────────────────────────────────
-    # When two child chunks share a parent, only the higher-scoring one is kept.
-    # This prevents the LLM from seeing the same 512-token parent block twice,
-    # which would waste tokens and inflate citation diversity signals.
+    # ── 1. Deduplicate by parent_id & MMR near-duplicate filter ──────────────
     seen_parents: set[str] = set()
     deduped: list[SearchResult] = []
     for r in results:
         key = r.parent_id or r.chunk_id  # tables / standalone chunks use chunk_id
-        if key not in seen_parents:
-            seen_parents.add(key)
-            deduped.append(r)
+        if key in seen_parents:
+            continue
+
+        r_text = (r.parent_text or r.text).strip()
+        is_near_dup = False
+        if mmr_threshold < 1.0:
+            for accepted in deduped:
+                # Never deduplicate across different tickers or different fiscal periods
+                if accepted.ticker != r.ticker or accepted.fiscal_period != r.fiscal_period:
+                    continue
+                acc_text = (accepted.parent_text or accepted.text).strip()
+                if _token_jaccard_similarity(r_text, acc_text) >= mmr_threshold:
+                    is_near_dup = True
+                    break
+        if is_near_dup:
+            continue
+
+        seen_parents.add(key)
+        deduped.append(r)
 
     # ── 2. Valley reorder ────────────────────────────────────────────────────
     ordered = _valley_reorder(deduped)

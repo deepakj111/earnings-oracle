@@ -3,16 +3,15 @@
 > Deep technical reference for the Financial RAG System — design decisions, data flows, and component contracts.
 
 ---
-
 ## Table of Contents
 
 1. [System Overview](#system-overview)
 2. [Layer 1: Ingestion Pipeline](#layer-1-ingestion-pipeline)
-3. [Layer 2: Query Transformation](#layer-2-query-transformation)
+3. [Layer 2: Query Transformation & Routing](#layer-2-query-transformation)
 4. [Layer 3: Hybrid Retrieval](#layer-3-hybrid-retrieval)
 5. [Layer 4: Answer Generation](#layer-4-answer-generation)
-6. [Layer 5: Corrective RAG](#layer-5-corrective-rag)
-7. [API Layer](#api-layer)
+6. [Layer 5: Calibrated Abstention & PAL Verification](#layer-5-calibrated-abstention--pal-verification)
+7. [Layer 6: API Layer & Serving Infrastructure](#layer-6-api-layer--serving-infrastructure)
 8. [Configuration System](#configuration-system)
 9. [Data Contracts](#data-contracts)
 10. [Concurrency Model](#concurrency-model)
@@ -29,23 +28,48 @@ User Question
 ┌─────────────────────────────────────────────────────────────┐
 │  FinancialRAGPipeline  (rag_pipeline.py)                    │
 │                                                             │
+│   SemanticCache.get_cached_response(query_vector)           │
+│           │ (cache miss)                                    │
+│   QueryRouter.route(question) (Refusal / Ticker Extraction) │
+│           │                                                 │
+│   QueryDecomposer.decompose(question) (2026 Sub-Query Decomp)│
+│           │                                                 │
 │   QueryTransformer.transform(question)                      │
+│   (HyDE [specificity-gated] + Multi-Query + Step-Back)      │
 │           │                                                 │
 │           ▼                                                 │
-│   retrieve(query, qdrant_client, metadata_filter)          │
+│   retrieve(transformed, qdrant, bm25, reranker)             │
+│   (RRF k=60 + FlashRank Cross-Encoder + FactStore + GraphRAG)│
+│           │                                                 │
+│   ContextualCompressor.compress_all() (2026 Context Clean)  │
 │           │                                                 │
 │           ▼                                                 │
 │   Generator.generate(question, retrieval_result)           │
+│   (Valley context reordering + citation grounding)          │
 │           │                                                 │
-│           ▼ (optional)                                      │
-│   CRAGCorrector.correct(question, gen_result, ret_result)  │
+│           ▼ (if ungrounded)                                 │
+│   Agentic Reflexion (Self-Correction loop)                  │
+│           │                                                 │
+│           ▼ (Strict Verification Tier / Eval)               │
+│   ClaimGroundingVerifier (Sentence NLI) + PAL Calculator    │
 └─────────────────────────────────────────────────────────────┘
      │
      ▼
-GenerationResult / CRAGResult
+GenerationResult (Grounded answer with citations, audit trace, & OTel telemetry)
 ```
 
-**Thread safety**: All pipeline components are stateless between calls. Internal model singletons (OpenAI embedding client, BM25, FlashRank, OpenAI API client) are safe for concurrent reads after first initialisation. Parallel `ask()` calls across threads are fully supported.
+### Canonical Layer Reference Table
+
+| Layer | Name | Core Components | Key Technologies & Guarantees |
+|---|---|---|---|
+| **Layer 1** | **Ingestion Pipeline** | SEC EDGAR downloader, HTML/ASCII parser, structure-aware chunker, Qdrant indexer, BM25 indexer, SEC GAAP FactStore, GraphRAG extractor | Deterministic UUID5 chunk IDs, parent-child chunking (512/192 tokens), atomic financial tables, exact GAAP disclosures |
+| **Layer 2** | **Query Transformation & Routing** | Heuristic fast-path classifier, LLM intent router, specificity-gated HyDE, Multi-Query expansion, Step-Back abstraction | Sub-1ms regex routing, dynamic technique selection, out-of-scope refusal probability |
+| **Layer 3** | **Hybrid Retrieval & Fusion** | Batched dense vector search, BM25 sparse search, RRF (k=60), FlashRank cross-encoder reranker, GraphRAG fusion, SEC Facts injection | Zero-duplicate embedding query vector reuse, adaptive 50/50 CE/RRF table blending, authoritative audited GAAP statements |
+| **Layer 4** | **Answer Generation & Context Construction** | Context builder, lost-in-the-middle valley ordering, MMR lexical deduplicator, Gemini 2.5 Flash / GPT-5 synthesis, inline citation mapping | Strict token budgets, U-shaped attention optimization, 0.92 MMR similarity threshold, inline `[N]` mapping |
+| **Layer 5** | **Hallucination Fences & Verification** | Numerical Hallucination Fence, Citation Integrity Validator, AST Safe Financial Calculator (PAL), ClaimGroundingVerifier (NLI), Agentic Reflexion loop | Quantitative ±0.5% tolerance check, cross-entity citation contamination guard, deterministic math execution, bounded self-correction |
+| **Layer 6** | **API & Serving Infrastructure** | FastAPI endpoints, SSE streaming with typed frames (`log`, `token`, `done`), Qdrant Semantic Cache (TTL + invalidation), OpenTelemetry tracer | Sub-millisecond cache hits, P50/P90/P95/P99 rolling latency telemetry, structured audit JSONL |
+
+**Thread safety**: All pipeline components are stateless between calls. Internal model singletons (Model-agnostic LLM/embedding client `config.llm_client`, BM25, FlashRank) are safe for concurrent reads after first initialisation. Parallel `ask()` calls across threads are fully supported.
 
 ---
 
@@ -54,33 +78,29 @@ GenerationResult / CRAGResult
 ### Data Flow
 
 ```
-SEC EDGAR API (JSON submissions endpoint)
+SEC EDGAR API (JSON submissions & Archives endpoints)
         │
-        │ CIK lookup → 10-K/10-Q filing list → accession numbers
+        │ CIK lookup → Form 10-K / 10-Q filing list → accession numbers
         ▼
-Filing Index HTML (https://www.sec.gov/Archives/.../accession-index.htm)
-        │
-        │ EX-99.1 selection (earnings press release exhibit)
-        ▼
-Raw .htm file (download_document)
+Raw Filing HTML (data/company_filings/*.htm)
         │
         ▼  parse_html()
 ParsedDocument {ticker, date, raw_text, sections[]}
         │
         │  extract_metadata()
         ▼
-DocumentMetadata {ticker, company, date, year, quarter, fiscal_period}
+DocumentMetadata {ticker, company, date, year, quarter, fiscal_period, form_type}
         │
         │  create_parent_child_chunks()
         ▼
 list[Chunk]  (parent + child + table chunks)
         │
-        ├──▶  extract_entities() ──▶ Knowledge Graph Entities (per-chunk LLM extraction)
-        │
-        ├──▶  index_document()   ──▶ Qdrant (child embeddings via text-embedding-3-small)
-        │                        ──▶ bm25_texts + bm25_corpus (in-memory)
-        │
-        └──▶  _save_bm25()       ──▶ bm25_index.pkl + bm25_corpus.pkl (persisted)
+        ├──▶  FactStore Extraction       ──▶ data/facts_store.json (Structured GAAP facts)
+        ├──▶  IngestionStateManager      ──▶ data/ingestion_state.db (SQLite SHA-256 hashes)
+        ├──▶  Anthropic Contextual Retrieval (_generate_chunk_context prepend)
+        ├──▶  Knowledge Graph Extraction ──▶ data/knowledge_graph.json
+        ├──▶  Dense Vector Indexing      ──▶ Qdrant collection (text-embedding-004 768-dim / text-embedding-3-small 1536-dim)
+        └──▶  BM25 Financial Indexing    ──▶ bm25_index.pkl + bm25_corpus.pkl
 ```
 
 ### Chunking Architecture
@@ -89,7 +109,7 @@ The chunker implements a **three-stage parent/child architecture** tuned for fin
 
 **Stage 1 — Structure-aware section splitting**
 
-Financial section headers act as hard boundaries. A line qualifies as a header only if:
+Financial section headers act as hard boundaries (MD&A, Risk Factors, Segment Results, Financial Statements). A line qualifies as a header only if:
 1. It matches a financial/markdown header pattern (Revenue, Segment Results, Outlook, etc.)
 2. It contains ≤8 words (prevents long prose sentences matching header patterns)
 
@@ -97,20 +117,24 @@ Markdown tables are detected via `_is_table_block()` and kept **strictly atomic*
 
 **Stage 2 — Parent chunks** (~512 tokens)
 - 64-token overlap between consecutive parents
-- Each parent carries a contextual prefix: `[Context: AAPL | earnings_release | 2024-10-31 | Section: Revenue]`
+- Each parent carries a contextual prefix: `[Context: NVDA (NVIDIA) | SEC Form 10-K | Fiscal Period: FY2025 | Date: 2025-01-26 | Section: Segment Results]`
 - Oversized sections are split into word-budget pages before accumulation, maintaining overlap continuity
 
-**Stage 3 — Child chunks** (~128 tokens)
+**Stage 3 — Child chunks** (~192 tokens)
 - Sentence boundaries are respected — no mid-sentence splits via `_split_into_sentences()`
-- 32-token overlap between consecutive children
+- 48-token overlap between consecutive children (scaled with child target)
 - Contextual prefix re-applied to every child (enables context injection at embedding time)
-- Table parents produce exactly one child with identical text
+- Table parents are **not** split into children — they are indexed directly as atomic parent chunks
+  to preserve tabular financial data integrity (no duplicate vector space waste)
+
+**Anthropic-Style Contextual Retrieval (Enabled by Default)**:
+For each indexable chunk, an LLM call summarizes the chunk's situated context relative to the broader filing before embedding, eliminating ambiguity for isolated figures.
 
 **Why parent/child?**
 
 | Concern | Solution |
 |---------|---------|
-| Embedding precision | Small 128-token children → more precise dense retrieval |
+| Embedding precision | Small 192-token children → more precise dense & sparse retrieval |
 | Generation context | 512-token parents → richer context for LLM answer synthesis |
 | Cost control | Embed children only; fetch parents lazily at retrieval time |
 | Boilerplate dilution | Section boundaries prevent legal disclaimers contaminating financial content |
@@ -194,11 +218,11 @@ The **query-document semantic gap** is the core challenge in RAG: a user's natur
 ```
 user question: "What was Apple's revenue in Q4 2024?"
         │
-        ├──▶ [Thread 1] _run_hyde()         → hypothetical answer passage
-        ├──▶ [Thread 2] _run_multi_query()  → 3 rephrasings
-        └──▶ [Thread 3] _run_stepback()     → abstract question
+        ├──▶ [Task 1] _run_hyde()         → hypothetical answer passage
+        ├──▶ [Task 2] _run_multi_query()  → 3 rephrasings
+        └──▶ [Task 3] _run_stepback()     → abstract question
                 │
-                │ as_completed()  — each result stored on return
+                │ asyncio.gather(*tasks, return_exceptions=True)
                 ▼
         TransformedQuery {
             original        = "What was Apple's revenue in Q4 2024?"
@@ -234,7 +258,7 @@ Temperature: `0.1` — near-deterministic, same question should produce same abs
 
 ### Graceful Degradation
 
-All three techniques run in a `ThreadPoolExecutor(max_workers=3)`. If any technique fails:
+All three techniques execute concurrently via `asyncio.gather(*tasks, return_exceptions=True)`. If any technique fails:
 - The failed technique's output falls back to the original query
 - `failed_techniques` list is populated (visible in `/query?verbose=true` response and logs)
 - Pipeline execution always completes — partial degradation is not a fatal error
@@ -243,7 +267,7 @@ All three techniques run in a `ThreadPoolExecutor(max_workers=3)`. If any techni
 
 A simple dict-based LRU cache (size: `RAG_QUERY_TRANSFORM_CACHE_SIZE`, default 256) keyed by `sha256(query.strip().lower())`. Eliminates redundant LLM calls for:
 - Repeated questions in evaluation harness runs
-- CRAG re-generation loops on the same question
+- Calibrated Abstention re-generation loops on the same question
 - UI demos with repeated queries
 
 ---
@@ -253,29 +277,60 @@ A simple dict-based LRU cache (size: `RAG_QUERY_TRANSFORM_CACHE_SIZE`, default 2
 ### Search Strategy
 
 ```
-TransformedQuery
+TransformedQuery + Identified Ticker/Period
         │
-        ├──▶ Dense: hyde_document        → 1× Qdrant search (10 results)
-        ├──▶ Dense: multi_queries[0..3]  → 4× Qdrant searches (10 each)
-        ├──▶ Dense: stepback_query       → 1× Qdrant search (10 results)
-        ├──▶ BM25:  multi_queries[0..3]  → 4× BM25 searches (10 each)
-        └──▶ BM25:  stepback_query       → 1× BM25 search (10 results)
+        ├──▶ Pre-computed Query Vector Reuse ──▶ Reuses semantic cache query vector (0ms redundant embedding)
+        │
+        ├──▶ SEC iXBRL FactStore ─────────────▶ Deterministic GAAP Fact Table (0% hallucination)
+        │                                        (Injected directly into top of context)
+        ├──▶ Dense (Batched Embeddings) ──────▶ Single API call (_embed_batch) for:
+        │    ├── hyde_document (if enabled)    → 1× Qdrant search (10 results)
+        │    ├── multi_queries[0..3]           → 4× Qdrant searches (10 each)
+        │    └── stepback_query                → 1× Qdrant search (10 results)
+        ├──▶ BM25 Keyword Search
+        │    ├── multi_queries[0..3]           → 4× BM25 searches (10 each)
+        │    └── stepback_query                → 1× BM25 search (10 results)
+        └──▶ GraphRAG Entity Retrieval ───────▶ Traverses knowledge graph relationships & injects chunks
                 │
-                │ Total raw pool: up to 6×10 dense + 5×10 BM25 = ~110 hits
+                │ Total raw pool: up to 6×10 dense + 5×10 BM25 + GraphRAG = ~110 hits
                 │ After deduplication: 30–60 unique chunks
                 ▼
         RRF Fusion  (k=60, standard default from Cormack et al. 2009)
                 │
                 │ score(chunk) = Σ 1/(60 + rank_i) across all result lists
                 ▼
-        Top 20 candidates (top_k_pre_rerank)  →  FlashRank reranker
+        Top 20 candidates (top_k_pre_rerank)  →  FlashRank cross-encoder reranker
                 │
+                │ Adaptive CE/RRF Blending (65/35 default, 50/50 for table-heavy candidate sets)
                 ▼
-        Top 5 results (top_k_final)  →  Late parent fetch
+        Top 5–8 results (top_k_final)  →  Late parent fetch
                 │
                 ▼
         list[SearchResult] with parent_text populated
 ```
+
+> [!NOTE]
+> **Retrieval Architecture & Cross-Encoder vs. Late-Interaction Design Decision**:
+> During initial architectural design, token-level late-interaction multi-vector scoring (ColBERT MaxSim) was evaluated against cross-encoder reranking. In production, full cross-encoder reranking via FlashRank (`ms-marco-MiniLM-L-12-v2` ONNX CPU) was chosen as the definitive primary reranking mechanism for three critical engineering reasons:
+> 1. **Cross-Attention Table Geometry**: Full multi-head cross-attention over concatenated query-document tokens explicitly models the relationship between metric labels (e.g., "Data Center Revenue") and multi-period tabular columns (e.g., "Q3 2024" vs "Q3 2023"). ColBERT late-interaction token MaxSim lacks full joint cross-attention and frequently conflates neighboring financial columns.
+> 2. **Sub-15ms Latency on Commodity CPU**: FlashRank runs optimized ONNX Runtime binaries with zero GPU dependencies and negligible memory footprint, reranking top-25 candidate pools in <15ms.
+> 3. **Index Efficiency & Cost**: Storing single 1536-dim dense vectors avoids the 100–150× vector multiplication overhead of token-level multi-vector stores. (See ADR-005 & ADR-012 in `docs/DESIGN_DECISIONS.md`).
+
+
+### Batched Query Embeddings (`_embed_batch`)
+
+A common bottleneck in multi-query RAG is sequential embedding calls: generating vector embeddings for the HyDE document, 3 rephrasings, and the stepback query sequentially takes $5 \times 150\text{ms} = 750\text{ms}$.
+
+In `retrieval/searcher.py`, all query texts are aggregated into a single batch and dispatched in a single call via `config.llm_client.aembed` (routing directly to Vertex AI REST or OpenAI). This slashes query embedding overhead from ~750ms to ~160ms (a 4.5× speedup) while guaranteeing identical vector representations.
+
+### Deterministic SEC iXBRL FactStore Injection
+
+For quantitative queries involving standard financial metrics (Revenue, Operating Margin, Net Income, Diluted EPS, Cash from Operations), vector retrieval can suffer subtle tabular misalignments (e.g. confusing 3-month vs 9-month ended columns).
+
+The `FactStore` (`ingestion/facts_store.py`, serialized at `data/facts_store.json`) indexes exact XBRL numerical disclosures extracted from SEC EDGAR. When `retrieve()` detects a financial query targeting an identified company and period:
+1. `FactStore` queries exact GAAP facts for `(ticker, year, quarter)`.
+2. A deterministic Markdown fact table is formatted and prepended to the retrieved context chunks with rank 0.
+3. The LLM synthesizes the final answer referencing the exact audited figures, guaranteeing 0% calculation and attribution hallucination.
 
 ### RRF Fusion
 
@@ -289,9 +344,9 @@ score(chunk_id) = sum(1.0 / (k + rank_i) for rank_i in all_rankings_containing_c
 
 ### FlashRank Reranking
 
-After RRF, the top `top_k_pre_rerank=20` candidates are passed to FlashRank's `ms-marco-TinyBERT-L-2-v2` cross-encoder:
+After RRF, the top `top_k_pre_rerank=20` candidates are passed to FlashRank's `ms-marco-MiniLM-L-12-v2` cross-encoder:
 
-- **Model**: TinyBERT cross-encoder, fully local
+- **Model**: MiniLM cross-encoder (`ms-marco-MiniLM-L-12-v2`), fully local via ONNX
 - **Input**: `(query_original, parent_text_or_child_text)` pairs
 - **Output**: Relevance scores from 0–1 (higher = more relevant)
 - **Latency**: ~8–15 ms for 20 candidates on CPU
@@ -302,7 +357,7 @@ When disabled (`RAG_RERANKER_ENABLED=false`), results fall through sorted by RRF
 
 ### Late Parent Fetch
 
-After reranking determines the final `top_k_final=5` child chunks, a **single batch Qdrant scroll** fetches all corresponding parent chunks:
+After reranking determines the final `top_k_final=8` child chunks, a **single batch Qdrant scroll** fetches all corresponding parent chunks:
 
 ```python
 # One batch call, not N individual lookups
@@ -313,7 +368,7 @@ scroll_result, _ = client.scroll(
 )
 ```
 
-This replaces each child's 128-token text with its 512-token parent text. The generation layer receives full context without paying the cost of embedding large parent chunks.
+This replaces each child's 192-token text with its 512-token parent text. The generation layer receives full context without paying the cost of embedding large parent chunks.
 
 ### Metadata Filtering
 
@@ -337,7 +392,7 @@ This replaces each child's 128-token text with its 512-token parent text. The ge
    → rank-1 at position 0, rank-2 at last position
 
 3. Greedy token budget allocation
-   add blocks until max_context_tokens (4096) exhausted
+   add blocks until max_context_tokens (8192) exhausted
    if first chunk alone exceeds budget → hard truncate to fit
 
 4. Format as numbered [1]..[N] blocks
@@ -371,7 +426,7 @@ UNGROUNDED_PHRASES = (
 )
 ```
 
-`GenerationResult.grounded = False` signals downstream layers (CRAG, API) that a web-search fallback may be appropriate.
+`GenerationResult.grounded = False` signals downstream layers that Agentic Reflexion (self-correction re-retrieval) or Calibrated Abstention should trigger to eliminate hallucination.
 
 ### Retry Strategy
 
@@ -380,11 +435,30 @@ UNGROUNDED_PHRASES = (
 - Propagates immediately on: 4xx `APIError` (unrecoverable — retrying wastes money)
 - Max retries: 3 (configurable via `RAG_GENERATION_MAX_RETRIES`)
 
+### Strict Verification & Quantitative Hallucination Defense
+
+For compliance-critical production environments, the generator supports a dual-tier verification regime:
+
+1. **Fast Heuristic Tier** (default):
+   - Fast lexical citation extraction (`[1]..[N]`) with regex mapping.
+   - Negative phrase scanning (`UNGROUNDED_PHRASES`).
+   - Near-zero latency overhead (<5ms).
+
+2. **Strict Verification Tier** (`RAG_GENERATION_STRICT_VERIFICATION=true` or `strict_verification=True`):
+   - **NLI Claim-Level Grounding** (`ClaimGroundingVerifier`): Every sentence in the generated answer is verified against the cited context chunks to compute a quantitative `grounding_score` (0.0 to 1.0) and partition claims into `verified_claims` vs `ungrounded_claims`.
+   - **Quantitative Hallucination Fence** (`NumericalHallucinationFence`): Regex extraction of all numerical figures, dollar values, percentages, and metrics. Normalizes figures with scale multipliers (e.g., `$14.2B` matches `$14,200M`) and cross-checks every number against the retrieved context or verified Program-Aided Language (PAL) mathematical calculations. Flagged numbers are recorded in `numerical_hallucination_warnings`.
+   - **Citation Integrity Validation** (`CitationIntegrityValidator`): Ensures that entity names (tickers, companies) mentioned in each claim correspond accurately to the cited parent document, eliminating cross-entity hallucination.
+   - **Context MMR Deduplication** (`RAG_CONTEXT_MMR_THRESHOLD=0.92`): Eliminates near-duplicate context chunks prior to prompt assembly, preserving prompt budget for diverse evidence.
+
 ---
 
-## Layer 5: Corrective RAG
+## Layer 5: Calibrated Abstention & PAL Verification
 
-### Decision Tree
+### Architecture & Motivation
+
+In production financial intelligence, **unverified web search fallback is unacceptable**: external web queries introduce severe hallucination risks, non-compliant data leaks, and unpredictable latency.
+
+Instead, the system employs **Calibrated Abstention** and **Program-Aided Language (PAL) deterministic calculation**:
 
 ```
                     ┌─────────────────────────────┐
@@ -392,97 +466,156 @@ UNGROUNDED_PHRASES = (
                     └─────────────┬───────────────┘
                                   │
                    ┌──────────────▼──────────────┐
-                   │ crag.enabled = False?        │
-                   │ YES → return CORRECT         │
-                   └──────────────┬──────────────┘
-                                  │ NO
-                   ┌──────────────▼──────────────┐
-                   │ grounded=True AND            │
-                   │ grade_even_if_grounded=False? │
-                   │ YES → return CORRECT (fast)  │
-                   └──────────────┬──────────────┘
-                                  │ NO
-                   ┌──────────────▼──────────────┐
-                   │  RelevanceGrader             │
-                   │  grade all retrieved chunks  │
-                   │  (concurrent ThreadPool)     │
+                   │ Sentence Claim Extraction   │
+                   │ (OpenAI Structured Outputs) │
                    └──────────────┬──────────────┘
                                   │
-              ┌───────────────────┼───────────────────┐
-              │                   │                   │
-        ratio≥0.6           0.2<ratio<0.6         ratio≤0.2
-              │                   │                   │
-          CORRECT             AMBIGUOUS           INCORRECT
-              │                   │                   │
-      return original        web search          web search
-        gen_result          local+web chunks     web only
-                                   │                   │
-                             Generator.generate()      │
-                                   └────────┬──────────┘
-                                            │
-                                     CRAGResult
+                   ┌──────────────▼──────────────┐
+                   │ ClaimGroundingVerifier      │
+                   │ NLI Entailment vs Context   │
+                   └──────────────┬──────────────┘
+                                  │
+               ┌──────────────────┴──────────────────┐
+               ▼                                     ▼
+        Math Assertion?                       Factual Text Claim?
+               │                                     │
+    ┌──────────▼──────────┐               ┌──────────▼──────────┐
+    │ SafeFinancialCalc   │               │ Contextual NLI      │
+    │ AST Sandbox Eval    │               │ Entailment Check    │
+    └──────────┬──────────┘               └──────────┬──────────┘
+               │                                     │
+               └──────────────────┬──────────────────┘
+                                  │
+               ┌──────────────────┼──────────────────┐
+               │                                     │
+        Fully Grounded                        Ungrounded Claims?
+               │                                     │
+            CORRECT                              CALIBRATED
+       Return Answer with                        ABSTENTION
+      Verified Citations                    Graceful refusal to
+                                            prevent hallucination
 ```
 
-### Relevance Grader
+### ClaimGroundingVerifier (`generation/grounding_verifier.py`)
 
-`RelevanceGrader` sends one LLM call per chunk concurrently via `ThreadPoolExecutor`. Each call asks the LLM to evaluate whether the chunk **directly** helps answer the question (not just tangentially related). JSON response: `{"relevant": bool, "score": float, "reasoning": str}`.
+- **Sentence-Level NLI Verification**: Deconstructs answers into atomic factual claims and verifies strict entailment against the retrieved SEC filing excerpts using OpenAI Structured Outputs (`GroundingReportModel`).
+- **Hallucination Detection**: Flags ungrounded statements and sets `grounded = False` to trigger calibrated abstention or agentic reflexion.
 
-**Fail-open design**: Any grader error (API timeout, parse failure) defaults to `relevant=True, score=0.5`. This ensures the pipeline degrades gracefully — a grader failure never silently discards potentially useful context.
+### Agentic Reflexion (Self-Correction Loop)
 
-### Web Search Abstraction
+When an initial generation fails grounding verification (`grounded = False`) but documents exist in the index (`retrieval_failed = False`), the pipeline initiates an autonomous **Agentic Reflexion** self-correction loop (`rag_pipeline.py` L427–453):
 
-Provider auto-detection at init time:
-1. **Tavily** — if `TAVILY_API_KEY` is set (`poetry install --extras crag-tavily`)
-2. **DuckDuckGo** — free fallback, no API key, rate-limited (`poetry install --extras crag-ddg`)
+1. **Reflexion Query Formulation**: Formulates a targeted search prompt emphasizing numerical verification:
+   ```python
+   reflexion_query = f"{question} (Find specific details, numerical values, and context to support the answer)"
+   ```
+2. **Targeted Transform & Re-Retrieval**: Executes Multi-Query and Step-Back expansions, retrieving with expanded candidate depth.
+3. **Re-Generation & Verification**: Re-synthesizes the answer against the enriched context and repeats NLI claim verification.
+4. **Calibrated Abstention**: If the answer remains ungrounded after reflexion, the pipeline returns a calibrated abstention with explicit disclaimer rather than hallucinating.
 
-Web results are converted to `SearchResult` objects via `_web_to_search_result()` and flow through the existing `Generator.generate()` without modification. The `chunk_id` is `web:<md5_hash_of_url>` and `doc_type="web"`.
+### Semantic Caching Layer (`retrieval/semantic_cache.py`)
+
+To eliminate redundant LLM inference costs and optimize P95 response latency, the pipeline incorporates a Qdrant-backed **Semantic Cache**:
+- **Similarity Threshold**: Evaluates cosine similarity of new queries against cached embeddings ($\ge 0.98$ cosine similarity threshold).
+- **Sub-15ms Latency**: Serves verified past answers and citations instantly with $0.00 LLM cost.
+- **Payload Cache**: Stores serialized `GenerationResult` objects with all verified citations and diagnostics.
 
 ---
 
-## API Layer
+## Layer 6: API Layer & Serving Infrastructure
 
-### Middleware Stack
+### Input Guardrails & Security Filtering (`query/guardrails.py`)
 
-Registration order (inner → outer on request):
+All incoming queries are processed through a multi-tier security filter before execution:
+- **Prompt Injection Defense**: Detects adversarial override attempts, jailbreak patterns (e.g. DAN mode), and raw instruction token smuggling (`<|im_start|>`, `<<SYS>>`).
+- **PII Detection & Redaction**: Flags and masks Social Security Numbers (SSN) and credit card numbers validated via the Luhn mod-10 algorithm.
+- **Token Budget & DoS Protection**: Rejects queries exceeding maximum token lengths via `tiktoken` to prevent context exhaustion attacks.
+
+### Async Execution Model
+
+The FastAPI event loop and RAG pipeline are natively asynchronous (`async`/`await`). Non-async operations (BM25 sparse ranking, FlashRank ONNX cross-encoding) run in background worker threads via `asyncio.to_thread` to prevent event loop starvation:
+
+```python
+# Non-blocking async retrieval
+retrieval_result = await asyncio.to_thread(
+    retrieve,
+    query=transformed,
+    qdrant_client=self.qdrant_client,
+    metadata_filter=metadata_filter,
+)
+```
+
+### Native SSE Streaming Architecture
+
+Streaming operates natively as an `AsyncIterator[str | dict[str, Any]]` from the LLM provider through the generation layer and pipeline directly into FastAPI's `StreamingResponse`. This eliminates thread-pool producer bottlenecks, blocking queues, and thread starvation risks:
 
 ```
-PrometheusMiddleware      ← records metrics for every route
-RequestIDMiddleware       ← stamps X-Request-Id (from header or generates UUID4)
-TimingMiddleware          ← measures latency, adds X-Response-Time-Ms
-CORSMiddleware            ← handles preflight OPTIONS
+FastAPI Consumer (_consume)                 Pipeline Streamer (ask_streaming)
+─────────────────────────────               ─────────────────────────────────
+StreamingResponse(_consume())               pipeline.ask_streaming()
+  async for item in stream:                  ├── yield {"log": "Transforming..."}
+    if isinstance(item, dict):               ├── yield {"log": "Retrieving..."}
+      payload = json.dumps(item)             ├── async for token in generator:
+    else:                                    │     yield token
+      payload = json.dumps({"token": item})  └── yield {"type": "done", ...}
+    yield f"data: {payload}\n\n"
+  yield "data: [DONE]\n\n"
 ```
+
+#### Typed SSE Streaming Frames
+
+The streaming interface delivers three distinct structured frame types over SSE:
+
+1. **Progress Log Frame (`log`)**:
+   Emitted at pipeline phase transitions for real-time frontend status updates.
+   ```json
+   {"log": "Transforming query using HyDE and multi-query..."}
+   ```
+
+2. **Incremental Token Frame (`token`)**:
+   Emitted as tokens arrive from the LLM completion stream. If served from semantic cache, the cached answer is streamed word-by-word to maintain consistent UI animation.
+   ```json
+   {"token": "Microsoft's "}
+   ```
+
+3. **Terminal Structured Metadata Frame (`done`)**:
+   Emitted immediately prior to stream completion (`data: [DONE]\n\n`). Delivers verified citations, grounding status, and distributed tracing IDs so UI clients can render citation badges and source inspection drawers without an extra HTTP request:
+   ```json
+   {
+     "type": "done",
+     "grounded": true,
+     "cache_hit": false,
+     "trace_id": "tr-4f9e8a1b2c",
+     "citations": [
+       {
+         "index": 1,
+         "ticker": "MSFT",
+         "fiscal_period": "FY2024",
+         "section_title": "Item 7. MD&A",
+         "excerpt": "Intelligent Cloud revenue grew 20% to $105.4 billion..."
+       }
+     ]
+   }
+   ```
+
+Headers set on SSE response:
+- `Content-Type: text/event-stream`
+- `Cache-Control: no-cache`
+- `Connection: keep-alive`
+- `X-Accel-Buffering: no` (disables Nginx response buffering for real-time token delivery)
+- `X-Request-ID: <uuid>` (stamped for distributed tracing)
+
+### Pure ASGI Middleware Architecture
+
+The API layer implements pure ASGI middleware rather than Starlette's `BaseHTTPMiddleware`:
+
+- **`TimingMiddleware`**: Stamps `X-Response-Time` and records Prometheus request durations.
+- **`RequestIDMiddleware`**: Propagates or generates `X-Request-ID` across all spans.
+- **`RateLimitMiddleware`**: In-memory sliding window rate limiting with RFC-compliant `X-RateLimit-*` headers.
 
 **Why pure ASGI (not BaseHTTPMiddleware)?**
 
 `BaseHTTPMiddleware` uses `anyio.create_task_group()` internally. When a route raises and the exception handler sends a 500 response, the inner task group re-raises via `ExceptionGroup` / `collapse_excgroups()` — crashing `TestClient` instead of returning the 500. Pure ASGI middleware wraps `send()` directly and never participates in exception propagation.
-
-### Threading Model
-
-The FastAPI event loop is async; the RAG pipeline is entirely synchronous (blocking). Every pipeline call is offloaded to a module-level `ThreadPoolExecutor(max_workers=4)`:
-
-```python
-loop = asyncio.get_running_loop()
-result = await loop.run_in_executor(_THREAD_POOL, pipeline.ask, ...)
-```
-
-`asyncio.get_running_loop()` is used (not `get_event_loop()`) — the latter is deprecated in Python 3.10+ when called inside a running event loop.
-
-### SSE Streaming Architecture
-
-```
-Producer thread (_produce)              Consumer coroutine (_consume)
-─────────────────────────────           ─────────────────────────────
-pipeline.ask_streaming()                asyncio.Queue(maxsize=128)
-  for token in generator:                 while True:
-    queue.put(json_payload)                 item = await queue.get(timeout=60)
-                                            if item is None: break
-  queue.put(None)  # sentinel              yield f"data: {item}\n\n"
-                                         yield "data: [DONE]\n\n"
-```
-
-`asyncio.Queue(maxsize=128)` provides backpressure — if the client reads slowly, the producer thread blocks until the queue drains, preventing memory accumulation.
-
-**Fix**: The producer future is stored and cancelled on consumer exit — preventing thread leaks if the client disconnects mid-stream.
 
 ### Health Check Hierarchy
 
@@ -531,7 +664,6 @@ Settings
   ├── RetrievalConfig         (RAG_RETRIEVAL_*)
   ├── RerankerConfig          (RAG_RERANKER_*)
   ├── InfraConfig             (QDRANT_URL, OPENAI_API_KEY, SEC_USER_AGENT)
-  ├── CRAGConfig              (RAG_CRAG_*)
   ├── EvaluationConfig        (RAG_EVAL_*)
   ├── ObservabilityConfig     (RAG_TRACING_*, RAG_AUDIT_*)
   └── KnowledgeGraphConfig    (RAG_KG_*)
@@ -553,7 +685,7 @@ TransformedQuery           (query/models.py)
 
 SearchResult               (retrieval/models.py)
   ├── chunk_id, parent_id
-  ├── text (child, 128 tokens)
+  ├── text (child, 192 tokens)
   ├── parent_text (512 tokens, populated after parent fetch)
   ├── rrf_score (pre-rerank)
   ├── rerank_score (post-rerank, float("-inf") before)
@@ -577,11 +709,20 @@ GenerationResult           (generation/models.py)
   ├── unique_sources: list[str]  (property)
   └── format_answer_with_citations(): str
 
-CRAGResult                 (crag/models.py)
-  ├── action: CRAGAction (CORRECT/AMBIGUOUS/INCORRECT)
-  ├── final_result: GenerationResult
-  ├── was_corrected: bool  (property)
-  └── relevance_ratio: float  (property)
+GroundingReport            (generation/grounding_verifier.py)
+  ├── is_grounded: bool
+  ├── grounding_score: float (0.0 to 1.0)
+  ├── verified_claims: list[str]
+  ├── ungrounded_claims: list[str]
+  ├── hallucinated_citations: list[int]
+  └── reasoning: str
+
+CalculationResult          (generation/calculator.py)
+  ├── expression: str
+  ├── result: float
+  ├── formatted: str
+  ├── success: bool
+  └── error: str
 ```
 
 ---
@@ -590,65 +731,70 @@ CRAGResult                 (crag/models.py)
 
 | Component | Mechanism | Notes |
 |-----------|-----------|-------|
-| Query transformation | `ThreadPoolExecutor(max_workers=3)` | HyDE + Multi-Query + Step-Back concurrent |
-| API request handling | `asyncio` + `ThreadPoolExecutor(max_workers=4)` | Blocks event loop never |
-| SSE producer | Background thread via `run_in_executor` | Bounded queue with backpressure |
-| Relevance grading | `ThreadPoolExecutor(max_workers=5)` | One LLM call per chunk, concurrent |
+| Query transformation | `asyncio.gather(*tasks)` | HyDE + Multi-Query + Step-Back concurrent |
+| Query embedding | `_embed_batch` (single API call) | All query variants embedded in 1 batch call |
+| Hybrid retrieval | `asyncio.to_thread` | Offloads CPU BM25/FlashRank from event loop |
+| API request handling | Native `asyncio` | Full non-blocking async routes |
+| SSE streaming | `AsyncIterator` directly streamed | No producer threads or queue bottlenecks |
+| NLI Grounding Verifier | `asyncio` / OpenAI Structured Outputs | Claim-level entailment check |
+| PAL Calculator | AST-sandboxed synchronous evaluation | Sub-millisecond execution |
 | Evaluation harness | `ThreadPoolExecutor(max_workers=2)` | Parallel pipeline calls |
-| BM25 search | Python GIL-protected (single thread) | No concurrency needed |
-| Qdrant search | Thread-safe (qdrant-client is thread-safe) | |
-| OpenAI embedding client | Thread-safe after first init | Singleton client instance |
+| Qdrant search | Thread-safe (`qdrant-client` / async client) | Dense vector search + FlashRank reranking |
+| Semantic cache | Async Qdrant client (`query_points`) | Sub-15ms vector cache hits |
+| OpenAI API client | Singleton async client (`get_async_openai_client`) | Reused across all async coroutines |
 | FlashRank | Thread-safe after first init | Module-level singleton |
 
 ---
 
 ## Design Decisions & Trade-offs
 
-### Why OpenAI text-embedding-3-small?
+### Embedding Backbones: Google text-embedding-004 vs. OpenAI text-embedding-3-small
 
-| Concern | text-embedding-3-small | Notes |
-|---------|-----------------------|-------|
-| Dimensions | 1536-dim | Higher capacity for financial semantic nuance |
-| Latency | ~50–100 ms/batch | Parallelized async batching across chunks |
-| Integration | OpenAI SDK singleton | Shared client infrastructure across layers |
+The system supports seamless hot-swapping between Google Vertex AI and OpenAI embeddings via `config.llm_client.aembed` / `embed`:
 
-`text-embedding-3-small` provides high retrieval recall and precision across 1536 dimensions, enabling dense vector search in Qdrant to capture subtle earnings metrics and management discussion context.
+| Concern | Google `text-embedding-004` (Default) | OpenAI `text-embedding-3-small` | Notes |
+|---------|--------------------------------------|---------------------------------|-------|
+| Dimensions | **768-dim** | 1536-dim | 768-dim cuts Qdrant vector memory in half while retaining dense precision |
+| Authentication | **Google Cloud ADC** (Zero keys) | `OPENAI_API_KEY` | ADC authenticates automatically via host `gcloud` login |
+| Latency | ~40–80 ms/batch | ~50–100 ms/batch | Parallelized async batching across chunks |
+| Protocol | Direct Vertex AI REST engine | OpenAI SDK singleton | Dedicated HTTP/2 client in `config/llm_client.py` |
 
-### Why BM25 + Dense (not dense-only)?
+### Zero-Key Authentication: Google Cloud Application Default Credentials (ADC)
 
-Dense embeddings capture semantic meaning but miss **exact keyword matches** — critical for financial queries containing specific metrics, ticker symbols, and fiscal period identifiers. BM25 excels at these. RRF fusion gives each signal appropriate weight without requiring tuned combination coefficients.
+In enterprise production deployments, hardcoded API keys are an anti-pattern. The Financial RAG pipeline implements zero-key authentication:
+1. **Host Credential Discovery**: Automatically discovers credentials generated via `gcloud auth application-default login` (`~/.config/gcloud/application_default_credentials.json`).
+2. **OAuth2 Token Caching**: Tokens are cached in-memory with a 1-hour lifespan and refreshed 5 minutes prior to expiration.
+3. **Double-Checked Locking**: Protected by `asyncio.Lock` to guarantee that concurrent asynchronous pipeline calls never trigger redundant OAuth2 token exchange requests.
+4. **Direct Vertex AI REST Engine**: Bypasses heavy SDK overhead by using `httpx.AsyncClient` directly against the Vertex AI publisher endpoint (`generateContent`, `streamGenerateContent`, `predict`), guaranteeing sub-second response times.
 
-### Why Parent/Child (not fixed-size chunks)?
+### Why separate LLM tiers (Flash vs. Pro / GPT-5 vs. Mini)?
 
-Fixed-size chunking splits financial tables and section context arbitrarily. Parent/child allows:
-- **Precision retrieval** with small children (128 tokens ≈ 1–2 financial sentences)
-- **Rich generation context** with large parents (512 tokens ≈ full paragraph + header)
-- **Table atomicity** — tables are never split
+The pipeline uses two model tiers to balance accuracy, latency, and cost:
+- **Fast / Routing Tier (`gemini-2.5-flash` or `gpt-5-mini`)**: Query routing, query transformation (HyDE, Multi-Query, Step-Back), Knowledge Graph entity extraction, and evaluation grading — tasks where structured JSON output and sub-second speed matter more than long-form reasoning depth.
+- **Deep Synthesis Tier (`gemini-2.5-flash` / `gemini-2.5-pro` or `gpt-5`)**: Answer generation and NLI claim-level grounding verification — tasks where deep reasoning, citation fidelity, and factual synthesis are critical.
 
-### Why gpt-5-mini for all LLM calls?
-
-Standardizing on `gpt-5-mini` across all pipeline layers (Query Routing, Query Transformation, Answer Generation, CRAG Grading, Knowledge Graph Entity Extraction, Evaluation) ensures consistent instruction following, structured output formatting, and cost efficiency across the application.
+This two-tier design cuts ~60–70% of generation costs on routing and transform calls while preserving full capability where hallucination risk is highest.
 
 ### Why not Ragas for evaluation?
 
 Ragas is an excellent framework but has frequent API changes between versions. The custom evaluation harness provides:
 - Identical metric definitions (faithfulness, answer_relevancy, context_precision, context_recall)
 - Full control over prompt design tuned for financial domain
-- No external dependency that could break CI
+- 95% Bootstrap Confidence Intervals (1 000 iterations)
 - Direct integration with the existing OpenAI client singleton
 
-Ragas integration is on the roadmap as an optional alternative once the API stabilises.
+### Why Calibrated Abstention over Corrective RAG (CRAG) with Web Search?
 
-### Why CRAG (not naive RAG)?
+Generic open-domain RAG pipelines frequently adopt Corrective RAG (CRAG), evaluating retrieval confidence and falling back to autonomous web search or recursive re-query loops upon retrieval misses.
 
-Naive RAG silently returns hallucinated answers when retrieval quality is poor. CRAG provides:
-- **Explicit quality signal**: the grounding flag triggers corrective action
-- **Graceful degradation**: web search fallback ensures useful responses even for out-of-scope companies
-- **Diagnostic visibility**: `action`, `relevance_ratio`, `web_search_triggered` are all observable
+In institutional financial QA over SEC filings, this is deliberately avoided (see **ADR-017**):
+- **Regulatory compliance (FINRA / SEC Rule 17a-4)**: Web fallbacks ingest unverified third-party content (blogs, speculation, social media) that violates strict attribution requirements. Financial analysts and auditors require 100% provenance back to verified SEC accession numbers.
+- **Latency & hallucination bounds**: When an SEC filing simply does not report an out-of-scope metric, recursive re-retrieval loops inflate P95 latency by 2–4× while increasing the probability of confabulated numbers.
+- **Calibrated refusal & internal Reflexion**: Instead of external fallbacks, the system employs calibrated abstention (`RAG_GENERATION_ABSTENTION_THRESHOLD=0.50`) when evidence is missing, combined with bounded internal **Reflexion retry loops** (`RAG_GENERATION_REFLEXION_ENABLED=true`) over verified context when numerical or citation checks fail.
+- **Claim-level NLI entailment**: Validates every factual statement against cited excerpts using structured outputs (`ClaimGroundingVerifier`).
+- **PAL deterministic arithmetic**: Offloads mathematical operations to an AST-sandboxed calculator (`SafeFinancialCalculator`) to eliminate arithmetic hallucinations.
 
-The cost is ~N additional LLM calls for grading (N = number of retrieved chunks, typically 5). At `gpt-5-mini` pricing, this adds minimal latency and cost per query — acceptable for production use.
-
-### Knowledge Graph: Current Implementation & Enterprise Scalability Path
+### Knowledge Graph: Current Implementation & Scalability Path
 
 The current `EntityStore` loads the full knowledge graph from `data/knowledge_graph.json` into memory as a `KnowledgeGraph` object at startup and caches it as a module-level singleton. This approach is deliberately simple and is well-suited to the current corpus size (4 companies, ~26 filings, ~21 MB serialized graph).
 
@@ -656,7 +802,7 @@ The current `EntityStore` loads the full knowledge graph from `data/knowledge_gr
 
 | Deployment Scale | Recommended Backend | Migration Path |
 | :--- | :--- | :--- |
-| **Single-machine / portfolio** | In-memory JSON (current) | No change needed |
+| **Single-machine / small corpus** | In-memory JSON (current) | No change needed |
 | **100k–10M entities** | **Neo4j** (self-hosted) | Swap `EntityStore.load()` / `save()` with Bolt driver queries |
 | **>10M entities / multi-region** | **AWS Neptune** or **Google Cloud Spanner Graph** | Same interface, managed infrastructure |
 

@@ -32,11 +32,10 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
 
 ```json
 {
-  "question": "What was Apple's total revenue in Q4 2024?",
+  "question": "What was NVIDIA's Data Center revenue in fiscal year 2025?",
   "filter": {
-    "ticker": "AAPL",
-    "year": 2024,
-    "quarter": "Q4"
+    "ticker": "NVDA",
+    "year": 2025
   },
   "verbose": false
 }
@@ -46,7 +45,7 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
 |-------|------|----------|-------------|-------------|
 | `question` | string | ✅ | 3–2000 chars | Natural language financial question |
 | `filter` | object | ❌ | — | Optional scope filter (all fields optional) |
-| `filter.ticker` | string | ❌ | One of: AAPL, NVDA, MSFT, AMZN, META, JPM, XOM, UNH, TSLA, WMT | Company ticker (case-insensitive) |
+| `filter.ticker` | string | ❌ | Any configured ticker (e.g. NVDA, WMT, NFLX, UNH, AAPL, MSFT) | Company ticker (case-insensitive, dynamic via CompanyRegistry) |
 | `filter.year` | integer | ❌ | 2020–2030 | Fiscal year |
 | `filter.quarter` | string | ❌ | Q1, Q2, Q3, Q4 | Fiscal quarter (case-insensitive) |
 | `verbose` | boolean | ❌ | default: `false` | Include query transform + retrieval diagnostics in response |
@@ -55,37 +54,38 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
 
 ```json
 {
-  "question": "What was Apple's total revenue in Q4 2024?",
-  "answer": "Apple reported total net sales of $94.9 billion in Q4 fiscal year 2024 [1], representing a 6% increase year-over-year [1][2].",
+  "question": "What was NVIDIA's Data Center revenue in fiscal year 2025?",
+  "answer": "NVIDIA reported fiscal year 2025 Data Center revenue of $115.2 billion [1], an increase of 142% year-over-year [1][2].",
   "citations": [
     {
       "index": 1,
-      "ticker": "AAPL",
-      "company": "Apple",
-      "date": "2024-10-31",
-      "fiscal_period": "Q4 2024",
-      "section_title": "Financial Highlights",
-      "doc_type": "earnings_release",
+      "ticker": "NVDA",
+      "company": "NVIDIA",
+      "date": "2025-01-26",
+      "fiscal_period": "FY2025",
+      "section_title": "Segment Results",
+      "doc_type": "10-K",
       "source": "both",
       "rerank_score": 0.9821,
-      "excerpt": "Apple Inc. today announced financial results for its fiscal 2024 fourth quarter ended September 28, 2024. The Company posted quarterly revenue of $94.9 billion..."
+      "excerpt": "Data Center revenue for fiscal year 2025 was $115.2 billion, up 142% from a year ago..."
     },
     {
       "index": 2,
-      "ticker": "AAPL",
-      "company": "Apple",
-      "date": "2024-10-31",
-      "fiscal_period": "Q4 2024",
-      "section_title": "Revenue",
-      "doc_type": "earnings_release",
+      "ticker": "NVDA",
+      "company": "NVIDIA",
+      "date": "2025-01-26",
+      "fiscal_period": "FY2025",
+      "section_title": "Financial Highlights",
+      "doc_type": "10-K",
       "source": "dense",
       "rerank_score": 0.9412,
-      "excerpt": "Total net sales for Q4 2024 were $94,930 million compared to $89,498 million in Q4 2023..."
+      "excerpt": "Total revenue for fiscal year 2025 was $130.5 billion, driven primarily by hyper-scale demand for compute..."
     }
   ],
   "grounded": true,
+  "confidence_score": 0.962,
   "retrieval_failed": false,
-  "model": "gpt-5-mini",
+  "model": "gemini-2.5-flash",
   "usage": {
     "prompt_tokens": 2456,
     "completion_tokens": 87,
@@ -95,9 +95,20 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
     "chunks_used": 5,
     "tokens_used": 2048
   },
-  "latency_seconds": 3.142,
-  "unique_tickers": ["AAPL"],
-  "unique_sources": ["AAPL Q4 2024"],
+  "latency_seconds": 2.142,
+  "unique_tickers": ["NVDA"],
+  "unique_sources": ["NVDA FY2025"],
+  "calculations": [
+    {
+      "expr": "growth(47.5, 115.2)",
+      "res": 142.53,
+      "fmt": "142.53",
+      "ok": true
+    }
+  ],
+  "numerical_hallucination_warnings": [],
+  "citation_integrity_warnings": [],
+  "reflexion_attempts": 0,
   "query_summary": null,
   "retrieval_summary": null
 }
@@ -110,14 +121,19 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
 | `answer` | string | LLM-synthesised answer with inline `[N]` citations |
 | `citations` | array | Structured metadata for each citation number used in answer |
 | `citations[].index` | integer | 1-based citation number matching `[N]` in answer text |
-| `citations[].source` | string | `"dense"` \| `"bm25"` \| `"both"` \| `"graph"` \| `"web"` — retrieval system that surfaced this chunk |
+| `citations[].source` | string | `"dense"` \| `"bm25"` \| `"both"` \| `"facts"` \| `"knowledge_graph"` — retrieval system that surfaced this chunk |
 | `citations[].rerank_score` | float | FlashRank cross-encoder relevance score (higher = more relevant) |
 | `citations[].excerpt` | string | First 250 chars of source passage for compact UI cards |
 | `citations[].full_text` | string | Full text of retrieved context chunk for evaluation and deep inspection |
-| `grounded` | boolean | `false` if model signalled insufficient context — consider CRAG web fallback |
+| `grounded` | boolean | `false` if model signalled insufficient context or verification failed — triggers calibrated abstention |
+| `confidence_score` | float | Calibrated composite confidence score ($0.0–1.0$, clamped to $0.0$ on abstention) |
 | `retrieval_failed` | boolean | `true` if zero documents were retrieved from the index |
 | `unique_tickers` | array | Deduplicated tickers cited in answer, in citation order |
-| `unique_sources` | array | `"TICKER fiscal_period"` labels, e.g. `["AAPL Q4 2024"]` |
+| `unique_sources` | array | `"TICKER fiscal_period"` labels, e.g. `["NVDA FY2025"]` |
+| `calculations` | array | Executed deterministic PAL math formulas and verified outputs |
+| `numerical_hallucination_warnings` | array | Quantitative figures flagged by `NumericalHallucinationFence` |
+| `citation_integrity_warnings` | array | Entity mismatches flagged by `CitationIntegrityValidator` |
+| `reflexion_attempts` | integer | Number of Agentic Reflexion self-correction cycles executed |
 | `query_summary` | string\|null | Query transform diagnostics (only when `verbose=true`) |
 | `retrieval_summary` | string\|null | Retrieval diagnostics with scores (only when `verbose=true`) |
 
@@ -166,19 +182,23 @@ Streaming variant. Runs L2 + L3 synchronously, then streams L4 answer tokens as 
 
 **Response**: `text/event-stream`
 
-SSE message format:
+SSE message format uses typed JSON frames:
 
 ```
+data: {"log": "Transforming query using HyDE and multi-query..."}
+
 data: {"token": "Apple"}
 
 data: {"token": " reported"}
 
-data: {"token": " total"}
+data: {"token": " $94.9B"}
+
+data: {"type": "done", "grounded": true, "citations": [{"index": 1, "ticker": "AAPL", "fiscal_period": "Q4 2024", "section_title": "Revenue", "excerpt": "..."}], "trace_id": "a1b2c3d4-..."}
 
 data: [DONE]
 ```
 
-Error events (stream terminates after this):
+Error events (stream still terminates with `[DONE]`):
 
 ```
 data: {"error": "Rate limit exceeded. Please retry in a moment."}
@@ -195,7 +215,18 @@ X-Accel-Buffering: no
 X-Request-ID: <uuid>
 ```
 
-**Note**: No citation metadata or token counts are available in streaming mode. Use `POST /query/` for structured output with citation details.
+**Note**: Streaming clients receive real-time token events and progress logs, followed by a final structured `{"type": "done"}` frame containing citation cards and grounding status. Use `POST /query` when immediate full structured JSON is required.
+
+##### Streaming Limitations & Compliance Guidance
+
+> [!WARNING]
+> **Streaming Mode Architectural Trade-offs**:
+> While `POST /query/stream` achieves minimal Time-To-First-Token (TTFT < 250ms), clients should note two intentional architectural degradations relative to the non-streaming `POST /query` endpoint:
+> 1. **No Agentic Reflexion Self-Correction**: Tokens stream directly to the client as they are sampled from the LLM. If the post-generation Grounding Verifier or Numerical Hallucination Fence flags an ungrounded claim or arithmetic inconsistency, the pipeline flags the terminal `{"type": "done"}` payload (`grounded: false`, `numerical_hallucination_warnings: [...]`), but cannot recall or rewrite already-emitted tokens.
+> 2. **Single-Entity Retrieval Scope**: Streaming mode bypasses multi-subquery decomposition (ADR-014) and comparative candidate interleaving (ADR-012) in favor of linear hybrid search latency.
+>
+> **Recommendation**: Use `POST /query/stream` for interactive conversational dashboards. Use `POST /query` for programmatic trading systems, quantitative analysis, regulatory compliance audits, and multi-company comparative evaluations.
+
 
 **Example consumption (JavaScript)**:
 
@@ -249,6 +280,119 @@ with requests.post(
 
 ---
 
+#### `POST /query/cache/invalidate`
+
+Invalidate cached semantic query responses stored in Qdrant. Allows targeted invalidation by ticker (e.g. after newly ingested quarterly or annual reports) or full flush of the semantic cache.
+
+**Query Parameters**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|:---:|---------|-------------|
+| `ticker` | string | ❌ | `null` | Optional company ticker (e.g. `NVDA`). If provided, invalidates all cached responses referencing that ticker. If omitted, flushes the entire cache. |
+
+**Response `200 OK` (Targeted Ticker Invalidation)**
+
+```json
+{
+  "status": "success",
+  "ticker": "NVDA",
+  "deleted": 1
+}
+```
+
+**Response `200 OK` (Full Cache Flush)**
+
+```json
+{
+  "status": "success",
+  "message": "Semantic cache flushed completely"
+}
+```
+
+---
+
+### Companies
+
+#### `GET /companies/` (or `GET /companies`)
+
+List all configured public companies from the dynamic `CompanyRegistry` (`config/companies.json`). Returns metadata including ticker, corporate name, SEC CIK, industry sector, fiscal year-end month, and brand/subsidiary aliases.
+
+Used by the Web UI (`loadCompanies()`) to dynamically populate company selection dropdowns without hardcoding tickers in frontend code.
+
+**Response `200 OK`**
+
+```json
+[
+  {
+    "ticker": "AAPL",
+    "name": "Apple",
+    "cik": "0000320193",
+    "sector": "Technology / Consumer Electronics",
+    "fiscal_year_end_month": 9,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["apple", "iphone", "ipad", "macbook"]
+  },
+  {
+    "ticker": "NVDA",
+    "name": "NVIDIA",
+    "cik": "0001045810",
+    "sector": "Technology / Semiconductors",
+    "fiscal_year_end_month": 1,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": true,
+    "aliases": ["nvidia", "geforce", "mellanox", "nvd"]
+  }
+]
+```
+
+---
+
+#### `GET /companies/{ticker}`
+
+Retrieve the detailed profile and fiscal metadata for a specific company ticker.
+
+**Path parameters**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `ticker` | string | ✅ | Company ticker symbol (case-insensitive, e.g. `NVDA`, `aapl`) |
+
+**Response `200 OK`**
+
+```json
+{
+  "ticker": "NVDA",
+  "name": "NVIDIA",
+  "cik": "0001045810",
+  "sector": "Technology / Semiconductors",
+  "fiscal_year_end_month": 1,
+  "download_start_date": "2024-01-01",
+  "default_portfolio": true,
+  "aliases": ["nvidia", "geforce", "mellanox", "nvd"]
+}
+```
+
+**Response `404 Not Found`**
+
+```json
+{
+  "detail": "Company 'XYZ' is not configured in the registry."
+}
+```
+
+---
+
+### Web Frontend
+
+#### `GET /app` (or `GET /`)
+
+Serves the modern single-page HTML / CSS / JavaScript chat application. Provides interactive conversation history, ticker and fiscal period filters, and citation inspection cards.
+
+**Response `200 OK`**: `text/html; charset=utf-8`
+
+---
+
 ### Health
 
 #### `GET /health/live`
@@ -295,7 +439,7 @@ Full dependency health check. Actively probes Qdrant connectivity, collection ex
     },
     "pipeline": {
       "status": "ok",
-      "detail": "generation=gpt-5-mini | transform=gpt-5-mini"
+      "detail": "generation=gemini-2.5-flash | transform=gemini-2.5-flash"
     },
     "bm25_index": {
       "status": "ok",
@@ -439,10 +583,13 @@ result, query_summary, retrieval_summary = pipeline.ask_verbose("...")
 print(query_summary)
 print(retrieval_summary)
 
-# With CRAG
-crag = pipeline.ask_with_crag("What was Tesla Q3 deliveries?")
-print(crag.action.value)          # "correct" | "ambiguous" | "incorrect"
-print(crag.was_corrected)         # bool
-print(crag.relevance_ratio)       # 0.0–1.0
-print(crag.final_result.answer)   # Corrected answer
+# With Agentic Reflexion & Calibrated Abstention (built into ask)
+result = await pipeline.ask(
+    "What was NVDA data center revenue Q3?",
+    strict_verification=True,     # enables sentence-level NLI grounding + PAL math
+)
+print(result.grounded)            # True if verified, False if abstained
+print(result.confidence_score)    # Composite confidence score (0.0-1.0)
+print(result.citations)           # Exact SEC 10-K/10-Q citations
+print(result.answer)              # Verified financial answer
 ```

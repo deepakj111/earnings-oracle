@@ -264,7 +264,6 @@
       cursor: pointer;
       transition: var(--transition);
       border: 1px solid transparent;
-      group: true;
     }
     .history-item:hover { background: var(--bg-hover); border-color: var(--border); }
     .history-item.active { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.25); }
@@ -660,6 +659,81 @@
 
     .stat-chip.grounded { color: var(--success); border-color: rgba(16,185,129,0.3); }
     .stat-chip.ungrounded { color: var(--warning); border-color: rgba(245,158,11,0.3); }
+    .stat-chip.conf-high { color: var(--success); border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); font-weight: 500; }
+    .stat-chip.conf-med  { color: var(--warning); border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); font-weight: 500; }
+    .stat-chip.conf-low  { color: var(--danger);  border-color: rgba(239,68,68,0.35);  background: rgba(239,68,68,0.08);  font-weight: 500; }
+    .stat-chip.reflexion { color: #c4b5fd; background: rgba(75,50,195,0.25); border-color: rgba(139,92,246,0.4); font-weight: 500; }
+    .stat-chip.warning   { color: var(--danger); border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); }
+    .stat-chip.calc      { color: var(--accent2); border-color: rgba(6,182,212,0.35); background: rgba(6,182,212,0.08); }
+    .stat-chip.cache     { color: #38bdf8; border-color: rgba(56,189,248,0.35); background: rgba(56,189,248,0.08); }
+
+    /* PAL Calculations */
+    .pal-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-secondary);
+      transition: var(--transition);
+      user-select: none;
+    }
+    .pal-toggle:hover { background: var(--bg-hover); border-color: var(--border-bright); color: var(--text-primary); }
+    .pal-toggle .chevron { transition: transform 0.2s ease; margin-left: auto; }
+    .pal-toggle.open .chevron { transform: rotate(180deg); }
+
+    .pal-panel {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+      padding: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .pal-panel.open { display: flex; }
+
+    .calc-card {
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2);
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: var(--transition);
+    }
+    .calc-card:hover { border-color: var(--border-bright); }
+    .calc-expr-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .calc-expr { color: var(--accent2); font-weight: 500; }
+    .calc-res  { color: var(--success); font-weight: 600; }
+    .calc-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(16,185,129,0.15);
+      color: var(--success);
+      border: 1px solid rgba(16,185,129,0.3);
+      width: fit-content;
+    }
+    .calc-badge.err {
+      background: rgba(239,68,68,0.15);
+      color: var(--danger);
+      border-color: rgba(239,68,68,0.3);
+    }
 
     /* Citations */
     .citations-toggle {
@@ -742,6 +816,7 @@
       line-height: 1.6;
       display: -webkit-box;
       -webkit-line-clamp: 3;
+      line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -1319,6 +1394,27 @@ function updateFilterHint() {
   hint.style.color = 'var(--accent)';
 }
 
+async function loadCompanies() {
+  const select = document.getElementById('filter-ticker');
+  if (!select) return;
+  try {
+    const res = await fetch('/companies');
+    if (!res.ok) return;
+    const companies = await res.json();
+    if (Array.isArray(companies) && companies.length > 0) {
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">(all companies)</option>' +
+        companies.map(c => `<option value="${escapeHtml(c.ticker)}">${escapeHtml(c.ticker)} — ${escapeHtml(c.name)}</option>`).join('');
+      if (currentVal) {
+        select.value = currentVal;
+      }
+      updateFilterHint();
+    }
+  } catch (err) {
+    console.debug('Dynamic company loading fell back to static list', err);
+  }
+}
+
 ['filter-ticker','filter-year','filter-quarter'].forEach(id => {
   document.getElementById(id).addEventListener('change', updateFilterHint);
 });
@@ -1400,6 +1496,43 @@ function toggleCitations(id) {
   tog.classList.toggle('open');
 }
 
+// ── Render PAL calculation cards ─────────────────────────────────────────────
+function renderCalculations(calculations, msgId) {
+  if (!calculations || calculations.length === 0) return '';
+  const id = `pal-${msgId}`;
+  const cards = calculations.map(c => {
+    const ok = c.ok !== false;
+    const statusText = ok ? '✅ Verified Deterministic Arithmetic' : '❌ Computation Error';
+    const statusClass = ok ? 'calc-badge' : 'calc-badge err';
+    return `
+      <div class="calc-card">
+        <div class="calc-expr-row">
+          <span class="calc-expr">${escapeHtml(c.expr || '')}</span>
+          <span class="calc-res">→ ${escapeHtml(String(c.fmt || c.res || ''))}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;">
+          <span class="${statusClass}">${statusText}</span>
+          ${c.res != null ? `<span style="font-size:10px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">float: ${escapeHtml(String(c.res))}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="pal-toggle" id="tog-${id}" onclick="toggleCalculations('${id}')">
+      <span>🧮</span>
+      <span>${calculations.length} Verified PAL Calculation${calculations.length !== 1 ? 's' : ''}</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="pal-panel" id="${id}">${cards}</div>`;
+}
+
+function toggleCalculations(id) {
+  const panel = document.getElementById(id);
+  const tog   = document.getElementById('tog-' + id);
+  if (panel) panel.classList.toggle('open');
+  if (tog) tog.classList.toggle('open');
+}
+
 // ── Render stats row ──────────────────────────────────────────────────────────
 function renderStats(meta) {
   if (!meta || Object.keys(meta).length === 0) return '';
@@ -1410,7 +1543,28 @@ function renderStats(meta) {
   if (meta.grounded != null) {
     chips.push(meta.grounded
       ? `<span class="stat-chip grounded">✓ Grounded</span>`
-      : `<span class="stat-chip ungrounded">⚠ Ungrounded</span>`);
+      : `<span class="stat-chip ungrounded">⚠️ Calibrated Abstention</span>`);
+  }
+  if (meta.confidence_score != null) {
+    const confPct = (meta.confidence_score * 100).toFixed(1);
+    const confCls = meta.confidence_score >= 0.80 ? 'conf-high' : (meta.confidence_score >= 0.50 ? 'conf-med' : 'conf-low');
+    chips.push(`<span class="stat-chip ${confCls}">🎯 ${confPct}% Confidence</span>`);
+  }
+  if (meta.cache_hit) {
+    chips.push(`<span class="stat-chip cache">⚡ Cache Hit</span>`);
+  }
+  if (meta.calculations && meta.calculations.length > 0) {
+    chips.push(`<span class="stat-chip calc">🧮 ${meta.calculations.length} PAL Calc${meta.calculations.length !== 1 ? 's' : ''}</span>`);
+  }
+  if (meta.reflexion_attempts && meta.reflexion_attempts > 0) {
+    chips.push(`<span class="stat-chip reflexion">🔄 Reflexion (Self-Corrected)</span>`);
+  }
+  if (meta.numerical_hallucination_warnings && meta.numerical_hallucination_warnings.length > 0) {
+    const numCount = meta.numerical_hallucination_warnings.length;
+    chips.push(`<span class="stat-chip warning">⚠️ ${numCount} Unverified Number${numCount !== 1 ? 's' : ''}</span>`);
+  }
+  if (meta.citation_integrity_warnings && meta.citation_integrity_warnings.length > 0) {
+    chips.push(`<span class="stat-chip warning">⚠️ Citation Contamination</span>`);
   }
   if (!chips.length) return '';
   return `<div class="message-stats">${chips.join('')}</div>`;
@@ -1429,6 +1583,7 @@ function renderMessage(msg, idx) {
 
   const logsHtml     = !isUser && msg.logs && msg.logs.length > 0 ? renderPipelineLogs(msg.logs, msgId, !!msg._streaming) : '';
   const statsHtml    = !isUser ? renderStats(msg.meta) : '';
+  const palHtml      = !isUser && msg.meta?.calculations && msg.meta.calculations.length > 0 ? renderCalculations(msg.meta.calculations, msgId) : '';
   const citHtml      = !isUser && msg.meta?.citations ? renderCitations(msg.meta.citations, msgId) : '';
 
   return `
@@ -1439,6 +1594,7 @@ function renderMessage(msg, idx) {
         ${logsHtml}
         ${contentHtml}
         ${statsHtml}
+        ${palHtml}
         ${citHtml}
       </div>
     </div>`;
@@ -1691,6 +1847,17 @@ async function doStreamingQuery(conv, question, filter) {
             }
           }
           document.getElementById('chat-area').scrollTop = 99999;
+        } else if (event.type === 'done' || event.citations !== undefined) {
+          aiMsg.meta = aiMsg.meta || {};
+          if (event.citations) aiMsg.meta.citations = event.citations;
+          if (event.grounded !== undefined) aiMsg.meta.grounded = event.grounded;
+          if (event.trace_id) aiMsg.meta.trace_id = event.trace_id;
+          if (event.cache_hit !== undefined) aiMsg.meta.cache_hit = event.cache_hit;
+          if (event.confidence_score !== undefined) aiMsg.meta.confidence_score = event.confidence_score;
+          if (event.calculations) aiMsg.meta.calculations = event.calculations;
+          if (event.numerical_hallucination_warnings) aiMsg.meta.numerical_hallucination_warnings = event.numerical_hallucination_warnings;
+          if (event.citation_integrity_warnings) aiMsg.meta.citation_integrity_warnings = event.citation_integrity_warnings;
+          if (event.reflexion_attempts !== undefined) aiMsg.meta.reflexion_attempts = event.reflexion_attempts;
         } else if (event.error !== undefined) {
           throw new Error(event.error);
         }
@@ -1809,6 +1976,7 @@ loadState();
 state.activeId = null;
 renderAll();
 checkHealth();
+loadCompanies();
 setInterval(checkHealth, 30000); // refresh health every 30s
 updateFilterHint();
 </script>

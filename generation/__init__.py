@@ -26,7 +26,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from generation.calculator import CalculationResult, SafeFinancialCalculator
 from generation.generator import Generator
+from generation.grounding_verifier import ClaimGroundingVerifier, GroundingReport
 from generation.models import Citation, GenerationResult
 
 if TYPE_CHECKING:
@@ -47,7 +49,7 @@ def _get_generator() -> Generator:
     return _generator
 
 
-def generate(
+async def generate(
     question: str,
     retrieval_result: RetrievalResult,
 ) -> GenerationResult:
@@ -64,7 +66,7 @@ def generate(
     Returns:
         GenerationResult with answer, inline citations, and diagnostics.
     """
-    return _get_generator().generate(question, retrieval_result)
+    return await _get_generator().generate(question, retrieval_result)
 
 
 __all__ = [
@@ -72,4 +74,8 @@ __all__ = [
     "Generator",
     "GenerationResult",
     "Citation",
+    "ClaimGroundingVerifier",
+    "GroundingReport",
+    "SafeFinancialCalculator",
+    "CalculationResult",
 ]

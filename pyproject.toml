@@ -2,15 +2,17 @@
 [tool.poetry]
 name = "financial-rag-system"
 version = "0.1.0"
-description = "Financial Earnings Call RAG System"
+description = "Production Financial RAG for SEC 10-K/10-Q Filings with Agentic Reflexion & Calibrated Abstention"
 authors = ["Deepak J"]
 readme = "README.md"
 packages = [
     { include = "api" },
     { include = "config" },
-    { include = "crag" },
+    { include = "evaluation" },
+    { include = "experiments" },
     { include = "generation" },
     { include = "ingestion" },
+    { include = "knowledge_graph" },
     { include = "observability" },
     { include = "query" },
     { include = "retrieval" },
@@ -45,11 +47,14 @@ prometheus-client = "^0.20.0"
 # streamlit: Streamlit chat UI in ui/app.py
 streamlit = ">=1.35.0,<2.0.0"
 
-# ── Optional: CRAG web search providers ─────────────────────────────────────
-tavily-python     = {version = ">=0.5.0", optional = true}
-duckduckgo-search = {version = ">=6.0.0", optional = true}
 scipy = "^1.17.1"
 litellm = "^1.83.14"
+google-auth = ">=2.28.0"
+redis = "^8.1.0"
+opentelemetry-api = "^1.44.0"
+opentelemetry-sdk = "^1.44.0"
+opentelemetry-exporter-otlp = "^1.44.0"
+opentelemetry-instrumentation-fastapi = "^0.65b0"
 
 [tool.poetry.group.dev.dependencies]
 ruff                 = "^0.9.0"
@@ -102,6 +107,10 @@ ignore = [
     "UP017",  # datetime.UTC requires Python 3.12+; we target 3.11
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"evaluation/drift_detector.py" = ["N803", "N806"]
+"tests/test_drift_detector.py" = ["N803", "N806"]
+
 [tool.mypy]
 exclude = ["tests"]
 python_version        = "3.11"
@@ -116,6 +125,8 @@ skips        = [
     "B101",  # skip assert warnings
     "B104",  # hardcoded 0.0.0.0 bind is intended for docker
     "B106",  # false positive on 'prompt' token type
+    "B110",  # try-except-pass used intentionally in safe fallback cascade
+    "B112",  # try-except-continue used intentionally in streaming error recovery
     "B301",  # pickle is used intentionally for local BM25 index
     "B403",  # pickle import is used intentionally
     "B404",  # subprocess import is used intentionally in entrypoints
@@ -123,14 +134,12 @@ skips        = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ingestion", "query", "retrieval", "generation", "crag", "evaluation", "api", "config", "ui", "observability", "knowledge_graph"]
+known-first-party = ["ingestion", "query", "retrieval", "generation", "evaluation", "api", "config", "ui", "observability", "knowledge_graph"]
 
-[tool.poetry.extras]
-crag-tavily = ["tavily-python"]
-crag-ddg    = ["duckduckgo-search"]
-crag        = ["tavily-python", "duckduckgo-search"]
+
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 pythonpath = ["."]
 addopts = [
     "--tb=short",
@@ -138,7 +147,6 @@ addopts = [
     "--cov=query",
     "--cov=retrieval",
     "--cov=generation",
-    "--cov=crag",
     "--cov=evaluation",
     "--cov=api",
     "--cov=config",

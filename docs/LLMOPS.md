@@ -24,7 +24,7 @@ The Financial RAG System treats LLM-powered components as **measurable, improvab
 
 1. **Observable outputs** — structured data that can be validated and scored
 2. **Cost attribution** — token counts tracked per model and call type
-3. **Quality signals** — grounding flags, citation counts, CRAG actions
+3. **Quality signals** — grounding flags, citation counts, Agentic Reflexion self-corrections, and calibrated abstention rates
 4. **Latency measurements** — per-layer timing for bottleneck identification
 
 The evaluation harness closes the loop: offline evaluation against a golden dataset detects quality regressions before they reach production.
@@ -35,14 +35,15 @@ The evaluation harness closes the loop: offline evaluation against a golden data
 
 ### Golden Dataset
 
-`evaluation/dataset.py` loads a **130-question curated QA dataset** drawn from real SEC 10-K Annual Reports and 10-Q Quarterly Filings across four Fortune 50 companies:
+`evaluation/dataset.py` loads the **129-question audited golden dataset** drawn from real SEC 10-K Annual Reports and 10-Q Quarterly Filings across four Fortune 50 companies (exactly 3 questions per filing across all 43 filings):
 
-| Company | Ticker | Sector | # Samples |
-|---------|--------|--------|-----------|
-| NVIDIA | NVDA | Technology / Semiconductors | 30 |
-| Walmart | WMT | Consumer Staples / Retail | 30 |
-| Netflix | NFLX | Communication Services / Streaming | 35 |
-| UnitedHealth Group | UNH | Healthcare / Managed Care | 35 |
+| Company | Ticker | Sector | # Samples | Downloaded Filings |
+|---------|--------|--------|:---:|:---:|
+| NVIDIA | NVDA | Technology / Semiconductors | **33** | 11 filings (3 × 10-K, 8 × 10-Q) |
+| Walmart | WMT | Consumer Staples / Retail | **33** | 11 filings (3 × 10-K, 8 × 10-Q) |
+| Netflix | NFLX | Communication Services / Streaming | **33** | 11 filings (3 × 10-K, 8 × 10-Q) |
+| UnitedHealth Group | UNH | Healthcare / Managed Care | **30** | 10 filings (2 × 10-K, 8 × 10-Q) |
+| **Total Benchmark** | — | **4 Cross-Sector Leaders** | **129** | **43 Filings (FY 2023–2026)** |
 
 Questions span both annual (10-K) and quarterly (10-Q) filings and adhere to a structured **4-pillar distribution**:
 
@@ -53,13 +54,45 @@ Questions span both annual (10-K) and quarterly (10-Q) filings and adhere to a s
 
 All questions are **100% self-contained**, explicitly naming the target company and precise fiscal period (*FY2025*, *Q1 2026 Form 10-Q*, etc.).
 
+The dataset size scales linearly with the number of ingested filings. Run `--max-files N` to generate a larger dataset for more statistically robust ablation studies.
+
 #### Reproducing / Regenerating the Dataset
 The dataset can be regenerated or scaled at any time via the unified multi-threaded generator:
 ```bash
 poetry run python -m scripts.generate_golden_dataset
 ```
 
-The adversarial evaluation harness also tests out-of-corpus resilience: CRAG-enabled queries for companies not in the knowledge base should correctly signal `grounded=False` and invoke web search fallback rather than hallucinating an answer.
+The evaluation harness also tests out-of-corpus resilience: queries for companies or metrics not present in the SEC filing corpus correctly trigger Calibrated Abstention and `grounded=False` rather than hallucinating an answer.
+
+### Structured Output Evaluation Mode (2026 JSON-Schema Standard)
+
+The evaluation harness natively supports **Structured Output Evaluation Mode**, toggled via:
+```bash
+export RAG_GENERATION_STRUCTURED_OUTPUT=true
+```
+
+When enabled, the generator switches from prose synthesis to OpenAI JSON-Schema structured mode (`GENERATION_SYSTEM_STRUCTURED`). The LLM emits a strictly formatted JSON object:
+```json
+{
+  "answer": "NVIDIA's Data Center revenue grew 112% year-over-year to $26,044 million [1]...",
+  "citations": [1, 2],
+  "calculations": [
+    {
+      "expression": "(26044 - 12280) / 12280 * 100",
+      "result": 112.08,
+      "formatted": "+112.08%"
+    }
+  ],
+  "confidence_rationale": "High confidence supported by audited 10-K segment tables.",
+  "grounded": true,
+  "abstained": false
+}
+```
+
+**Key Advantages for LLMOps & Continuous Integration:**
+1. **Deterministic PAL Auditing**: Math expressions and percentage changes are separated into a dedicated `calculations` array, allowing automated testing of every arithmetic operation without regex extraction brittleness.
+2. **Zero Regex Ambiguity**: Citations are emitted as discrete index integers, eliminating markdown format discrepancies across model versions.
+3. **Automated Abstention Classification**: Distinguishes between model-detected insufficient context (`abstained: true`) versus ungrounded hallucinations (`grounded: false`), preventing false-positive scoring penalties during out-of-domain evaluation suites.
 
 ### Metrics
 
@@ -109,6 +142,23 @@ Low recall = important facts missing (likely due to chunking or retrieval gaps)
 
 #### Context Retention & LLM-as-a-Judge Prompt Windows
 Unlike basic evaluation setups that pass short UI excerpts (e.g. 250 characters), the evaluation harness passes the **complete retrieved context** (`GenerationResult.retrieved_chunks` and `Citation.full_text`) to the LLM-as-a-Judge. The evaluation prompts allow up to 3,000 characters per chunk, ensuring complex multi-column financial tables and detailed management commentary are fully visible during scoring.
+
+#### Architectural Separation: Evaluation Harness vs. Portfolio Ablation Studies
+
+In our LLMOps framework, **Release Evaluation** and **Component Ablation** are deliberately decoupled:
+
+| Capability | Evaluation Harness (`evaluation/harness.py`) | Portfolio Ablations (`scripts/run_portfolio_ablations.py`) |
+| :--- | :--- | :--- |
+| **Role** | **Operational Release Gate & CI/CD** | **Scientific Research & Architecture Discovery** |
+| **Tested Surface** | **Single pipeline** (active production configuration) | **7–8 modular pipelines** (baseline + isolated components + Pareto tiers) |
+| **Objective** | Validate that the current system meets accuracy & safety SLAs | Empirically measure marginal $\Delta\text{Faithfulness}$ & $\Delta\text{Latency}$ per feature |
+| **Cost Profile** | $1\times$ API overhead (fast, suitable for automated CI/CD) | $8\times$ API overhead (comprehensive, reserved for design milestones) |
+| **Output** | `EvalReport` JSON/CSV in `data/eval_reports/` (Audit report in [`docs/BENCHMARKS.md`](file:///home/deepak/rag-project/docs/BENCHMARKS.md)) | Multi-arm delta tables & `ablation_report.md` in `data/ablation_results/` |
+
+**The Optimization & Guardrail Lifecycle:**
+1. **Initial Ceiling Test**: Running `evaluation.harness` on the fully integrated pipeline establishes the system's quality ceiling.
+2. **Dissection & Discovery**: Running `run_portfolio_ablations.py --isolated` isolates each component against a pure dense baseline, discovers true marginal lift vs. latency cost, and dynamically synthesizes **Tier 1 (Fast: <1.0s overhead)** and **Tier 2 (SOTA: all net-positive components)**.
+3. **Production Guardrail**: The winning tier is locked into `config/settings.py` / `.env`, and `evaluation.harness` serves as the automated daily CI/CD release gate to prevent regressions.
 
 ### Running Evaluations
 
@@ -246,18 +296,15 @@ histogram_quantile(0.5, rate(rag_retrieval_results_returned_bucket[1h]))
 histogram_quantile(0.9, rate(rag_context_tokens_used_bucket[1h]))
 ```
 
-#### Answer Quality
+#### Answer Quality & Grounding
 
 ```promql
-# Grounding rate (fraction of answers that are grounded)
+# Grounding rate (fraction of answers that are verified and grounded)
 rate(rag_grounded_responses_total{grounded="true"}[1h])
 / rate(rag_grounded_responses_total[1h])
 
 # Retrieval failure rate
 rate(rag_retrieval_failed_total[1h])
-
-# CRAG action distribution
-rate(rag_crag_actions_total[1h])
 ```
 
 #### Pipeline Latency
@@ -268,6 +315,20 @@ histogram_quantile(0.95, rate(rag_pipeline_latency_seconds_bucket{layer="L2"}[5m
 histogram_quantile(0.95, rate(rag_pipeline_latency_seconds_bucket{layer="L3"}[5m]))
 histogram_quantile(0.95, rate(rag_pipeline_latency_seconds_bucket{layer="L4"}[5m]))
 ```
+
+### 🛰️ OpenTelemetry (OTel) Distributed Tracing (Jaeger)
+
+The system is instrumented with native OpenTelemetry tracing (`observability/otel.py`) exporting OTLP spans over gRPC to Jaeger (`localhost:4317`):
+
+- **Jaeger Web UI**: [http://localhost:16686](http://localhost:16686)
+- **Spans captured**:
+  - `FinancialRAGPipeline.ask` (root span with user query, filter metadata, request ID)
+  - `QueryRouter.route` (intent classification, ticker extraction)
+  - `SemanticCache.get_cached_response` (vector similarity cache hit/miss)
+  - `QueryTransformer.transform` (HyDE, Multi-Query, Step-Back)
+  - `HybridSearcher.retrieve` (Qdrant dense, ColBERT, BM25, and FlashRank reranking)
+  - `Generator.generate` (LLM prompt synthesis, token consumption, context chunk injection)
+- **Flamegraphs**: Provide microsecond-level visibility into query execution waterfalls to immediately diagnose latency bottlenecks across network, embedding API, or local cross-encoders.
 
 ### Grafana Dashboard Setup
 
@@ -280,7 +341,6 @@ Recommended panels:
 - **Error Rate** — `rate(rag_http_requests_total{status_code=~"5.."}[5m])`
 - **P95 End-to-End Latency** — histogram_quantile on `/query` endpoint
 - **Grounding Rate** — grounded true vs total (area chart)
-- **CRAG Action Distribution** — pie chart of correct/ambiguous/incorrect
 - **Token Burn Rate** — rate of rag_llm_tokens_total by token_type
 - **Per-Layer Latency** — stacked bar of L2/L3/L4 p95
 
@@ -360,30 +420,83 @@ logger.add(sys.stdout, serialize=True)  # JSON output
 
 ### Token cost model
 
-At `gpt-5-mini` pricing:
+#### Model Tier Pricing Reference (per 1M Tokens)
 
-| Operation | Avg Input Tokens | Avg Output Tokens | Cost per Call |
-|-----------|-----------------|-------------------|--------------|
-| HyDE | ~150 | ~120 | $0.000063 |
-| Multi-Query | ~120 | ~80 | $0.000044 |
-| Step-Back | ~120 | ~30 | $0.000024 |
-| Generation | ~2500 | ~200 | $0.000330 |
-| CRAG grading (×5 chunks) | ~700 | ~30 | $0.000082 |
-| **Total per query (with CRAG)** | | | **~$0.000543** |
+| Model Tier | Role in Architecture | Input / 1M Tokens | Output / 1M Tokens |
+|:---|:---|:---:|:---:|
+| `gemini-2.5-flash` (Default) | L1 Router, L2 Transforms, L4 Generation, L5 Verification | $0.075 | $0.30 |
+| `gemini-2.5-pro` | Deep Financial Synthesis & Multi-Filing Reasoning | $1.25 | $5.00 |
+| `text-embedding-004` (Default) | L3 Dense Embedding & Semantic Caching (768-dim) | $0.025 | N/A |
+| `gpt-5-mini` | OpenAI Alternative: L2 Transforms, L5 Verification | $0.15 | $0.60 |
+| `gpt-5` | OpenAI Alternative: L4 High-Fidelity Generation | $1.25 | $5.00 |
+| `text-embedding-3-small` | OpenAI Alternative: L3 Dense Embedding (1536-dim) | $0.02 | N/A |
 
-~1,800 queries per dollar. A typical development session of 100 queries costs ~$0.05.
+#### Typical Per-Query Cost Breakdown by Pipeline Stage
+
+##### Google Cloud Vertex AI ADC (Production Default)
+| Pipeline Stage | Model Tier | Avg Input Tokens | Avg Output Tokens | Cost per Call |
+|:---|:---|:---:|:---:|:---:|
+| **L2: HyDE Expansion** | `gemini-2.5-flash` | ~150 | ~120 | $0.000047 |
+| **L2: Multi-Query Variants** | `gemini-2.5-flash` | ~120 | ~80 | $0.000033 |
+| **L2: Step-Back Abstraction** | `gemini-2.5-flash` | ~120 | ~30 | $0.000018 |
+| **L3: Query Embeddings** (original + variants) | `text-embedding-004` | ~180 | 0 | $0.000005 |
+| **L4: LLM Generation** | `gemini-2.5-flash` | ~2,500 | ~350 | $0.000293 |
+| **L5: Claim-Level NLI Verification** | `gemini-2.5-flash` | ~800 | ~60 | $0.000078 |
+| **Total per Query (Standard Uncached)** | | | | **~$0.000474** |
+| **Total per Query (Semantic Cache Hit)** | `text-embedding-004` (1 lookup) | ~25 | 0 | **<$0.000001** |
+
+*Note: With Google Cloud Vertex AI ADC defaults, query costs are ~10× lower than frontier alternatives (~2,100 queries per dollar).*
+
+##### OpenAI Alternative Setup
+| Pipeline Stage | Model Tier | Avg Input Tokens | Avg Output Tokens | Cost per Call |
+|:---|:---|:---:|:---:|:---:|
+| **L2: HyDE Expansion** | `gpt-5-mini` | ~150 | ~120 | $0.000095 |
+| **L2: Multi-Query Variants** | `gpt-5-mini` | ~120 | ~80 | $0.000066 |
+| **L2: Step-Back Abstraction** | `gpt-5-mini` | ~120 | ~30 | $0.000036 |
+| **L3: Query Embeddings** (original + variants) | `text-embedding-3-small` | ~180 | 0 | $0.000004 |
+| **L4: LLM Generation** | `gpt-5` | ~2,500 | ~350 | $0.004875 |
+| **L5: Claim-Level NLI Verification** | `gpt-5-mini` | ~800 | ~60 | $0.000156 |
+| **Total per Query (Standard Uncached)** | | | | **~$0.005230** |
+
+#### Monthly Operating Cost Projection at Scale (10,000 Queries / Day)
+
+Assuming production enterprise workload of 300,000 queries/month across analytical users (default Vertex AI ADC stack):
+
+| Scenario | Semantic Cache Hit Rate | Monthly LLM Generation Spend | Monthly Embedding Spend | Total Monthly Cost | Cost per 1k Queries |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| **Worst-Case (Zero Cache)** | 0% | $142.20 | $1.50 | **$143.70** | $0.48 |
+| **Baseline Production** | 25% | $106.65 | $1.44 | **$108.09** | $0.36 |
+| **High Cache Re-use (Earnings Season)** | 45% | $78.21 | $1.35 | **$79.56** | $0.27 |
+
+#### Key Cost Optimization Levers
+
+1. **Selective HyDE Gating**: `QueryRouter` bypasses HyDE for specific company/metric queries (e.g. "What was NVDA Q2 FY2026 revenue?"), saving 270 tokens per query on ~60% of traffic.
+2. **Contextual Compression**: When enabled (`RAG_CONTEXT_COMPRESSION_ENABLED=true`), extracts only relevant financial rows from parent chunks, reducing L4 prompt tokens by 35–50% (~$0.0012 saved per call).
+3. **Semantic Cache Invalidation Granularity**: Precise ticker-level invalidation prevents full-cache flushes when a single company files a 10-Q, maintaining a 30–45% cache hit rate.
 
 ### Cost reduction strategies
 
 **Disable expensive components for development**:
 ```dotenv
-RAG_CRAG_ENABLED=false          # Saves 5 LLM grading calls
-RAG_QUERY_TRANSFORM_MODEL=gpt-5-mini  # Default model
+# Fast development cycle — disable heavy reranking or late interaction if needed
+RAG_CONTEXT_COMPRESSION_ENABLED=false
+RAG_QUERY_TRANSFORM_MODEL=gemini-2.5-flash  # Fast path model (or gpt-5-mini)
 ```
 
-**Cache aggressively**:
-- Query transform cache (`RAG_QUERY_TRANSFORM_CACHE_SIZE=256`) — eliminates duplicate LLM calls for repeated questions
-- Evaluation harness: use `get_dataset_subset(5)` for iteration, full dataset only for release evaluation
+**Cache Aggressively & Manage Invalidation**:
+- **Query Transform LRU Cache** (`RAG_QUERY_TRANSFORM_CACHE_SIZE=256`): In-memory caching eliminates duplicate LLM expansions for identical queries during active analytical sessions.
+- **Qdrant Semantic Cache** (`retrieval/semantic_cache.py`, ADR-007): Caches query embeddings and validated generation results in Qdrant collection `semantic_cache`. Fast cosine lookup ($\text{score} \ge 0.96$) skips retrieval and generation entirely, yielding sub-50ms responses for recurring user queries.
+- **Targeted Ticker Invalidation on Ingestion**: When new quarterly 10-Q or annual 10-K filings are ingested, stale cached outputs must not persist. The pipeline triggers `SemanticCache.invalidate_ticker(ticker)` to atomically delete all points matching `{"tickers": ticker.upper()}`:
+  ```python
+  # Programmatic ticker invalidation trigger
+  from retrieval.semantic_cache import SemanticCache
+
+  async def on_new_filing_ingested(ticker: str):
+      cache = SemanticCache()
+      await cache.invalidate_ticker(ticker)
+  ```
+- **TTL Expiration Policy**: Entries older than `ttl_hours` (default 24h) are rejected on read and lazily purged.
+- **Evaluation Harness**: Use `get_dataset_subset(5)` for rapid development iteration; run the full 129-QA golden dataset only for formal verification runs.
 
 **Monitor with Prometheus**:
 ```promql
@@ -410,15 +523,15 @@ A declining grounding rate indicates retrieval quality degradation (ingestion st
 ) < 0.70
 ```
 
-### CRAG action drift
+### Ungrounded response and abstention drift
 
-A rising `incorrect` action rate indicates the knowledge base is becoming stale relative to user queries.
+A rising ungrounded response rate indicates the knowledge base is missing context or retrieval relevance has degraded.
 
 ```promql
-# Alert: CRAG "incorrect" actions exceed 30% of all CRAG calls
-rate(rag_crag_actions_total{action="incorrect"}[1h])
-/ rate(rag_crag_actions_total[1h])
-> 0.30
+# Alert: ungrounded responses exceed 25% of all queries over 1h
+rate(rag_grounded_responses_total{grounded="false"}[1h])
+/ rate(rag_grounded_responses_total[1h])
+> 0.25
 ```
 
 ### Retrieval failure spike
@@ -455,6 +568,29 @@ for m in curr["metric_averages"]:
     print(f"{flag} {m}: {prev['metric_averages'].get(m, 0):.3f} → {curr['metric_averages'][m]:.3f} (Δ {delta:+.3f})")
 EOF
 ```
+
+### Online Quality Monitoring & Continuous SLI Auditing (2026 SOTA)
+
+While offline evaluation runs on a weekly schedule against the static golden dataset, real-time production quality is audited using `evaluation/online_monitor.py`. This component ingests live trace events from `data/audit_logs/audit.jsonl` to calculate rolling SLIs and detect quality regressions immediately:
+
+```bash
+# Run online audit over the most recent 100 production requests
+poetry run python -m evaluation.online_monitor \
+  --audit-log data/audit_logs/audit.jsonl \
+  --sample-size 100 \
+  --output data/online_quality.jsonl
+```
+
+#### Production SLI Targets & Automated Alerting
+
+| Quality Metric / SLI | Target Threshold | Description | Remediation if Breached |
+| :--- | :--- | :--- | :--- |
+| **Grounded Rate** | $\ge 90.0\%$ | Fraction of production responses verified as grounded in filing context | Audit chunk retrieval coverage; check if filing ingest is missing recent periods |
+| **Citation Coverage Rate** | $\ge 95.0\%$ | Fraction of answers containing verifiable in-line `[n]` citations | Review prompt adherence; verify generator temperature is strictly 0.0 |
+| **Faithfulness Proxy Score** | $\ge 0.880$ | Joint score of claim-level entailment and citation grounding | Run offline evaluation harness; inspect Reflexion critique loop |
+| **p95 Latency SLA** | $\le 4.0\text{s}$ | 95th percentile end-to-end response time | Check Qdrant cluster latency, HyDE gating rate, and OpenAI API latency |
+
+The monitor automatically logs `[CRITICAL]` warnings and can be scheduled via cron or run as an asynchronous background worker in FastAPI to write metrics for Prometheus/Grafana scrapers.
 
 ---
 
@@ -512,58 +648,55 @@ for m in report_a.metric_averages:
 
 ## Retrieval Ablations & Architecture Benchmarks
 
-The system provides a comprehensive 6-arm incremental ablation framework (`scripts/run_portfolio_ablations.py`) to quantify the exact marginal gain of each RAG architecture layer:
+The system provides a rigorous, causal ablation framework (`scripts/run_portfolio_ablations.py`) to quantify the exact marginal gain of each RAG architecture layer without confounding variables:
 
-```
-[Arm 1] Dense Vector Search Only (top_k_bm25=0, no transforms, no reranking, no KG, no CRAG)
-   ↓ (+ BM25 Keyword Matching + Reciprocal Rank Fusion)
-[Arm 2] Hybrid Dense + BM25 Search
-   ↓ (+ HyDE Passage Synthesis + Multi-Query Expansion + Step-Back Abstraction)
-[Arm 3] Hybrid Search + Query Transformations
-   ↓ (+ FlashRank Cross-Encoder ms-marco-MiniLM-L-12-v2)
-[Arm 4] Hybrid Search + Transforms + FlashRank Reranker
-   ↓ (+ GraphRAG Entity Matching & Multi-Hop Context Injection)
-[Arm 5] Hybrid Search + Transforms + Reranker + Knowledge Graph
-   ↓ (+ Relevance Grader + Dynamic Web-Search Fallback)
-[Arm 6] Full Stack Pipeline (+ CRAG Corrective Loop)
-```
+### 1. Isolated Single-Component Arms (`--isolated`)
 
-### 6-Arm Architecture Reference
+To establish true unconfounded causal attribution, each isolated arm enables **exactly one** feature over the dense-only baseline while keeping all other components disabled:
 
-| Arm # | Architecture Arm | Active Subsystems & Configurations |
-|:---:|:---|:---|
-| **1** | `1. Base Naive RAG (Dense Only)` | Dense vector retrieval only (`top_k_bm25=0`, reranker disabled, transforms disabled, KG disabled, CRAG disabled) |
-| **2** | `2. + BM25 Sparse (Hybrid RRF)` | Dense vector + BM25 keyword matching fused via Reciprocal Rank Fusion (k=60) |
-| **3** | `3. + Query Transform` | Hybrid search + HyDE synthesis, 3× Multi-Query expansion, and Step-Back prompting |
-| **4** | `4. + FlashRank Reranker` | Hybrid search + Transforms + FlashRank cross-encoder (`ms-marco-MiniLM-L-12-v2`) |
-| **5** | `5. + Knowledge Graph (GraphRAG)` | Hybrid + Transforms + Reranker + GraphRAG entity context injection |
-| **6** | `6. Full Stack (+ CRAG Fallback)` | Complete pipeline with Corrective RAG (CRAG) web-search fallback |
+| Isolated Arm | Feature Tested | All Other Components |
+|:---|:---|:---|
+| `bm25` | BM25 keyword matching + hybrid RRF (k=60) | Disabled |
+| `querytransform` | HyDE + 3× Multi-Query + Step-Back prompting | Disabled |
+| `reranker` | FlashRank cross-encoder (`ms-marco-MiniLM-L-12-v2`) | Disabled |
+| `graphrag` | Knowledge Graph entity extraction & context injection | Disabled |
+| `pal_math` | Sentence NLI Grounding Verification & PAL Math Evaluator | Disabled |
+
+### 2. Dynamic Pareto Production Tiers
+
+Using the causal results of isolated arms, the pipeline dynamically filters out any regressions and constructs optimal production tiers:
+- **Tier 1 (Fast)**: Stacks all positive components adding <1.0s latency overhead (~2.0s P95).
+- **Tier 2 (Full Production SOTA)**: Stacks all positive components including Calibrated Abstention & PAL math (~4.5s P95).
+
+### 3. Three-Table Reporting Architecture
+
+The ablation harness produces `data/ablation_results/ablation_report.md`:
+- **Table 1**: Absolute metrics per dynamic Pareto arm + 95% Bootstrap Confidence Intervals (1 000 iterations).
+- **Table 2**: (Legacy waterfall incremental progression).
+- **Table 3**: Isolated single-component $\Delta$ vs. dense-only baseline for unconfounded causal attribution.
 
 ### Running Ablation Studies
 
 ```bash
-# Run all 6 arms across the ENTIRE golden dataset (all questions)
-poetry run python scripts/run_portfolio_ablations.py --all
+# 1. Run all isolated arms on the dataset to populate causal benchmarks
+poetry run python scripts/run_portfolio_ablations.py --isolated --all
 
-# Run all 6 arms on a custom sample size (e.g. 5 samples for rapid validation)
-poetry run python scripts/run_portfolio_ablations.py -n 5
+# 2. Run on 5 samples for rapid validation
+poetry run python scripts/run_portfolio_ablations.py --isolated -n 5
 
-# Force fresh re-evaluation bypassing cached sample checkpoints
-poetry run python scripts/run_portfolio_ablations.py --all --no-cache
+# 3. Dynamically generate and run optimal Pareto tiers
+poetry run python scripts/run_portfolio_ablations.py
 
-# Run a single arm in isolation (e.g. Arm 1 only)
-poetry run python scripts/run_portfolio_ablations.py --arm 1
-
-# Run specific arms (e.g. Arm 1, Arm 2, and Arm 4)
-poetry run python scripts/run_portfolio_ablations.py --arms 1 2 4
+# 4. Regenerate Markdown report from cache (zero LLM API calls)
+poetry run python scripts/run_portfolio_ablations.py --report-only
 ```
 
 ### Automated Invariant Verification (Zero Leakage Check)
 
-To guarantee that components are strictly isolated during ablation testing (e.g. ensuring Arm 1 does not execute FlashRank reranking or query expansion), use `scripts/verify_ablation_isolation.py`. It inspects per-sample execution telemetry:
+To mathematically assert that components are strictly isolated during ablation testing, use `scripts/verify_ablation_isolation.py`. It inspects per-sample execution telemetry:
 
 ```bash
-# Run a fresh 5-sample verification test across all 6 arms and assert structural invariants
+# Run a fresh 5-sample verification test and assert structural invariants
 poetry run python scripts/verify_ablation_isolation.py --run -n 5
 
 # Audit existing saved results in data/ablation_results/
@@ -572,7 +705,7 @@ poetry run python scripts/verify_ablation_isolation.py
 
 ### Custom Pairwise A/B Experiments
 
-To run head-to-head A/B experiments between arbitrary pipeline configurations:
+To run head-to-head A/B experiments with paired Wilcoxon signed-rank tests and Student's t-tests:
 
 ```bash
 poetry run python -m experiments.retrieval_experiment \
@@ -655,6 +788,46 @@ print(f"First section: {doc.sections[0][:200]}")
 ### Cost spike
 
 1. Check Prometheus: `increase(rag_llm_tokens_total[1h])`
-2. Identify if CRAG grading is being triggered excessively: `rag_crag_actions_total{action="incorrect"}`
+2. Identify if ungrounded responses or Reflexion loops are firing frequently: `rag_grounded_responses_total{grounded="false"}`
 3. Check if query transform cache is working: high cache miss rate → many duplicate queries
 4. Verify no infinite retry loops in tenacity (check logs for repeated retry warnings)
+
+---
+
+## Production Hallucination Fences & Verification
+
+### 1. Numerical Hallucination Fence (`generation/hallucination_fence.py`)
+In financial enterprise applications, quantitative metrics (currencies, growth rates, margins) require strict grounding. The Numerical Hallucination Fence automatically:
+- Extracts all numerical values, percentages, and multiples (excluding bare calendar years).
+- Cross-references each figure against retrieved context chunks and verified Program-Aided Language (PAL) calculation outputs.
+- Flags ungrounded numerical claims as `numerical_hallucination_warnings` in the `GenerationResult`.
+
+### 2. Citation Integrity Validator (`generation/citation_validator.py`)
+Comparative financial questions (e.g. comparing Microsoft and Apple revenues) are prone to cross-entity attribution errors. The Citation Integrity Validator:
+- Inspects sentence-level company mentions via the dynamic `CompanyRegistry`.
+- Flags instances where a sentence discussing Company A cites a filing from Company B (`citation_integrity_warnings`).
+
+### 3. Reflexion Loop Observability & Depth Guards
+When an initial answer fails grounding verification:
+- The pipeline triggers an Agentic Reflexion loop with bounded depth (`max_reflexion_attempts = 1`).
+- Both the initial generation span and the reflexion attempt are explicitly recorded in OpenTelemetry and `PipelineTrace`.
+- Prevents unbounded latency or token consumption while retaining full auditability of the model's self-correction trajectory.
+
+---
+
+## Covariate Shift & Semantic Drift Monitoring
+
+### Maximum Mean Discrepancy (MMD) Drift Detection (`evaluation/drift_detector.py`)
+Over time, incoming production query distributions diverge from static evaluation benchmarks. The system implements non-parametric distribution shift detection via MMD:
+
+$$\text{MMD}^2(P, Q) = \frac{1}{m^2}\sum_{i,j} k(x_i, x_j) - \frac{2}{mn}\sum_{i,j} k(x_i, y_j) + \frac{1}{n^2}\sum_{i,j} k(y_i, y_j)$$
+
+Run automated drift audits:
+```bash
+poetry run python -m evaluation.drift_detector \
+    --current data/audit_logs/query_embeddings.jsonl \
+    --baseline data/golden_dataset.json \
+    --threshold 0.05 \
+    --kernel rbf
+```
+An alert is raised when `mmd_score >= threshold`, signalling the ML engineering team to ingest new filings or update golden evaluation benchmarks.

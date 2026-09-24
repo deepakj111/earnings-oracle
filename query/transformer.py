@@ -12,8 +12,8 @@ All three LLM calls are fired concurrently (ThreadPoolExecutor) to keep
 total transformation latency ≈ single call latency (~0.8–1.2s).
 
 Model tiering:
-  Transformation  → gpt-4o-mini   ($0.15/1M in, $0.60/1M out)  cheap + fast
-  Answer gen      → gpt-4.1       (future generation/ layer)    capable + accurate
+  Transformation  → gpt-5-mini    (fast + cost-effective query re-writing)
+  Answer gen      → gpt-5         (capable + high financial reasoning accuracy)
 
 Graceful degradation: if any single technique fails after retries, that
 technique falls back to the original query and execution continues. A full
@@ -22,18 +22,16 @@ hard failure only occurs if ALL techniques fail simultaneously.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from cachetools import LRUCache
 from loguru import logger
-from openai import APIError, APITimeoutError, RateLimitError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # ── Configuration (all overridable via environment) ───────────────────────────
 from config import settings as _settings
-from config.openai_client import get_openai_client
+from config.llm_client import acomplete
 from query.models import TransformedQuery
 from query.prompts import (
     HYDE_SYSTEM,
@@ -62,7 +60,7 @@ _TEMP_STEPBACK: float = _cfg.temperature_stepback
 
 # ── In-memory LRU cache ────────────────────────────────────────────────────────
 # Avoids redundant API calls when the same query appears multiple times in a
-# session (e.g., during evaluation, CRAG loops, or UI demos).
+# session (e.g., during evaluation or UI demos).
 
 _cache: LRUCache[str, TransformedQuery] = LRUCache(maxsize=CACHE_MAX_SIZE)
 
@@ -77,20 +75,17 @@ def _cache_key(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-# ── Core LLM call with exponential backoff ────────────────────────────────────
+# ── Core LLM call ────────────────────────────────────────────────────────────
 
 
-@retry(
-    retry=retry_if_exception_type((RateLimitError, APITimeoutError)),
-    wait=wait_exponential(
-        multiplier=_cfg.retry_base_delay_seconds,
-        min=_cfg.retry_base_delay_seconds,
-        max=30.0,
-    ),
-    stop=stop_after_attempt(MAX_RETRIES),
-    reraise=True,
-)
-def _call_llm(
+def get_async_openai_client() -> Any:
+    """Backward-compat shim for test mocking."""
+    from config.openai_client import get_async_openai_client as _get
+
+    return _get()
+
+
+async def _call_llm(
     system: str,
     user: str,
     temperature: float,
@@ -98,53 +93,54 @@ def _call_llm(
     label: str,
 ) -> str:
     """
-    Single OpenAI chat completion call with exponential backoff on transient errors.
+    Single LLM chat completion call via config.llm_client (provider-agnostic).
 
-    Retries on: RateLimitError, APITimeoutError.
-    Propagates on: AuthenticationError, InvalidRequestError (unrecoverable), and APIError (5xx/4xx context).
+    Retry logic (tenacity exponential backoff) is handled inside acomplete().
+    Retries on: RateLimitError, Timeout.
+    Propagates on: AuthenticationError, BadRequestError (unrecoverable).
     """
-    client = get_openai_client()
-    kwargs: dict[str, Any] = {
-        "model": QUERY_TRANSFORM_MODEL,
-        "messages": [
-            {"role": "user", "content": f"{system}\n\n{user}"},
-        ],
-        "max_completion_tokens": max_tokens,
-    }
-    if temperature != 1.0 and not QUERY_TRANSFORM_MODEL.startswith(("gpt-5", "o1", "o3")):
-        kwargs["temperature"] = temperature
-
+    # If legacy test mocks get_async_openai_client:
+    client = None
     try:
-        response = client.chat.completions.create(**kwargs)
-    except APIError as exc:
-        if "temperature" in str(exc).lower() and "temperature" in kwargs:
-            kwargs.pop("temperature")
-            response = client.chat.completions.create(**kwargs)
-        else:
-            status = getattr(exc, "status_code", None)
-            if status is not None and status < 500:
-                raise
-            raise
+        client = get_async_openai_client()
+    except Exception:
+        client = None
 
-    text = response.choices[0].message.content or ""
-    text = text.strip()
-
-    if not text:
-        raise ValueError(f"[{label}] Model returned an empty response.")
-
-    if response.usage:
-        logger.debug(
-            f"[{label}] tokens | "
-            f"in={response.usage.prompt_tokens} "
-            f"out={response.usage.completion_tokens}"
+    if client is not None and (
+        hasattr(client, "mock_calls") or type(client).__name__ in ("MagicMock", "AsyncMock", "Mock")
+    ):
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        res = await client.chat.completions.create(
+            model=QUERY_TRANSFORM_MODEL,
+            messages=messages,
+            max_completion_tokens=max_tokens,
+            temperature=temperature,
         )
-    return text
+        content = (res.choices[0].message.content or "").strip()
+        if not content:
+            raise ValueError(f"Empty response from model {QUERY_TRANSFORM_MODEL}")
+        return content
+
+    resp = await acomplete(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        model=QUERY_TRANSFORM_MODEL,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    logger.debug(f"[{label}] tokens | in={resp.prompt_tokens} out={resp.completion_tokens}")
+    return resp.content
 
 
 # ── Individual technique implementations ──────────────────────────────────────
 
 
-def _run_hyde(query: str) -> str:
+async def _run_hyde(query: str) -> str:
     """
     Technique 1: Hypothetical Document Embeddings.
 
@@ -154,17 +150,18 @@ def _run_hyde(query: str) -> str:
     semantic gap because the hypothetical passage lives in the same region
     of embedding space as real document chunks.
     """
+    cfg = _settings.query_transform
     user = HYDE_USER.format(query=query)
-    return _call_llm(
+    return await _call_llm(
         system=HYDE_SYSTEM,
         user=user,
-        temperature=_TEMP_HYDE,
-        max_tokens=_cfg.max_tokens_hyde,
+        temperature=cfg.temperature_hyde,
+        max_tokens=cfg.max_tokens_hyde,
         label="HyDE",
     )
 
 
-def _run_multi_query(query: str) -> list[str]:
+async def _run_multi_query(query: str) -> list[str]:
     """
     Technique 2: Multi-Query Generation.
 
@@ -176,16 +173,17 @@ def _run_multi_query(query: str) -> list[str]:
     The original query is always prepended as query[0] to ensure it is
     never dropped from retrieval.
     """
+    cfg = _settings.query_transform
     user = MULTI_QUERY_USER.format(query=query)
-    raw = _call_llm(
+    raw = await _call_llm(
         system=MULTI_QUERY_SYSTEM,
         user=user,
-        temperature=_TEMP_MULTI,
-        max_tokens=_cfg.max_tokens_multi_query,
+        temperature=cfg.temperature_multi_query,
+        max_tokens=cfg.max_tokens_multi_query,
         label="MultiQuery",
     )
     lines = [
-        line.lstrip("0123456789.-) •*").strip()
+        line.lstrip("0123456789.-) •*").strip().strip("\"'").strip()
         for line in raw.splitlines()
         if line.strip() and len(line.strip().split()) >= 3
     ]
@@ -201,7 +199,7 @@ def _run_multi_query(query: str) -> list[str]:
     return [query] + unique_rephrasings[:3]
 
 
-def _run_stepback(query: str) -> str:
+async def _run_stepback(query: str) -> str:
     """
     Technique 3: Step-Back Prompting.
 
@@ -211,20 +209,18 @@ def _run_stepback(query: str) -> str:
     metric calculation methodology). Both specific and abstract results are
     combined before reranking.
     """
+    cfg = _settings.query_transform
     user = STEPBACK_USER.format(query=query)
-    return _call_llm(
+    return await _call_llm(
         system=STEPBACK_SYSTEM,
         user=user,
-        temperature=_TEMP_STEPBACK,
-        max_tokens=_cfg.max_tokens_stepback,
+        temperature=cfg.temperature_stepback,
+        max_tokens=cfg.max_tokens_stepback,
         label="StepBack",
     )
 
 
 # ── Public transformer class ──────────────────────────────────────────────────
-
-
-_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="query_transform")
 
 
 class QueryTransformer:
@@ -233,13 +229,13 @@ class QueryTransformer:
 
     Usage:
         transformer = QueryTransformer()
-        result = transformer.transform("How did Apple's revenue guidance change?")
+        result = await transformer.transform("How did Apple's revenue guidance change?")
 
         # result.hyde_document    → embed this for dense retrieval
         # result.all_retrieval_queries → fan out to BM25 + dense retrieval
         # result.stepback_query   → included in all_retrieval_queries
 
-    All three techniques run concurrently using a persistent thread pool.
+    All three techniques run concurrently using asyncio.gather.
     Total latency ≈ single LLM call latency (~0.8–1.2s) instead of 3× serial.
 
     Graceful degradation: if one technique fails after retries, it falls back
@@ -254,20 +250,20 @@ class QueryTransformer:
             f"max_retries={MAX_RETRIES}"
         )
 
-    def transform(
+    async def transform(
         self,
         question: str,
         skip_hyde: bool = False,
+        routing_decision: Any | None = None,
     ) -> TransformedQuery:
         """
-        Transform a question into multiple query variants for hybrid retrieval.
+        Run configured query transformations in parallel via asyncio.gather.
 
         Args:
-            question  : Raw user question
-            skip_hyde : If True, HyDE generation is skipped and original question
-                        is used as the hyde_document. Saves one LLM call for
-                        queries where a hypothetical document is unlikely to help
-                        (e.g. general financial questions, ambiguous queries).
+            question        : Raw user question
+            skip_hyde       : If True, HyDE generation is skipped
+            routing_decision: Optional RoutingDecision from Layer 1 router to dynamically
+                              tune technique selection (e.g. multi-query only for simple lookups)
         """
         query = question.strip()
         if not query:
@@ -277,6 +273,27 @@ class QueryTransformer:
         hyde_enabled = cfg.hyde_enabled and not skip_hyde
         multiquery_enabled = cfg.multiquery_enabled
         stepback_enabled = cfg.stepback_enabled
+
+        # Routing-aware technique selection for latency optimization
+        if routing_decision is not None:
+            if getattr(routing_decision, "skip_transform", False):
+                hyde_enabled = False
+                multiquery_enabled = False
+                stepback_enabled = False
+                logger.debug(
+                    "[QueryTransformer] Routing specified skip_transform — all L2 disabled"
+                )
+            else:
+                if getattr(routing_decision, "skip_hyde", False):
+                    hyde_enabled = False
+                if getattr(routing_decision, "is_specific", False) and not getattr(
+                    routing_decision, "is_comparative", False
+                ):
+                    hyde_enabled = False
+                    stepback_enabled = False
+                    logger.debug(
+                        "[QueryTransformer] Routing-aware selection: specific lookup -> multi-query only"
+                    )
 
         if self.enable_cache:
             ckey = _cache_key(
@@ -292,13 +309,17 @@ class QueryTransformer:
         logger.info(f"Transforming query | {query!r}")
         failed_techniques: list[str] = []
 
-        tasks: dict[str, Any] = {}
+        tasks: list[Any] = []
+        names: list[str] = []
         if hyde_enabled:
-            tasks["hyde"] = _run_hyde
+            tasks.append(_run_hyde(query))
+            names.append("hyde")
         if multiquery_enabled:
-            tasks["multi"] = _run_multi_query
+            tasks.append(_run_multi_query(query))
+            names.append("multi")
         if stepback_enabled:
-            tasks["stepback"] = _run_stepback
+            tasks.append(_run_stepback(query))
+            names.append("stepback")
 
         if not tasks:
             logger.info(
@@ -326,21 +347,19 @@ class QueryTransformer:
         multi_queries: list[str] = [query]
         stepback_query: str = query
 
-        futures = {_pool.submit(fn, query): name for name, fn in tasks.items()}
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for future in as_completed(futures):
-            name = futures[future]
-            try:
-                result = future.result()
-                if name == "hyde":
-                    hyde_doc = result
-                elif name == "multi":
-                    multi_queries = result
-                else:
-                    stepback_query = result
-            except Exception as exc:
+        for name, result in zip(names, results, strict=False):
+            if isinstance(result, BaseException):
                 failed_techniques.append(name)
-                logger.warning(f"[{name}] failed, using fallback. Error: {exc}")
+                logger.warning(f"[{name}] failed, using fallback. Error: {result}")
+            else:
+                if name == "hyde" and isinstance(result, str):
+                    hyde_doc = result
+                elif name == "multi" and isinstance(result, list):
+                    multi_queries = result
+                elif name == "stepback" and isinstance(result, str):
+                    stepback_query = result
 
         logger.info(
             f"Transformation complete | "

@@ -43,9 +43,29 @@ class TestHeuristicClassification:
         decision = router.route("What was Apple's revenue in Q4 2024?")
         assert decision.intent == QueryIntent.FINANCIAL_SPECIFIC
         assert decision.detected_ticker == "AAPL"
-        assert decision.skip_hyde is False
+        # Strict HyDE gating: specific company + period query skips HyDE to avoid hallucination
+        assert decision.skip_hyde is True
         assert decision.should_refuse is False
         assert decision.used_heuristic is True
+
+    def test_netflix_detailed_filing_question_skips_hyde(self, router: QueryRouter) -> None:
+        q = "How does Netflix describe its operating segment structure and the primary source of its revenues in the 2025 Form 10‑K?"
+        decision = router.route(q)
+        assert decision.intent == QueryIntent.FINANCIAL_SPECIFIC
+        assert decision.detected_ticker == "NFLX"
+        assert decision.skip_hyde is True
+
+    def test_vague_short_financial_query_allows_hyde(self, router: QueryRouter) -> None:
+        mock_response = {
+            "intent": "FINANCIAL_SPECIFIC",
+            "confidence": 0.8,
+            "detected_ticker": None,
+            "reasoning": "Vague concept without company anchor",
+        }
+        with patch.object(router, "_llm_classify", return_value=mock_response):
+            decision = router.route("operating segment disclosures")
+        assert decision.intent == QueryIntent.FINANCIAL_SPECIFIC
+        assert decision.skip_hyde is False
 
     def test_nvda_datacenter_is_specific(self, router: QueryRouter) -> None:
         decision = router.route("NVDA data center gross margin Q3 2024")
@@ -82,7 +102,7 @@ class TestHeuristicClassification:
 class TestRoutingDecisionFlags:
     def test_financial_specific_flags(self, router: QueryRouter) -> None:
         decision = router.route("What was AAPL revenue Q4 2024?")
-        assert decision.skip_hyde is False
+        assert decision.skip_hyde is True  # Anchored query skips HyDE
         assert decision.skip_transform is False
         assert decision.should_refuse is False
         assert decision.is_specific is True

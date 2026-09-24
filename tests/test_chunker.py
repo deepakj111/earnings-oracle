@@ -23,6 +23,7 @@ from ingestion.chunker import (
     _is_table_block,
     _make_chunk_id,
     _split_into_semantic_sections,
+    _split_into_sentences,
     _token_count,
     create_parent_child_chunks,
 )
@@ -521,3 +522,25 @@ class TestEdgeCases:
             c for c in chunks if c.chunk_type == "child" and c.metadata.get("is_table")
         ]
         assert len(table_children) == 0, "Table chunks should not produce children"
+
+
+class TestSentenceSplitter:
+    """Test sentence boundary detection, especially around percentages and numbers."""
+
+    def test_splits_on_percentage_sentence_boundary(self) -> None:
+        text = "Revenue grew 12%. Revenue guidance was raised."
+        sentences = _split_into_sentences(text)
+        assert len(sentences) == 2
+        assert sentences[0] == "Revenue grew 12%."
+        assert sentences[1] == "Revenue guidance was raised."
+
+    def test_does_not_split_on_mid_sentence_percentage(self) -> None:
+        text = "Margin expanded by 3.5% driven by services."
+        sentences = _split_into_sentences(text)
+        assert len(sentences) == 1
+        assert sentences[0] == "Margin expanded by 3.5% driven by services."
+
+    def test_abbreviation_not_split(self) -> None:
+        text = "Operating in the U.S. Apple continued rapid expansion."
+        sentences = _split_into_sentences(text)
+        assert len(sentences) == 1

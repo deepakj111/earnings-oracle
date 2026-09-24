@@ -14,8 +14,8 @@ repos:
       - id: check-toml                # validate pyproject.toml is valid
       - id: check-json                # validate any .json files
       - id: check-merge-conflict      # catch leftover <<<< merge markers
-      - id: check-added-large-files   # block files > 500KB from being committed
-        args: ["--maxkb=500"]
+      - id: check-added-large-files   # allow knowledge graph and benchmark datasets up to 30MB
+        args: ["--maxkb=30000"]
       - id: detect-private-key        # block accidental API key commits
       - id: debug-statements          # catch forgotten breakpoint() / pdb calls
       - id: check-ast                 # verify Python files parse as valid syntax

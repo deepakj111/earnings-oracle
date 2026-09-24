@@ -1,0 +1,112 @@
+[
+  {
+    "ticker": "NVDA",
+    "name": "NVIDIA",
+    "cik": "0001045810",
+    "sector": "Technology / Semiconductors",
+    "fiscal_year_end_month": 1,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": true,
+    "aliases": ["nvidia", "geforce", "mellanox", "nvd"]
+  },
+  {
+    "ticker": "WMT",
+    "name": "Walmart",
+    "cik": "0000104169",
+    "sector": "Consumer Staples / Retail",
+    "fiscal_year_end_month": 1,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": true,
+    "aliases": ["walmart", "sam's club", "sams club", "wal-mart"]
+  },
+  {
+    "ticker": "NFLX",
+    "name": "Netflix",
+    "cik": "0001065280",
+    "sector": "Communication Services / Streaming",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": true,
+    "aliases": ["netflix"]
+  },
+  {
+    "ticker": "UNH",
+    "name": "UnitedHealth Group",
+    "cik": "0000731766",
+    "sector": "Healthcare / Managed Care",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": true,
+    "aliases": ["optum", "united health", "unitedhealthcare", "united health group", "change healthcare"]
+  },
+  {
+    "ticker": "AAPL",
+    "name": "Apple",
+    "cik": "0000320193",
+    "sector": "Technology / Consumer Electronics",
+    "fiscal_year_end_month": 9,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["apple", "iphone", "ipad", "macbook"]
+  },
+  {
+    "ticker": "MSFT",
+    "name": "Microsoft",
+    "cik": "0000789019",
+    "sector": "Technology / Software",
+    "fiscal_year_end_month": 6,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["microsoft", "azure", "windows", "xbox"]
+  },
+  {
+    "ticker": "AMZN",
+    "name": "Amazon",
+    "cik": "0001018724",
+    "sector": "Consumer Discretionary / E-Commerce",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["amazon", "aws", "prime video"]
+  },
+  {
+    "ticker": "META",
+    "name": "Meta Platforms",
+    "cik": "0001326801",
+    "sector": "Communication Services / Interactive Media",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["meta", "facebook", "instagram", "whatsapp", "oculus"]
+  },
+  {
+    "ticker": "JPM",
+    "name": "JPMorgan Chase",
+    "cik": "0000019617",
+    "sector": "Financials / Banking",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["jpmorgan", "jp morgan", "chase"]
+  },
+  {
+    "ticker": "TSLA",
+    "name": "Tesla",
+    "cik": "0001318605",
+    "sector": "Consumer Discretionary / Automotive",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["tesla"]
+  },
+  {
+    "ticker": "XOM",
+    "name": "ExxonMobil",
+    "cik": "0000034088",
+    "sector": "Energy / Oil & Gas",
+    "fiscal_year_end_month": 12,
+    "download_start_date": "2024-01-01",
+    "default_portfolio": false,
+    "aliases": ["exxon", "exxonmobil", "mobil"]
+  }
+]

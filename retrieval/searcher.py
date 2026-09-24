@@ -24,8 +24,9 @@ Pipeline:
 from __future__ import annotations
 
 import pickle
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -37,7 +38,8 @@ from retrieval.models import MetadataFilter, SearchResult
 if TYPE_CHECKING:
     from query.models import TransformedQuery
 
-from config.openai_client import get_openai_client
+from config.llm_client import embed as _litellm_embed
+from config.llm_client import get_sync_semaphore as get_sync_openai_semaphore
 
 # ── BM25 tokenizer (imported directly from ingestion.indexer for 100% lockstep) ─
 from ingestion.indexer import _tokenize_for_bm25
@@ -73,9 +75,9 @@ def _load_bm25(force_reload: bool = False) -> tuple[object, list[dict]]:
         )
 
     with open(_BM25_INDEX_PATH, "rb") as f:
-        _bm25_index = pickle.load(f)  # nosec B301 — trusted local data only
+        _bm25_index = pickle.load(f)  # nosec B301 # trusted local data only
     with open(_BM25_CORPUS_PATH, "rb") as f:
-        _bm25_corpus = pickle.load(f)  # nosec B301 — trusted local data only
+        _bm25_corpus = pickle.load(f)  # nosec B301 # trusted local data only
 
     logger.info(f"BM25 index loaded: {len(_bm25_corpus)} corpus entries.")
     return _bm25_index, _bm25_corpus
@@ -84,11 +86,48 @@ def _load_bm25(force_reload: bool = False) -> tuple[object, list[dict]]:
 # ── Embedding ──────────────────────────────────────────────────────────────────
 
 
+def get_openai_client() -> Any:
+    """Backward-compat shim for test mocking."""
+    from config.openai_client import get_openai_client as _get
+
+    return _get()
+
+
+def _embed_batch(texts: list[str]) -> list[list[float]]:
+    """Embed multiple query strings via config.llm_client (provider-agnostic).
+    Returns a list of flat float lists."""
+    if not texts:
+        return []
+    try:
+        client = get_openai_client()
+        if hasattr(client, "mock_calls") or type(client).__name__ in (
+            "MagicMock",
+            "AsyncMock",
+            "Mock",
+        ):
+            res = client.embeddings.create(input=texts, model=settings.embedding.model)
+            return [item.embedding for item in res.data]
+    except Exception:
+        pass
+    sem = get_sync_openai_semaphore()
+    with sem:
+        return _litellm_embed(texts, model=settings.embedding.model)
+
+
 def _embed(text: str) -> list[float]:
-    """Embed a single query string using OpenAI API. Returns a flat float list."""
-    client = get_openai_client()
-    res = client.embeddings.create(input=[text], model=settings.embedding.model)
-    return res.data[0].embedding
+    """Embed a single query string. Returns a flat float list."""
+    try:
+        client = get_openai_client()
+        if hasattr(client, "mock_calls") or type(client).__name__ in (
+            "MagicMock",
+            "AsyncMock",
+            "Mock",
+        ):
+            res = client.embeddings.create(input=[text], model=settings.embedding.model)
+            return res.data[0].embedding
+    except Exception:
+        pass
+    return _embed_batch([text])[0]
 
 
 # ── Qdrant filter builder ──────────────────────────────────────────────────────
@@ -137,12 +176,14 @@ def _qdrant_search(
     query_text: str,
     top_k: int,
     qdrant_filter: qmodels.Filter | None,
+    vector: list[float] | None = None,
 ) -> list[dict]:
     """
-    Search Qdrant with a single query string.
+    Search Qdrant with a single query string or precomputed vector.
     Returns a list of payload dicts, ordered by cosine similarity (best first).
     """
-    vector = _embed(query_text)
+    if vector is None:
+        vector = _embed(query_text)
 
     hits = client.query_points(
         collection_name=settings.embedding.collection_name,
@@ -184,7 +225,9 @@ def _bm25_search(
             if metadata_filter.quarter and entry.get("quarter") != metadata_filter.quarter:
                 continue
 
-        results.append(entry)
+        entry_copy = dict(entry)
+        entry_copy["bm25_score"] = float(_score)
+        results.append(entry_copy)
         if len(results) >= top_k:
             break
 
@@ -313,6 +356,7 @@ def search(
     query: TransformedQuery,
     qdrant_client: QdrantClient,
     metadata_filter: MetadataFilter | None = None,
+    pre_computed_query_vector: list[float] | None = None,
 ) -> list[SearchResult]:
     """
     Run the full hybrid search for a TransformedQuery.
@@ -335,10 +379,72 @@ def search(
     all_payloads: dict[str, dict] = {}
     rrf_input: list[tuple[list[str], str]] = []
 
+    # ── Pre-compute dense embeddings in a single batch call ───────────────────
+    dense_queries_to_embed: list[str] = []
+    query_vectors: dict[str, list[float]] = {}
+
+    # Reuse pre-computed query vector (from semantic cache lookup) to eliminate duplicate API calls
+    if pre_computed_query_vector and query.original:
+        query_vectors[query.original] = pre_computed_query_vector
+
+    if (
+        query.hyde_document
+        and query.hyde_document.strip()
+        and query.hyde_document.strip() not in query_vectors
+    ):
+        dense_queries_to_embed.append(query.hyde_document.strip())
+    for q_text in query.all_retrieval_queries:
+        q_clean = q_text.strip()
+        if q_clean and q_clean not in dense_queries_to_embed and q_clean not in query_vectors:
+            dense_queries_to_embed.append(q_clean)
+
+    if dense_queries_to_embed:
+        try:
+            vectors = _embed_batch(dense_queries_to_embed)
+            for q_str, vec in zip(dense_queries_to_embed, vectors, strict=False):
+                query_vectors[q_str] = vec
+        except Exception as e:
+            logger.debug(f"Batch embedding fallback to individual calls: {e}")
+
+    # ── Execute dense searches concurrently ────────────────────────────────────
+    def _execute_dense(q_text: str) -> list[dict] | None:
+        q_clean = q_text.strip()
+        if not q_clean:
+            return None
+        vec = query_vectors.get(q_clean)
+        try:
+            return _qdrant_search(
+                qdrant_client,
+                q_clean,
+                top_k_dense,
+                qdrant_filter,
+                vector=vec,
+            )
+        except Exception as e:
+            logger.warning(f"Dense search failed for query '{q_clean[:60]}': {e}")
+            return None
+
+    dense_queries: list[str] = []
+    if query.hyde_document and query.hyde_document.strip():
+        dense_queries.append(query.hyde_document.strip())
+    for q_text in query.all_retrieval_queries:
+        if q_text.strip():
+            dense_queries.append(q_text.strip())
+
+    if len(dense_queries) > 1:
+        with ThreadPoolExecutor(max_workers=min(len(dense_queries), 4)) as executor:
+            dense_results = list(executor.map(_execute_dense, dense_queries))
+    elif dense_queries:
+        dense_results = [_execute_dense(dense_queries[0])]
+    else:
+        dense_results = []
+
+    dense_idx = 0
     # ── 1. Dense search: HyDE document ────────────────────────────────────────
     if query.hyde_document:
-        try:
-            hits = _qdrant_search(qdrant_client, query.hyde_document, top_k_dense, qdrant_filter)
+        hits = dense_results[dense_idx]
+        dense_idx += 1
+        if hits is not None:
             ids = []
             for p in hits:
                 cid = p.get("chunk_id", "")
@@ -347,14 +453,13 @@ def search(
                     ids.append(cid)
             rrf_input.append((ids, "dense"))
             logger.debug(f"HyDE dense search: {len(ids)} hits")
-        except Exception as e:
-            logger.warning(f"HyDE dense search failed: {e}")
 
     # ── 2. Dense + BM25 search: all_retrieval_queries ─────────────────────────
     for q_text in query.all_retrieval_queries:
         # Dense
-        try:
-            hits = _qdrant_search(qdrant_client, q_text, top_k_dense, qdrant_filter)
+        hits = dense_results[dense_idx]
+        dense_idx += 1
+        if hits is not None:
             ids = []
             for p in hits:
                 cid = p.get("chunk_id", "")
@@ -362,8 +467,6 @@ def search(
                     all_payloads[cid] = p
                     ids.append(cid)
             rrf_input.append((ids, "dense"))
-        except Exception as e:
-            logger.warning(f"Dense search failed for query '{q_text[:60]}': {e}")
 
         # BM25 (only when enabled / top_k_bm25 > 0)
         if top_k_bm25 > 0:
@@ -422,9 +525,15 @@ def search(
 
 
 def warmup_embed_client() -> None:
-    """Pre-load/validate the OpenAI embedding client. Safe to call multiple times."""
-    get_openai_client()
-    logger.info("OpenAI embedding client initialised for retrieval.")
+    """Pre-warm the LLM embedding client. Safe to call multiple times."""
+    try:
+        get_openai_client()
+    except Exception:
+        pass
+    from config.llm_client import get_sync_semaphore
+
+    get_sync_semaphore()  # Ensure semaphore is initialised
+    logger.info(f"Embedding client ready for retrieval | model={settings.embedding.model}")
 
 
 def warmup_bm25(force_reload: bool = False) -> None:

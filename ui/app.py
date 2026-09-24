@@ -26,6 +26,7 @@ from typing import Any
 import requests
 import streamlit as st
 
+from config import settings
 from config.companies import CompanyRegistry
 from ui.utils import (
     build_metadata_filter,
@@ -87,6 +88,7 @@ st.markdown(
         margin-right: 6px;
     }
     .grounded-true  { color: #198754; font-weight: 600; }
+    .grounded-amber { color: #d97706; font-weight: 600; }
     .grounded-false { color: #dc3545; font-weight: 600; }
     </style>
     """,
@@ -135,15 +137,8 @@ with st.sidebar:
         value=False,
         help="Include query transform + retrieval summaries in response.",
     )
-    crag_mode = st.toggle(
-        "Corrective RAG (CRAG)",
-        value=False,
-        help="Enable Layer 5 CRAG: grades chunk relevance & triggers web search fallback if needed.",
-    )
     if streaming_mode and verbose_mode:
         st.caption("ℹ️ Verbose diagnostics only available in non-streaming mode.")
-    if streaming_mode and crag_mode:
-        st.caption("ℹ️ CRAG operates in structured mode. Streaming mode will bypass CRAG.")
 
     st.divider()
 
@@ -200,14 +195,51 @@ def _render_response_meta(meta: dict[str, Any]) -> None:
     context_tokens = context.get("tokens_used", 0)
 
     grounded_cls = "grounded-true" if grounded else "grounded-false"
-    grounded_label = "✓ Grounded" if grounded else "✗ Ungrounded"
+    grounded_label = "✓ Grounded" if grounded else "⚠️ Calibrated Abstention"
 
-    crag_action = meta.get("crag_action")
-    crag_chip = ""
-    if crag_action:
-        web_triggered = meta.get("web_search_triggered", False)
-        crag_label = f"🔄 CRAG: {crag_action}" + (" (Web Search)" if web_triggered else "")
-        crag_chip = f'<span class="stat-chip">{crag_label}</span>'
+    # Confidence score chip (ADR-018)
+    conf_score = meta.get("confidence_score")
+    conf_chip = ""
+    if conf_score is not None:
+        conf_pct = round(conf_score * 100, 1)
+        conf_cls = (
+            "grounded-true"
+            if conf_score >= 0.80
+            else ("grounded-amber" if conf_score >= 0.50 else "grounded-false")
+        )
+        conf_chip = f'<span class="stat-chip {conf_cls}">🎯 {conf_pct}% Confidence</span>'
+
+    # Reflexion chip (ADR-010)
+    reflexion_attempts = meta.get("reflexion_attempts", 0)
+    reflexion_chip = (
+        '<span class="stat-chip" style="background:#4b32c3;color:#fff;">🔄 Reflexion (Self-Corrected)</span>'
+        if reflexion_attempts > 0
+        else ""
+    )
+
+    # Numerical Hallucination Fence warnings
+    num_warnings = meta.get("numerical_hallucination_warnings", [])
+    num_warning_chip = (
+        f'<span class="stat-chip grounded-false">⚠️ {len(num_warnings)} Unverified Number{"s" if len(num_warnings) > 1 else ""}</span>'
+        if num_warnings
+        else ""
+    )
+
+    # Citation Integrity warnings
+    cit_warnings = meta.get("citation_integrity_warnings", [])
+    cit_warning_chip = (
+        '<span class="stat-chip grounded-false">⚠️ Citation Contamination</span>'
+        if cit_warnings
+        else ""
+    )
+
+    # PAL calculations chip
+    calculations = meta.get("calculations", [])
+    calc_chip = (
+        f'<span class="stat-chip">🧮 {len(calculations)} PAL Calc{"s" if len(calculations) > 1 else ""}</span>'
+        if calculations
+        else ""
+    )
 
     st.markdown(
         f"""
@@ -217,11 +249,26 @@ def _render_response_meta(meta: dict[str, Any]) -> None:
           <span class="stat-chip">📄 {context.get("chunks_used", 0)} chunks
           ({format_token_count(context_tokens)} ctx tokens)</span>
           <span class="stat-chip {grounded_cls}">{grounded_label}</span>
-          {crag_chip}
+          {conf_chip}
+          {calc_chip}
+          {reflexion_chip}
+          {num_warning_chip}
+          {cit_warning_chip}
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    # --- PAL Calculations Expander ---
+    if calculations:
+        with st.expander(f"🧮 Verified PAL Calculations ({len(calculations)})", expanded=False):
+            calc_lines = []
+            for c in calculations:
+                status_icon = "✅" if c.get("ok", True) else "❌"
+                calc_lines.append(
+                    f"- **Expression:** `{c.get('expr')}` → **Result:** `{c.get('fmt')}` ({status_icon})"
+                )
+            st.markdown("\n".join(calc_lines))
 
     # --- Citations ---
     citations = meta.get("citations", [])
@@ -377,7 +424,6 @@ if question:
                         question=question,
                         metadata_filter=metadata_filter,
                         verbose=verbose_mode,
-                        use_crag=crag_mode,
                     )
                     content = data.get("answer", "")
                     resp_meta = data
@@ -417,6 +463,6 @@ if question:
 # ── Footer ─────────────────────────────────────────────────────────────────────
 
 st.caption(
-    f"Financial RAG v0.1.0 · API: `{API_BASE_URL}` · "
-    "Model: OpenAI text-embedding-3-small + Qdrant + BM25 + FlashRank"
+    f"Financial RAG v0.5.0 · API: `{API_BASE_URL}` · "
+    f"Model: {settings.embedding.model} ({settings.embedding.vector_dim}d) + Qdrant + BM25 + FlashRank"
 )

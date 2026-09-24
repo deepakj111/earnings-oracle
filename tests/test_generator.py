@@ -11,7 +11,7 @@ Coverage:
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from loguru import logger
@@ -235,12 +235,16 @@ class TestIsGrounded:
 # ── Generator.generate ────────────────────────────────────────────────────────
 
 
+# ── Generator.generate ────────────────────────────────────────────────────────
+
+
 class TestGeneratorGenerate:
-    @patch("generation.generator.get_openai_client")
-    def test_empty_retrieval_returns_no_context_answer(self, mock_get_client) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator.get_async_openai_client")
+    async def test_empty_retrieval_returns_no_context_answer(self, mock_get_client) -> None:
         """Empty RetrievalResult must return the no-context fallback immediately."""
         generator = Generator()
-        result = generator.generate(
+        result = await generator.generate(
             question="What was Apple's revenue?",
             retrieval_result=_make_empty_retrieval(),
         )
@@ -253,8 +257,9 @@ class TestGeneratorGenerate:
         # LLM must NOT be called for empty retrieval
         mock_get_client.assert_not_called()
 
-    @patch("generation.generator._call_llm")
-    def test_generate_returns_generation_result(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_generate_returns_generation_result(self, mock_call_llm) -> None:
         """Happy path: mocked LLM returns an answer with citations."""
         mock_call_llm.return_value = (
             "Apple reported revenue of $94.9B [1], up 6% YoY [1].",
@@ -262,9 +267,16 @@ class TestGeneratorGenerate:
             60,
         )
         generator = Generator()
-        result = generator.generate(
+        result = await generator.generate(
             question="What was Apple's Q4 2024 revenue?",
-            retrieval_result=_make_retrieval_result(),
+            retrieval_result=_make_retrieval_result(
+                results=[
+                    _make_result(
+                        text="Apple reported revenue of $94.9B in Q4 2024, up 6% YoY.",
+                        parent_text="Apple reported revenue of $94.9B in Q4 2024, up 6% YoY.",
+                    )
+                ]
+            ),
         )
 
         assert isinstance(result, GenerationResult)
@@ -277,15 +289,16 @@ class TestGeneratorGenerate:
         assert result.model is not None
         assert "Apple" in result.answer
 
-    @patch("generation.generator._call_llm")
-    def test_citations_extracted_from_answer(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_citations_extracted_from_answer(self, mock_call_llm) -> None:
         mock_call_llm.return_value = (
             "Revenue was $94.9B [1]. Services was $26.3B [1].",
             200,
             40,
         )
         r = _make_result(chunk_id="aapl_c1")
-        result = Generator().generate(
+        result = await Generator().generate(
             question="Revenue?",
             retrieval_result=_make_retrieval_result([r]),
         )
@@ -293,44 +306,48 @@ class TestGeneratorGenerate:
         assert result.citations[0].index == 1
         assert result.citations[0].chunk_id == "aapl_c1"
 
-    @patch("generation.generator._call_llm")
-    def test_ungrounded_answer_sets_grounded_false(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_ungrounded_answer_sets_grounded_false(self, mock_call_llm) -> None:
         mock_call_llm.return_value = (
             "The provided documents do not contain sufficient information to answer this question.",
             150,
             25,
         )
-        result = Generator().generate(
+        result = await Generator().generate(
             question="What was the 5-year CAGR?",
             retrieval_result=_make_retrieval_result(),
         )
         assert result.grounded is False
         assert result.citations == []
 
-    @patch("generation.generator._call_llm")
-    def test_context_chunks_used_populated(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_context_chunks_used_populated(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1].", 100, 20)
         results = [_make_result(chunk_id=f"c{i}") for i in range(5)]
-        result = Generator().generate(
+        result = await Generator().generate(
             question="Revenue?",
             retrieval_result=_make_retrieval_result(results),
         )
         assert 1 <= result.context_chunks_used <= 5
 
-    @patch("generation.generator._call_llm")
-    def test_context_tokens_used_populated(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_context_tokens_used_populated(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1].", 100, 20)
-        result = Generator().generate(
+        result = await Generator().generate(
             question="Revenue?",
             retrieval_result=_make_retrieval_result(),
         )
         assert result.context_tokens_used > 0
 
-    @patch("generation.generator._call_llm")
-    def test_format_answer_with_citations_output(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_format_answer_with_citations_output(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue was $100B [1].", 100, 20)
         r = _make_result(ticker="AAPL", fiscal_period="Q4 2024", section_title="Revenue")
-        result = Generator().generate(
+        result = await Generator().generate(
             question="Revenue?",
             retrieval_result=_make_retrieval_result([r]),
         )
@@ -339,10 +356,11 @@ class TestGeneratorGenerate:
         assert "Sources:" in formatted
         assert "[1]" in formatted
 
-    @patch("generation.generator._call_llm")
-    def test_to_dict_structure(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_to_dict_structure(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1].", 100, 20)
-        result = Generator().generate(
+        result = await Generator().generate(
             question="Revenue?",
             retrieval_result=_make_retrieval_result(),
         )
@@ -357,12 +375,13 @@ class TestGeneratorGenerate:
         assert "retrieval_failed" in d
         assert "unique_sources" in d
 
-    @patch("generation.generator._call_llm")
-    def test_unique_sources_populated(self, mock_call_llm) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_unique_sources_populated(self, mock_call_llm) -> None:
         mock_call_llm.return_value = ("Revenue [1][2].", 200, 40)
         r1 = _make_result("c1", ticker="AAPL", fiscal_period="Q4 2024", parent_id="p1")
         r2 = _make_result("c2", ticker="NVDA", fiscal_period="Q3 2024", parent_id="p2")
-        result = Generator().generate(
+        result = await Generator().generate(
             question="Compare AAPL and NVDA revenue?",
             retrieval_result=_make_retrieval_result([r1, r2]),
         )
@@ -375,46 +394,67 @@ class TestGeneratorGenerate:
 
 
 class TestGeneratorStreaming:
-    def test_empty_retrieval_yields_no_context_message(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_retrieval_yields_no_context_message(self) -> None:
         generator = Generator()
-        tokens = list(
-            generator.generate_streaming(
+        tokens = [
+            t
+            async for t in generator.generate_streaming(
                 question="Revenue?",
                 retrieval_result=_make_empty_retrieval(),
             )
-        )
+        ]
         full_text = "".join(tokens)
         assert "No relevant documents" in full_text
 
-    @patch("generation.generator.get_openai_client")
-    def test_streaming_yields_tokens(self, mock_get_client) -> None:
+    @pytest.mark.asyncio
+    @patch("generation.generator.get_async_openai_client")
+    async def test_streaming_yields_tokens(self, mock_get_client) -> None:
         """Mock the streaming API and verify tokens are yielded correctly."""
 
-        # Build fake streaming chunks
-        def _fake_chunks():
+        # Build fake async streaming chunks
+        async def _fake_chunks():
             for word in ["Apple ", "reported ", "$100B ", "revenue [1]."]:
                 chunk = MagicMock()
                 chunk.choices = [MagicMock()]
                 chunk.choices[0].delta.content = word
                 yield chunk
 
-        mock_stream = MagicMock()
-        mock_stream.__iter__ = MagicMock(return_value=_fake_chunks())
-
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = mock_stream
+        mock_client.chat.completions.create = AsyncMock(return_value=_fake_chunks())
         mock_get_client.return_value = mock_client
 
         generator = Generator()
-        tokens = list(
-            generator.generate_streaming(
+        tokens = [
+            t
+            async for t in generator.generate_streaming(
                 question="Revenue?",
                 retrieval_result=_make_retrieval_result(),
             )
-        )
+        ]
         full_text = "".join(tokens)
         assert "Apple" in full_text
         assert "$100B" in full_text
+
+    @pytest.mark.asyncio
+    @patch("generation.generator.astream")
+    async def test_streaming_yields_astream_str_tokens(self, mock_astream) -> None:
+        """Test streaming when astream yields raw string deltas."""
+
+        async def _fake_tokens(*args, **kwargs):
+            for token in ["NVIDIA ", "Data ", "Center ", "revenue ", "was ", "$47.5B."]:
+                yield token
+
+        mock_astream.side_effect = _fake_tokens
+        generator = Generator()
+        tokens = [
+            t
+            async for t in generator.generate_streaming(
+                question="Revenue?",
+                retrieval_result=_make_retrieval_result(),
+            )
+        ]
+        assert "".join(tokens) == "NVIDIA Data Center revenue was $47.5B."
 
 
 class TestGenerationPromptsAndConfig:
@@ -429,5 +469,131 @@ class TestGenerationPromptsAndConfig:
     def test_generation_config_default_model_is_gpt_5(self) -> None:
         from config.settings import settings
 
-        assert settings.generation.model == "gpt-5"
-        assert settings.knowledge_graph.extraction_model == "gpt-5-mini"
+        assert settings.generation.model in ("gpt-5", "gemini-2.5-flash")
+        assert settings.knowledge_graph.extraction_model in ("gpt-5-mini", "gemini-2.5-flash")
+
+
+class TestConfidenceScoreCalibration:
+    def test_abstention_and_failure_clamps_to_zero(self) -> None:
+        from generation.models import Citation, GenerationResult
+
+        # retrieval_failed
+        r1 = GenerationResult(
+            question="What was revenue?",
+            answer="Data not available.",
+            citations=[],
+            model="gpt-5",
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            context_chunks_used=0,
+            context_tokens_used=0,
+            latency_seconds=1.0,
+            grounded=False,
+            retrieval_failed=True,
+        )
+        assert r1.computed_confidence_score == 0.0
+
+        # not grounded
+        r2 = GenerationResult(
+            question="What was revenue?",
+            answer="Revenue was $10B.",
+            citations=[
+                Citation(
+                    index=1,
+                    chunk_id="c1",
+                    parent_id="p1",
+                    ticker="AAPL",
+                    company="Apple Inc.",
+                    date="2024-11-01",
+                    fiscal_period="Q4 2024",
+                    section_title="Financial Statements",
+                    doc_type="10-K",
+                    source="dense",
+                    rerank_score=0.85,
+                    excerpt="...",
+                    full_text="...",
+                )
+            ],
+            model="gpt-5",
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            context_chunks_used=1,
+            context_tokens_used=50,
+            latency_seconds=1.0,
+            grounded=False,
+            retrieval_failed=False,
+        )
+        assert r2.computed_confidence_score == 0.0
+
+        # empty citations
+        r3 = GenerationResult(
+            question="What was revenue?",
+            answer="Revenue was $10B.",
+            citations=[],
+            model="gpt-5",
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            context_chunks_used=0,
+            context_tokens_used=0,
+            latency_seconds=1.0,
+            grounded=True,
+            retrieval_failed=False,
+        )
+        assert r3.computed_confidence_score == 0.0
+
+    def test_low_rerank_score_penalized(self) -> None:
+        from generation.models import Citation, GenerationResult
+
+        r = GenerationResult(
+            question="What was revenue?",
+            answer="Revenue was $10B [1].",
+            citations=[
+                Citation(
+                    index=1,
+                    chunk_id="c1",
+                    parent_id="p1",
+                    ticker="AAPL",
+                    company="Apple Inc.",
+                    date="2024-11-01",
+                    fiscal_period="Q4 2024",
+                    section_title="Financial Statements",
+                    doc_type="10-K",
+                    source="dense",
+                    rerank_score=0.20,  # low rerank score < 0.30
+                    excerpt="...",
+                    full_text="...",
+                )
+            ],
+            model="gpt-5",
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            context_chunks_used=1,
+            context_tokens_used=50,
+            latency_seconds=1.0,
+            grounded=True,
+            grounding_score=1.0,
+            retrieval_failed=False,
+        )
+        assert r.computed_confidence_score <= 0.55
+
+    @pytest.mark.asyncio
+    @patch("generation.generator._call_llm", new_callable=AsyncMock)
+    async def test_numerical_hallucination_marks_ungrounded(self, mock_call_llm) -> None:
+        # Context has $94.9B, but LLM hallucinates $999B
+        mock_call_llm.return_value = ("Apple reported revenue of $999B in Q4 2024 [1].", 100, 20)
+        r = _make_result(
+            chunk_id="aapl_c1",
+            text="Apple reported revenue of $94.9B in Q4 2024.",
+            parent_text="Apple reported revenue of $94.9B in Q4 2024.",
+        )
+        result = await Generator().generate(
+            question="What was Apple's revenue?",
+            retrieval_result=_make_retrieval_result([r]),
+        )
+        assert result.grounded is False
+        assert "$999B" in result.numerical_hallucination_warnings
+        assert result.computed_confidence_score == 0.0

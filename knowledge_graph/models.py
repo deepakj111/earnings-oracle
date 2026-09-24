@@ -285,6 +285,24 @@ class KnowledgeGraph:
                 chunk_ids.extend(entity.chunk_ids)
         return list(set(chunk_ids))
 
+    def get_entity_chunk_ids_for_ticker(self, entity_name: str, ticker: str) -> list[str]:
+        """
+        Get chunk IDs for an entity scoped to a specific company ticker.
+
+        Prevents cross-company contamination when the same generic financial
+        entity name (e.g. 'revenue', 'operating margin') exists in multiple
+        tickers. Only returns chunks where the entity's source ticker matches.
+        """
+        normalized = entity_name.strip().lower()
+        ticker_upper = ticker.strip().upper()
+        chunk_ids: list[str] = []
+        for entity in self.entities.values():
+            if entity.ticker.upper() != ticker_upper:
+                continue
+            if entity.name == normalized or normalized in entity.aliases:
+                chunk_ids.extend(entity.chunk_ids)
+        return list(set(chunk_ids))
+
     # ── Statistics ─────────────────────────────────────────────────────────
 
     @property

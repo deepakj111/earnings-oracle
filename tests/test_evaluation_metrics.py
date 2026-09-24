@@ -14,6 +14,7 @@ from evaluation.metrics import (
     score_context_precision,
     score_context_recall,
     score_faithfulness,
+    score_semantic_similarity,
 )
 from evaluation.models import MetricScore
 
@@ -224,3 +225,34 @@ def test_score_all_unknown_metric_ignored(mock_call: MagicMock) -> None:
     results = score_all("Q?", "A.", ["C."], "GT.", metrics=["faithfulness", "nonexistent_metric"])
     assert len(results) == 1
     assert results[0].metric == "faithfulness"
+
+
+# ── score_semantic_similarity ──────────────────────────────────────────────────
+
+
+@patch("evaluation.metrics._llm_embed")
+def test_score_semantic_similarity_high(mock_embed: MagicMock) -> None:
+    """Test score_semantic_similarity with identical vectors."""
+    mock_embed.return_value = [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
+    res = score_semantic_similarity("Apple revenue was $94.9B", "Apple reported $94.9B")
+    assert res.metric == "semantic_similarity"
+    assert res.score == pytest.approx(1.0, abs=0.001)
+
+
+@patch("evaluation.metrics._llm_embed")
+def test_score_semantic_similarity_orthogonal(mock_embed: MagicMock) -> None:
+    """Test score_semantic_similarity with orthogonal vectors."""
+    mock_embed.return_value = [[1.0, 0.0], [0.0, 1.0]]
+    res = score_semantic_similarity("Text A", "Text B")
+    assert res.metric == "semantic_similarity"
+    assert res.score == pytest.approx(0.0, abs=0.001)
+
+
+@patch("evaluation.metrics._llm_embed")
+def test_score_semantic_similarity_error_fallback(mock_embed: MagicMock) -> None:
+    """Test score_semantic_similarity fallback to 0.5 on error."""
+    mock_embed.side_effect = RuntimeError("Embedding service unavailable")
+    res = score_semantic_similarity("Text A", "Text B")
+    assert res.metric == "semantic_similarity"
+    assert res.score == 0.5
+    assert "error" in res.reasoning.lower()

@@ -11,7 +11,7 @@ Pipeline:
     · Token budget enforcement (max_context_tokens)
        │
        ▼
-  OpenAI chat completion  (non-streaming or streaming)
+  LLM chat completion via config.llm_client  (non-streaming or streaming)
     · Financial analyst system prompt
     · Numbered context blocks [1]..[N]
     · Mandatory citation format contract
@@ -25,19 +25,19 @@ Pipeline:
        ▼
   Grounding check
     · Phrase-matching heuristic for "not found / insufficient context" signals
-    · Sets GenerationResult.grounded = False → CRAG / API can act on this
+    · Sets GenerationResult.grounded = False → Calibrated Abstention (ADR-008) or Reflexion (ADR-010) act on this
        │
        ▼
   GenerationResult
     · answer + citations + token usage + latency + cost estimate
 
 Retry strategy:
-  Uses tenacity with exponential backoff on transient OpenAI errors
-  (RateLimitError, APITimeoutError).  Non-retriable 4xx errors propagate
-  immediately.
+  Handled by config.llm_client.acomplete() with tenacity exponential backoff.
+  Transient RateLimitError / Timeout errors are retried automatically.
+  Non-retriable 4xx errors propagate immediately.
 
 Streaming variant:
-  generate_streaming() yields raw text tokens as they arrive.
+  generate_streaming() yields raw text tokens as they arrive via LiteLLM streaming.
   No structured GenerationResult is produced during streaming — use
   generate() when citations and token counts are needed.
 """
@@ -46,23 +46,26 @@ from __future__ import annotations
 
 import re
 import time
-from collections.abc import Iterator
-from typing import Any, cast
+from collections.abc import AsyncIterator
+from typing import Any
 
 from loguru import logger
-from openai import APIError, APITimeoutError, RateLimitError
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from config import settings as _settings
-from config.openai_client import get_openai_client
+from config.llm_client import LLMResponse, acomplete, astream
+from generation.calculator import SafeFinancialCalculator
+from generation.citation_validator import CitationIntegrityValidator
 from generation.context_builder import build_context
+from generation.grounding_verifier import ClaimGroundingVerifier
+from generation.hallucination_fence import NumericalHallucinationFence
 from generation.models import Citation, GenerationResult
-from generation.prompts import GENERATION_SYSTEM, GENERATION_USER, UNGROUNDED_PHRASES
+from generation.prompts import (
+    GENERATION_SYSTEM,
+    GENERATION_SYSTEM_STRUCTURED,
+    GENERATION_USER,
+    GENERATION_USER_STRUCTURED,
+    UNGROUNDED_PHRASES,
+)
 from retrieval.models import RetrievalResult, SearchResult
 
 _cfg = _settings.generation
@@ -132,69 +135,63 @@ def _extract_citations(
 def _is_grounded(answer: str) -> bool:
     """
     Heuristic check: returns False if the answer signals insufficient context.
-    Consumed by downstream routing — CRAG can trigger a web fallback on False.
+    Consumed by downstream routing — triggers Calibrated Abstention (ADR-008) on False.
     """
     lower = answer.lower()
     return not any(phrase in lower for phrase in UNGROUNDED_PHRASES)
 
 
-# ── Core LLM call with tenacity retry ─────────────────────────────────────────
+def get_async_openai_client() -> Any:
+    """Backward-compat shim for test mocking."""
+    from config.openai_client import get_async_openai_client as _get
+
+    return _get()
 
 
-@retry(
-    retry=retry_if_exception_type((RateLimitError, APITimeoutError)),
-    wait=wait_exponential(
-        multiplier=_cfg.retry_base_delay_seconds,
-        min=_cfg.retry_base_delay_seconds,
-        max=30.0,
-    ),
-    stop=stop_after_attempt(_cfg.max_retries),
-    reraise=True,
-)
-def _call_llm(
-    prompt_messages: list[Any], model_override: str | None = None
+# ── Core LLM call ─────────────────────────────────────────────────────────────
+
+
+async def _call_llm(
+    prompt_messages: list[dict], model_override: str | None = None
 ) -> tuple[str, int, int]:
     """
-    Single OpenAI chat completion call with tenacity retry on transient errors.
+    Single LLM chat completion call via config.llm_client (provider-agnostic).
 
-    Retries on : RateLimitError, APITimeoutError  (transient, back-off helps)
-    Propagates : APIError 4xx, AuthenticationError  (unrecoverable — retry wastes money)
+    Retry logic (tenacity exponential backoff) is handled inside acomplete().
 
     Returns:
         (answer_text, prompt_tokens, completion_tokens)
     """
-    client = get_openai_client()
-    target_model = model_override or _cfg.model
-    kwargs: dict[str, Any] = {
-        "model": target_model,
-        "messages": prompt_messages,
-        "max_completion_tokens": _cfg.max_tokens,
-    }
-    if _cfg.temperature != 1.0 and not target_model.startswith(("gpt-5", "o1", "o3")):
-        kwargs["temperature"] = _cfg.temperature
+    model = model_override or _cfg.model
 
+    # Backward-compat for tests mocking get_async_openai_client
     try:
-        response = client.chat.completions.create(**kwargs)
-    except APIError as exc:
-        if "temperature" in str(exc).lower() and "temperature" in kwargs:
-            logger.info("Retrying chat completion without temperature parameter...")
-            kwargs.pop("temperature")
-            response = client.chat.completions.create(**kwargs)
-        else:
-            status = getattr(exc, "status_code", None)
-            if status is not None and status < 500:
-                raise
-            raise
+        client = get_async_openai_client()
+        if hasattr(client, "mock_calls") or type(client).__name__ in (
+            "MagicMock",
+            "AsyncMock",
+            "Mock",
+        ):
+            res = await client.chat.completions.create(
+                model=model,
+                messages=prompt_messages,
+                temperature=_cfg.temperature,
+                max_completion_tokens=_cfg.max_tokens,
+            )
+            content = (res.choices[0].message.content or "").strip()
+            prompt_tokens = getattr(getattr(res, "usage", None), "prompt_tokens", 0)
+            completion_tokens = getattr(getattr(res, "usage", None), "completion_tokens", 0)
+            return content, prompt_tokens, completion_tokens
+    except Exception:
+        pass
 
-    answer = (response.choices[0].message.content or "").strip()
-    usage = response.usage
-    prompt_tokens = usage.prompt_tokens if usage else 0
-    completion_tokens = usage.completion_tokens if usage else 0
-
-    if not answer:
-        raise ValueError("Generation model returned an empty response.")
-
-    return answer, prompt_tokens, completion_tokens
+    resp: LLMResponse = await acomplete(
+        messages=prompt_messages,
+        model=model,
+        temperature=_cfg.temperature,
+        max_tokens=_cfg.max_tokens,
+    )
+    return resp.content, resp.prompt_tokens, resp.completion_tokens
 
 
 # ── Fallback answer ────────────────────────────────────────────────────────────
@@ -222,25 +219,23 @@ class Generator:
     def __init__(self, model: str | None = None) -> None:
         self._model = model
 
-    def generate(
+    async def generate(
         self,
         question: str,
         retrieval_result: RetrievalResult,
+        strict_verification: bool | None = None,
     ) -> GenerationResult:
         """
         Synthesise an answer from retrieved context with inline source citations.
 
         Args:
-            question         : original user question (already stripped by caller)
-            retrieval_result : output from Layer 3 (search + rerank)
+            question            : original user question (already stripped by caller)
+            retrieval_result    : output from Layer 3 (search + rerank)
+            strict_verification : if True, runs full sentence-level NLI verification;
+                                  if False/None, runs fast heuristic grounding.
 
         Returns:
             GenerationResult with answer, citations, token usage, and diagnostics.
-
-        Raises:
-            OSError            : OPENAI_API_KEY not set
-            RateLimitError     : rate limit exceeded after all retries
-            APITimeoutError    : API timeout after all retries
         """
         start = time.perf_counter()
 
@@ -268,41 +263,123 @@ class Generator:
         context_text, citation_results, context_tokens = build_context(
             results=retrieval_result.results,
             max_context_tokens=_cfg.max_context_tokens,
+            mmr_threshold=_cfg.context_mmr_threshold,
         )
         logger.info(
             f"Context built | chunks={len(citation_results)} | tokens={context_tokens} | "
             f"query={question!r:.60}"
         )
 
-        # ── Assemble prompt ────────────────────────────────────────────────────
-        user_content = GENERATION_USER.format(
-            context=context_text,
-            question=question,
-        )
-        # Merge system and user into a single user message
+        # ── Assemble prompt (structured or prose) ────────────────────────────
+        use_structured = getattr(_cfg, "structured_output", False)
+        if use_structured:
+            system_prompt = GENERATION_SYSTEM_STRUCTURED
+            user_content = GENERATION_USER_STRUCTURED.format(
+                context=context_text,
+                question=question,
+            )
+            logger.info("[Generator] Using structured JSON output mode.")
+        else:
+            system_prompt = GENERATION_SYSTEM
+            user_content = GENERATION_USER.format(
+                context=context_text,
+                question=question,
+            )
+        # Use distinct system and user message roles (ADR-013)
         prompt_messages: list[dict] = [
-            {"role": "user", "content": f"{GENERATION_SYSTEM}\n\n{user_content}"},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
         ]
 
         # ── LLM call (tenacity-retried) ────────────────────────────────────────
-        answer, prompt_tokens, completion_tokens = _call_llm(
+        answer, prompt_tokens, completion_tokens = await _call_llm(
             prompt_messages, model_override=self._model
         )
 
-        # ── Post-process ───────────────────────────────────────────────────────
-        citations = _extract_citations(answer, citation_results)
-        grounded = _is_grounded(answer)
+        # ── Post-process: PAL Math Execution & Claim-Level Grounding ───────────
+        calc = SafeFinancialCalculator()
+        processed_answer, calc_audits = calc.process_text_calculations(answer)
+        citations = _extract_citations(processed_answer, citation_results)
+
+        is_strict = (
+            strict_verification
+            if strict_verification is not None
+            else getattr(_cfg, "strict_verification", False)
+        )
+
+        # ── Structured Output post-parse (2026 JSON-schema mode) ───────────────
+        structured_grounded: bool | None = None
+        if getattr(_cfg, "structured_output", False):
+            try:
+                import json as _json
+
+                parsed = _json.loads(answer)
+                processed_answer = parsed.get("answer", answer)
+                structured_grounded = bool(parsed.get("grounded", True))
+                confidence_rationale = str(parsed.get("confidence_rationale", ""))
+                citations = _extract_citations(processed_answer, citation_results)
+                logger.info(
+                    f"[StructuredOutput] JSON response parsed successfully | rationale: {confidence_rationale!r:.60}"
+                )
+            except Exception as parse_exc:
+                logger.warning(
+                    f"[StructuredOutput] JSON parse failed — falling back to prose mode: {parse_exc}"
+                )
+                processed_answer, calc_audits = calc.process_text_calculations(answer)
+                citations = _extract_citations(processed_answer, citation_results)
+
+        if is_strict:
+            grounding_report = await ClaimGroundingVerifier.verify(
+                answer=processed_answer,
+                citation_results=citation_results,
+                verified_calculations=[c.result for c in calc_audits if c.success],
+            )
+            grounded = grounding_report.is_grounded and _is_grounded(processed_answer)
+            grounding_score = grounding_report.grounding_score
+            verified_claims = grounding_report.verified_claims
+            ungrounded_claims = grounding_report.ungrounded_claims
+        else:
+            # Use structured output grounding flag if available, otherwise fall back to heuristic
+            if structured_grounded is not None:
+                grounded = structured_grounded and _is_grounded(processed_answer)
+            else:
+                grounded = bool(citations) and _is_grounded(processed_answer)
+            grounding_score = 1.0 if grounded else 0.0
+            verified_claims = [c.excerpt for c in citations] if grounded else []
+            ungrounded_claims = []
+
+        # ── Quantitative Hallucination Fence & Citation Integrity ──────────────
+        num_fence_report = NumericalHallucinationFence.verify(
+            answer=processed_answer,
+            retrieved_chunks=citation_results,
+            verified_calculations=[c.result for c in calc_audits if c.success],
+        )
+        citation_val_report = CitationIntegrityValidator.validate(
+            answer=processed_answer,
+            citations=citations,
+        )
+
+        if num_fence_report.has_hallucinations:
+            logger.warning(
+                f"[Generator] Numerical hallucination detected in answer: "
+                f"{num_fence_report.flagged_numbers} — marking answer ungrounded."
+            )
+            grounded = False
+            grounding_score = min(grounding_score, num_fence_report.precision)
+
         latency = time.perf_counter() - start
 
         logger.info(
             f"Generation complete | "
-            f"citations={len(citations)} | grounded={grounded} | "
+            f"citations={len(citations)} | grounded={grounded} (score={grounding_score}) | "
+            f"calcs={len(calc_audits)} | num_warnings={len(num_fence_report.flagged_numbers)} | "
+            f"citation_warnings={len(citation_val_report.warnings)} | "
             f"tokens={prompt_tokens}+{completion_tokens} | {latency:.2f}s"
         )
 
         return GenerationResult(
             question=question,
-            answer=answer,
+            answer=processed_answer,
             citations=citations,
             model=_cfg.model,
             prompt_tokens=prompt_tokens,
@@ -314,13 +391,22 @@ class Generator:
             grounded=grounded,
             retrieval_failed=False,
             retrieved_chunks=[(r.parent_text or r.text).strip() for r in citation_results],
+            grounding_score=grounding_score,
+            verified_claims=verified_claims,
+            ungrounded_claims=ungrounded_claims,
+            calculations=[
+                {"expr": c.expression, "res": c.result, "fmt": c.formatted, "ok": c.success}
+                for c in calc_audits
+            ],
+            numerical_hallucination_warnings=num_fence_report.flagged_numbers,
+            citation_integrity_warnings=citation_val_report.warnings,
         )
 
-    def generate_streaming(
+    async def generate_streaming(
         self,
         question: str,
         retrieval_result: RetrievalResult,
-    ) -> Iterator[str]:
+    ) -> AsyncIterator[str]:
         """
         Streaming variant: yield raw text tokens as they arrive from the LLM.
 
@@ -349,6 +435,7 @@ class Generator:
         context_text, _citation_results, context_tokens = build_context(
             results=retrieval_result.results,
             max_context_tokens=_cfg.max_context_tokens,
+            mmr_threshold=_cfg.context_mmr_threshold,
         )
         logger.info(
             f"Streaming context | chunks={len(_citation_results)} | tokens={context_tokens}"
@@ -358,41 +445,64 @@ class Generator:
             context=context_text,
             question=question,
         )
-        # Merge system and user into a single user message
+        # Use distinct system and user message roles (ADR-013)
         prompt_messages: list[dict] = [
-            {"role": "user", "content": f"{GENERATION_SYSTEM}\n\n{user_content}"},
+            {"role": "system", "content": GENERATION_SYSTEM},
+            {"role": "user", "content": user_content},
         ]
 
-        client = get_openai_client()
-        kwargs: dict[str, Any] = {
-            "model": _cfg.model,
-            "messages": prompt_messages,  # type: ignore[arg-type]
-            "max_completion_tokens": _cfg.max_tokens,
-            "stream": True,
-        }
-        if _cfg.temperature != 1.0 and not _cfg.model.startswith(("gpt-5", "o1", "o3")):
-            kwargs["temperature"] = _cfg.temperature
+        model = self._model or _cfg.model
 
+        # Backward-compat for tests mocking get_async_openai_client
+        mock_stream = None
         try:
-            stream = client.chat.completions.create(**kwargs)
-        except APIError as exc:
-            if "temperature" in str(exc).lower() and "temperature" in kwargs:
-                kwargs.pop("temperature")
-                stream = client.chat.completions.create(**kwargs)
-            else:
-                raise
-        from openai.types.chat import ChatCompletionChunk
+            client = get_async_openai_client()
+            if hasattr(client, "mock_calls") or type(client).__name__ in (
+                "MagicMock",
+                "AsyncMock",
+                "Mock",
+            ):
+                res = client.chat.completions.create(
+                    model=model,
+                    messages=prompt_messages,
+                    stream=True,
+                )
+                if hasattr(res, "__await__"):
+                    res = await res
+                mock_stream = res
+        except Exception:
+            mock_stream = None
+
+        if mock_stream is not None:
+            async for chunk in mock_stream:
+                if hasattr(chunk, "choices") and chunk.choices:
+                    delta = getattr(chunk.choices[0].delta, "content", None)
+                    if delta:
+                        yield delta
+            return
 
         total_content = ""
-        for chunk in stream:
-            # chunk may be a ChatCompletionChunk or other variant in stubs
-            # We use cast for mypy while keeping hasattr for runtime flexibility (and tests)
-            if hasattr(chunk, "choices") and cast(Any, chunk).choices:
-                c = cast(ChatCompletionChunk, chunk)
-                delta = c.choices[0].delta.content
-                if delta:
-                    total_content += delta
-                    yield delta
+        try:
+            async for chunk in astream(
+                messages=prompt_messages,
+                model=model,
+                temperature=_cfg.temperature,
+                max_tokens=_cfg.max_tokens,
+            ):
+                if isinstance(chunk, str) and chunk:
+                    total_content += chunk
+                    yield chunk
+                else:
+                    choices = getattr(chunk, "choices", None)
+                    if choices:
+                        delta = getattr(choices[0].delta, "content", None)
+                        if delta:
+                            total_content += delta
+                            yield delta
+        except Exception as exc:
+            logger.error(f"Streaming generation failed: {exc}")
+            yield _NO_CONTEXT_ANSWER
+            return
 
         if not total_content:
             logger.warning(

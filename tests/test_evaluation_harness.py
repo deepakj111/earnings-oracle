@@ -334,3 +334,29 @@ def test_harness_run_sample_exception(
     assert report.n_failed == 1
     assert report.sample_results[0].pipeline_failed is True
     assert "unexpected error" in report.sample_results[0].error_message
+
+
+def test_harness_cli_dry_run_with_ticker(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test CLI execution with --ticker and --dry-run terminates cleanly with expected message."""
+    import subprocess
+    import sys
+
+    res = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "evaluation.harness",
+            "--dry-run",
+            "-t",
+            "NVDA",
+            "-n",
+            "2",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0
+    assert (
+        "Successfully initialized pipeline and verified 2 eval samples for ticker 'NVDA'."
+        in res.stdout
+    )

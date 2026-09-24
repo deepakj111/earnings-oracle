@@ -11,8 +11,14 @@ from qdrant_client import QdrantClient
 from rank_bm25 import BM25Okapi
 
 from config import settings as _settings
-from ingestion.chunker import create_parent_child_chunks
-from ingestion.indexer import COLLECTION_NAME, index_document, init_qdrant, setup_embedder
+from ingestion.chunker import _generate_chunk_context, create_parent_child_chunks
+from ingestion.indexer import (
+    COLLECTION_NAME,
+    _tokenize_for_bm25,
+    index_document,
+    init_qdrant,
+    setup_embedder,
+)
 from ingestion.metadata_extractor import extract_metadata
 from ingestion.parser import parse_html
 
@@ -21,6 +27,7 @@ BM25_INDEX_PATH = Path("data/bm25_index.pkl")
 BM25_CORPUS_PATH = Path("data/bm25_corpus.pkl")
 INGESTION_METRICS_PATH = Path("data/ingestion_metrics.json")
 KG_GRAPH_PATH = Path("data/knowledge_graph.json")
+STATE_DB_PATH = Path("data/ingestion_state.db")
 
 
 class IngestionStoreState:
@@ -126,11 +133,11 @@ def _save_bm25(bm25_texts: list[list[str]], bm25_corpus: list[dict]) -> None:
     BM25_INDEX_PATH.parent.mkdir(exist_ok=True)
 
     with open(BM25_INDEX_PATH, "wb") as f:
-        pickle.dump(bm25, f, protocol=pickle.HIGHEST_PROTOCOL)  # nosec B403 — trusted local data only
+        pickle.dump(bm25, f, protocol=pickle.HIGHEST_PROTOCOL)  # nosec B403 # trusted local data only
     logger.info(f"BM25 index saved → {BM25_INDEX_PATH} ({len(bm25_texts)} chunks)")
 
     with open(BM25_CORPUS_PATH, "wb") as f:
-        pickle.dump(bm25_corpus, f, protocol=pickle.HIGHEST_PROTOCOL)  # nosec B403 — trusted local data only
+        pickle.dump(bm25_corpus, f, protocol=pickle.HIGHEST_PROTOCOL)  # nosec B403 # trusted local data only
     logger.info(f"BM25 corpus saved → {BM25_CORPUS_PATH} ({len(bm25_corpus)} entries)")
 
 
@@ -206,9 +213,9 @@ def _load_existing_bm25() -> tuple[list[list[str]], list[dict]]:
         return [], []
 
     try:
-        with open(BM25_CORPUS_PATH, "rb") as f:  # nosec B403 — trusted local data
-            bm25_corpus: list[dict] = pickle.load(f)  # nosec B301 — trusted local data only
-        bm25_texts = [entry["text"].lower().split() for entry in bm25_corpus]
+        with open(BM25_CORPUS_PATH, "rb") as f:  # nosec B403 # trusted local data
+            bm25_corpus: list[dict] = pickle.load(f)  # nosec B301 # trusted local data only
+        bm25_texts = [_tokenize_for_bm25(entry.get("text", "")) for entry in bm25_corpus]
         logger.info(f"Loaded existing BM25 corpus — {len(bm25_corpus)} chunks carried forward.")
         return bm25_texts, bm25_corpus
     except (pickle.UnpicklingError, EOFError, Exception) as exc:
@@ -252,8 +259,13 @@ async def _process_document(
     metrics_lock: asyncio.Lock | None = None,
     metrics_records: list[dict] | None = None,
     pipeline_start_time: float | None = None,
-) -> tuple[int, list[list[str]], list[dict], dict | None]:
+    enable_contextual_retrieval: bool = True,
+) -> tuple[int, list[list[str]], list[dict], dict | None, list[Any]]:
     """Process a single document concurrently while profiling execution steps."""
+    from ingestion.state_manager import IngestionStateManager
+
+    state_mgr = IngestionStateManager(db_path=str(STATE_DB_PATH))
+
     t_start = time.perf_counter()
     doc_timings: dict[str, float] = {}
 
@@ -266,7 +278,7 @@ async def _process_document(
 
             if doc is None:
                 logger.debug(f"Skipped (not earnings content): {file_path.name}")
-                return 0, [], [], None
+                return 0, [], [], None, []
 
             t0 = time.perf_counter()
             stem_parts = file_path.stem.split("_")
@@ -296,33 +308,60 @@ async def _process_document(
             parent_count = sum(1 for c in chunks if c.chunk_type == "parent")
             child_count = sum(1 for c in chunks if c.chunk_type == "child")
 
-            indexable_chunks = [c for c in chunks if c.chunk_type in ("child", "table")]
+            # Check Idempotency and Store State
+            all_indexable = [c for c in chunks if c.chunk_type in ("child", "table")]
             parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
 
             missing_qdrant = [
-                c for c in indexable_chunks if c.chunk_id not in store_state.qdrant_chunk_ids
+                c
+                for c in all_indexable
+                if (c.chunk_id not in store_state.qdrant_chunk_ids)
+                or state_mgr.is_chunk_modified(c.chunk_id, c.text)
             ]
             missing_bm25 = [
-                c for c in indexable_chunks if c.chunk_id not in store_state.bm25_chunk_ids
+                c
+                for c in all_indexable
+                if (c.chunk_id not in store_state.bm25_chunk_ids)
+                or state_mgr.is_chunk_modified(c.chunk_id, c.text)
             ]
             unindexed_kg_chunks = [
-                c for c in parent_chunks if c.chunk_id not in store_state.kg_chunk_ids
+                c
+                for c in parent_chunks
+                if (c.chunk_id not in store_state.kg_chunk_ids)
+                or state_mgr.is_chunk_modified(c.chunk_id, c.text)
             ]
             kg_needed = kg_enabled and kg_graph is not None and bool(unindexed_kg_chunks)
+
+            chunks_to_index = list(
+                {c.chunk_id: c for c in (missing_qdrant + missing_bm25)}.values()
+            )
+
+            # Run Contextual Retrieval (Anthropic style) if enabled
+            if enable_contextual_retrieval and chunks_to_index:
+                t0 = time.perf_counter()
+
+                async def _enrich_chunk(c: Any) -> None:
+                    ctx = await _generate_chunk_context(doc.raw_text, c.text)
+                    if ctx:
+                        c.text = f"{ctx}\n\n{c.text}"
+
+                await asyncio.gather(*[_enrich_chunk(c) for c in chunks_to_index])
+                t1 = time.perf_counter()
+                doc_timings["contextual_retrieval"] = round(t1 - t0, 4)
 
             if not missing_qdrant and not missing_bm25 and not kg_needed:
                 logger.info(
                     f"Skipped (already fully indexed across Qdrant, BM25, KG): {file_path.name}"
                 )
-                return 0, [], [], None
+                return 0, [], [], None, getattr(doc, "extracted_facts", [])
 
             logger.debug(
                 f"[PROCESS] {file_path.name} | "
-                f"Pending (Qdrant: {len(missing_qdrant)}/{len(indexable_chunks)}, "
-                f"BM25: {len(missing_bm25)}/{len(indexable_chunks)}, "
+                f"Pending (Qdrant: {len(missing_qdrant)}/{len(all_indexable)}, "
+                f"BM25: {len(missing_bm25)}/{len(all_indexable)}, "
                 f"KG: {len(unindexed_kg_chunks)}/{len(parent_chunks)}) | "
-                f"Already stored (Qdrant: {len(indexable_chunks) - len(missing_qdrant)}, "
-                f"BM25: {len(indexable_chunks) - len(missing_bm25)}, "
+                f"Already stored (Qdrant: {len(all_indexable) - len(missing_qdrant)}, "
+                f"BM25: {len(all_indexable) - len(missing_bm25)}, "
                 f"KG: {len(parent_chunks) - len(unindexed_kg_chunks)})"
             )
 
@@ -389,6 +428,9 @@ async def _process_document(
                     if cid:
                         store_state.bm25_chunk_ids.add(cid)
 
+            # Update state manager for processed chunks
+            state_mgr.update_chunks([(c.chunk_id, c.text) for c in (missing_qdrant + missing_bm25)])
+
             # ── Knowledge Graph extraction ─────────────────────────────────
             t_kg_start = time.perf_counter()
             if kg_needed:
@@ -449,11 +491,17 @@ async def _process_document(
                 f"{file_path.name} | {metadata.fiscal_period} | {len(new_bm25_corpus)} new chunks | {t_total:.3f}s"
             )
 
-            return child_count, new_bm25_texts, new_bm25_corpus, doc_metric
+            return (
+                child_count,
+                new_bm25_texts,
+                new_bm25_corpus,
+                doc_metric,
+                getattr(doc, "extracted_facts", []),
+            )
 
     except Exception as exc:
         logger.error(f"Error processing {file_path.name}: {exc}")
-        return 0, [], [], None
+        return 0, [], [], None, []
 
 
 async def _run_kg_only_async(threads_override: int | None = None) -> None:
@@ -474,13 +522,30 @@ async def _run_kg_only_async(threads_override: int | None = None) -> None:
     kg_graph = kg_store.load()
     store_state = IngestionStoreState.load(qdrant, bm25_corpus, kg_graph)
 
-    transcript_files = sorted(TRANSCRIPTS_DIR.glob("*.htm"))
+    transcript_files = sorted(
+        list(TRANSCRIPTS_DIR.glob("*.htm")) + list(TRANSCRIPTS_DIR.glob("*.html"))
+    )
     target_files = []
     for f in transcript_files:
         doc = parse_html(f)
         if doc is None:
             continue
-        chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
+        form_type = f.stem.split("_")[1] if len(f.stem.split("_")) >= 2 else "unknown"
+        metadata = extract_metadata(
+            doc.ticker,
+            doc.date,
+            doc.raw_text,
+            form_type=form_type,
+            file_name=f.name,
+        )
+        chunks = create_parent_child_chunks(
+            doc.ticker,
+            doc.date,
+            doc.sections,
+            doc_type=metadata.form_type,
+            company_name=metadata.company,
+            fiscal_period=metadata.fiscal_period,
+        )
         indexable_chunks = [c for c in chunks if c.chunk_type in ("child", "table")]
         if any(
             c.chunk_id in store_state.qdrant_chunk_ids or c.chunk_id in store_state.bm25_chunk_ids
@@ -510,7 +575,14 @@ async def _run_kg_only_async(threads_override: int | None = None) -> None:
             else "unknown",
             file_name=file_path.name,
         )
-        chunks = create_parent_child_chunks(doc.ticker, doc.date, doc.sections)
+        chunks = create_parent_child_chunks(
+            doc.ticker,
+            doc.date,
+            doc.sections,
+            doc_type=metadata.form_type,
+            company_name=metadata.company,
+            fiscal_period=metadata.fiscal_period,
+        )
         parent_chunks = [c for c in chunks if c.chunk_type == "parent"]
         unindexed_kg_chunks = [
             c for c in parent_chunks if c.chunk_id not in store_state.kg_chunk_ids
@@ -545,18 +617,23 @@ async def run_pipeline_async(
     concurrency_override: int | None = None,
     threads_override: int | None = None,
     kg_only: bool = False,
+    contextual_retrieval: bool = False,
 ) -> None:
     """Run the ingestion indexing pipeline asynchronously using automatic store-state inspection."""
     if kg_only:
         await _run_kg_only_async(threads_override=threads_override)
         return
+    ctx_retrieval = contextual_retrieval or _settings.embedding.contextual_retrieval_enabled
     pipeline_start_time = time.perf_counter()
     setup_ingestion_logging()
     setup_embedder(threads=threads_override)
     qdrant = init_qdrant(_settings.infra.qdrant_url)
 
-    transcript_files = sorted(TRANSCRIPTS_DIR.glob("*.htm"))
-    logger.info(f"Found {len(transcript_files)} .htm files in {TRANSCRIPTS_DIR}")
+    TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+    transcript_files = sorted(
+        list(TRANSCRIPTS_DIR.glob("*.htm")) + list(TRANSCRIPTS_DIR.glob("*.html"))
+    )
+    logger.info(f"Found {len(transcript_files)} filing files (*.htm, *.html) in {TRANSCRIPTS_DIR}")
 
     # --- seed bm25 with previously indexed docs ---
     bm25_texts, bm25_corpus = _load_existing_bm25()
@@ -584,6 +661,7 @@ async def run_pipeline_async(
 
     existing_chunk_ids = {entry["chunk_id"] for entry in bm25_corpus if "chunk_id" in entry}
     metrics_records: list[dict] = _load_existing_metrics()
+    all_extracted_facts: list[Any] = []
 
     if transcript_files:
         logger.info(
@@ -611,6 +689,7 @@ async def run_pipeline_async(
                     metrics_lock,
                     metrics_records,
                     pipeline_start_time,
+                    enable_contextual_retrieval=ctx_retrieval,
                 )
                 for f in batch_files
             ]
@@ -621,6 +700,9 @@ async def run_pipeline_async(
             for res in results:
                 child_count, new_bm25_texts, new_bm25_corpus = res[0], res[1], res[2]
                 doc_metric = res[3] if len(res) > 3 else None
+                extracted_facts = res[4] if len(res) > 4 else []
+                if extracted_facts:
+                    all_extracted_facts.extend(extracted_facts)
 
                 if child_count == 0 and not new_bm25_texts:
                     skipped_count += 1
@@ -647,9 +729,32 @@ async def run_pipeline_async(
 
     _save_bm25(bm25_texts, bm25_corpus)
 
+    if all_extracted_facts:
+        from ingestion.facts_store import FactStore
+
+        try:
+            existing_facts = FactStore.load()
+            FactStore.save(existing_facts + all_extracted_facts)
+            logger.info(f"Persisted {len(all_extracted_facts)} GAAP facts to FactStore.")
+        except Exception as exc:
+            logger.warning(f"Failed to persist extracted facts to FactStore: {exc}")
+
     if kg_enabled and kg_store and kg_graph:
         kg_store.save(kg_graph)
         logger.info(f"Knowledge graph: {kg_graph.summary()}")
+
+    # Invalidate semantic cache for any newly indexed tickers to guarantee cache coherence
+    if indexed_count > 0:
+        try:
+            from retrieval.semantic_cache import SemanticCache
+
+            cache = SemanticCache(qdrant_url=_settings.infra.qdrant_url)
+            indexed_tickers = {f.stem.split("_")[0].upper() for f in transcript_files if f.stem}
+            for t in indexed_tickers:
+                await cache.invalidate_ticker(t)
+            logger.info(f"Invalidated semantic cache for indexed tickers: {indexed_tickers}")
+        except Exception as exc:
+            logger.debug(f"Semantic cache invalidation skipped or deferred: {exc}")
 
     pipeline_total_time = time.perf_counter() - pipeline_start_time
     _save_ingestion_metrics(metrics_records, pipeline_total_time)
@@ -662,6 +767,7 @@ def run_pipeline(
     concurrency: int | None = None,
     threads: int | None = None,
     kg_only: bool = False,
+    contextual_retrieval: bool = False,
 ) -> None:
     """Synchronous entry point to run the ingestion pipeline."""
     asyncio.run(
@@ -670,6 +776,7 @@ def run_pipeline(
             concurrency_override=concurrency,
             threads_override=threads,
             kg_only=kg_only,
+            contextual_retrieval=contextual_retrieval,
         )
     )
 
@@ -704,10 +811,20 @@ if __name__ == "__main__":
             "Use to recover a blank knowledge graph after a failed extraction."
         ),
     )
+    parser.add_argument(
+        "--contextual-retrieval",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable Anthropic-style LLM contextual retrieval chunk enrichment "
+            "(default: disabled, relies on deterministic metadata prefix)."
+        ),
+    )
     args = parser.parse_args()
     run_pipeline(
         fast=args.fast,
         concurrency=args.concurrency,
         threads=args.threads,
         kg_only=args.kg_only,
+        contextual_retrieval=args.contextual_retrieval,
     )

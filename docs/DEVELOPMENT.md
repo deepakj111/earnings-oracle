@@ -42,8 +42,8 @@ docker --version     # Docker 24.x
 ### 1. Clone and bootstrap
 
 ```bash
-git clone https://github.com/your-username/rag-project.git
-cd rag-project
+git clone https://github.com/deepakj111/earnings-oracle.git
+cd earnings-oracle      # or cd rag-project
 poetry install          # installs all deps including dev group
 ```
 
@@ -51,12 +51,23 @@ poetry install          # installs all deps including dev group
 
 ```bash
 cp .env.example .env
+
+# Option A (Recommended): Google Cloud Application Default Credentials (Zero Keys)
+gcloud auth application-default login
+
+# Option B: OpenAI API Key
+# Set RAG_LLM_PROVIDER=openai and OPENAI_API_KEY in .env
 ```
 
 Edit `.env` (minimum required keys):
 
 ```dotenv
-OPENAI_API_KEY=sk-...
+# Provider selection: "gemini" (default with ADC) or "openai"
+RAG_LLM_PROVIDER="gemini"
+GOOGLE_CLOUD_PROJECT="gleaming-vision-509507-j6"
+GOOGLE_CLOUD_LOCATION="us-central1"
+
+# Required by SEC EDGAR fair-access policy
 SEC_USER_AGENT="Firstname Lastname firstname@example.com"
 QDRANT_URL=http://localhost:6333
 ```
@@ -68,40 +79,54 @@ poetry run pre-commit install
 # Hooks now run automatically on every git commit
 ```
 
-### 4. Start Qdrant
+### 4. Start backing infrastructure
+
+Start the local backing services (Qdrant vector DB, Redis cache, Jaeger tracing, Prometheus, Grafana) via Docker Compose:
 
 ```bash
-docker run -d \
-  --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
-  qdrant/qdrant:v1.9.2
+docker compose up -d qdrant redis jaeger prometheus grafana
 ```
 
 ### 5. Ingest data
 
 ```bash
-# Download SEC 10-K/10-Q filings (one-time, ~5–10 min)
+# Download SEC 10-K/10-Q filings (default portfolio: NVDA, WMT, NFLX, UNH)
 poetry run python -m ingestion.download_filings
 
-# Build Qdrant + BM25 index (computes OpenAI embeddings and constructs BM25 & KG index)
+# Or download custom company filings (e.g. AAPL, MSFT)
+# See docs/ADDING_COMPANIES.md for onboarding any ticker via config/companies.json
+poetry run python -m ingestion.download_filings --tickers AAPL,MSFT
+
+# Build Qdrant + BM25 + Knowledge Graph index (idempotent, resumable)
 poetry run python -m ingestion.pipeline
+
+# Ingestion options:
+#   --fast                    Instant regex entity extraction (skip LLM network calls)
+#   --contextual-retrieval    Enable Anthropic-style LLM contextual chunk enrichment
+#   --kg-only                 Re-extract Knowledge Graph on existing indexed files
+#   --concurrency N           Set worker concurrency limit
 ```
 
 ### 6. Start services
 
 ```bash
-# API server (development mode with auto-reload)
+# Production server (multi-worker)
+poetry run serve-prod
+
+# Or development server (auto-reload)
 poetry run serve
 
-# Streamlit UI (separate terminal)
+# Streamlit UI (optional, separate terminal)
 poetry run ui
 ```
 
-Open:
-- API docs: http://localhost:8000/docs
-- Streamlit: http://localhost:8501
-- Health: http://localhost:8000/health
+Access:
+- **Web App**: http://localhost:8000/app (or http://localhost:8000/)
+- **API Swagger Docs**: http://localhost:8000/docs
+- **Jaeger APM Tracing**: http://localhost:16686
+- **Prometheus Metrics**: http://localhost:9090
+- **Grafana Dashboard**: http://localhost:3000 (admin / admin)
+- **Master Operations Runbook**: See [RUNBOOK.md](RUNBOOK.md) for the complete command reference.
 
 ---
 
@@ -148,7 +173,7 @@ from config import settings
 from retrieval.models import SearchResult
 ```
 
-First-party packages: `ingestion`, `query`, `retrieval`, `generation`, `crag`, `evaluation`, `api`, `config`, `ui`.
+First-party packages: `ingestion`, `query`, `retrieval`, `generation`, `evaluation`, `knowledge_graph`, `observability`, `api`, `config`, `ui`.
 
 ### Type annotations
 
@@ -200,7 +225,7 @@ docker compose exec api poetry run python -m ingestion.pipeline
 
 ```bash
 # Comprehensive diagnostic tool
-poetry run python scripts/inspect_index.py
+poetry run inspect-data
 ```
 
 Output includes filesystem stats, BM25 corpus summary (per-ticker/quarter distribution, avg token length), and Qdrant collection stats (point counts per ticker, sample payloads, consistency check).
@@ -212,18 +237,14 @@ Output includes filesystem stats, BM25 corpus summary (per-ticker/quarter distri
 ### Running tests
 
 ```bash
-# Full suite with verbose output and timing
-poetry run pytest tests/ -v --durations=20
+# Full suite (885 tests with verbose output and timing)
+poetry run pytest tests/ -v --durations=10
 
 # Quiet (just counts)
 poetry run pytest tests/ -q
 
 # With coverage report
-poetry run pytest tests/ --cov-report=html
-open htmlcov/index.html
-
-# With CI-mode coverage gate (≥80% required)
-poetry run pytest tests/ --cov-fail-under=80
+poetry run pytest tests/ --cov=. --cov-report=term-missing
 
 # Single module
 poetry run pytest tests/test_chunker.py -v
@@ -233,26 +254,23 @@ poetry run pytest tests/test_api_query.py::TestAskEndpoint -v
 
 # Single test
 poetry run pytest tests/test_generator.py::TestGeneratorGenerate::test_empty_retrieval_returns_no_context_answer -v
+```
 
 ### Ablation Benchmarking & Component Isolation Testing
 
-The 6-arm RAG portfolio ablation framework (`scripts/run_portfolio_ablations.py`) enforces strict component isolation between architecture iterations. Each arm patches environment variables via `ExperimentConfig.to_env_patch()`:
+The RAG portfolio ablation framework (`scripts/run_portfolio_ablations.py`) enforces strict, unconfounded component isolation between architecture variants. Each isolated arm enables **exactly one** feature over the dense-only baseline:
 
-| Arm | Description | BM25 (`top_k_bm25`) | Transforms (`RAG_TRANSFORM_*`) | Reranker (`RAG_RERANKER`) | GraphRAG (`RAG_KG_RETRIEVAL`) | CRAG (`RAG_CRAG`) |
-|:---:|:---|:---:|:---:|:---:|:---:|:---:|
-| **1** | Base Naive RAG | `0` | `false` | `false` | `false` | `false` |
-| **2** | + BM25 Sparse Hybrid | `25` | `false` | `false` | `false` | `false` |
-| **3** | + Query Transformations | `25` | `true` | `false` | `false` | `false` |
-| **4** | + FlashRank Reranker | `25` | `true` | `true` | `false` | `false` |
-| **5** | + Knowledge Graph (GraphRAG) | `25` | `true` | `true` | `true` | `false` |
-| **6** | Full Stack (+ CRAG Fallback) | `25` | `true` | `true` | `true` | `true` |
+| Isolated Arm | Feature Tested | All Others |
+|:---|:---|:---|
+| `bm25` | BM25 keyword matching + hybrid RRF (k=60) | Disabled |
+| `querytransform` | HyDE + 3× Multi-Query + Step-Back prompting | Disabled |
+| `reranker` | FlashRank cross-encoder (`ms-marco-MiniLM-L-12-v2`) | Disabled |
+| `graphrag` | Knowledge Graph entity matching & multi-hop context | Disabled |
+| `pal_math` | Sentence NLI Grounding Verification & PAL Math Evaluator | Disabled |
 
 ```bash
-# Run 6-arm ablation study on all golden questions
-poetry run python scripts/run_portfolio_ablations.py --all
-
-# Run a single arm in isolation (e.g. Arm 1 only)
-poetry run python scripts/run_portfolio_ablations.py --arm 1
+# Run all isolated arms on the dataset
+poetry run python scripts/run_portfolio_ablations.py --isolated --all
 
 # Run automated zero-leakage invariant assertions across all arms (5 samples)
 poetry run python scripts/verify_ablation_isolation.py --run -n 5
@@ -492,13 +510,14 @@ All environment variables follow the pattern `RAG_<SECTION>_<KEY>`. See `config/
 ```dotenv
 # Fast development cycle — disable expensive components
 RAG_RERANKER_ENABLED=false       # Skip FlashRank (faster iteration)
-RAG_CRAG_ENABLED=false           # Skip CRAG loop
+RAG_CONTEXT_COMPRESSION_ENABLED=false # Skip contextual compression
+RAG_KG_RETRIEVAL_ENABLED=false   # Skip knowledge graph retrieval
 RAG_RETRIEVAL_TOP_K_DENSE=5      # Fewer Qdrant candidates
 RAG_RETRIEVAL_TOP_K_FINAL=3      # Fewer final chunks
 
-# Model selection
-RAG_GENERATION_MODEL=gpt-5-mini
-RAG_QUERY_TRANSFORM_MODEL=gpt-5-mini
+# Model selection (default: gemini-2.5-flash via ADC; or gpt-5-mini via OpenAI)
+RAG_GENERATION_MODEL=gemini-2.5-flash
+RAG_QUERY_TRANSFORM_MODEL=gemini-2.5-flash
 
 # Evaluation
 RAG_EVAL_OUTPUT_DIR=data/eval_reports
@@ -573,9 +592,11 @@ The API starts but retrieval fails with 503. Run the ingestion pipeline:
 poetry run python -m ingestion.pipeline
 ```
 
-### `OPENAI_API_KEY is not set`
+### `Neither GEMINI_API_KEY nor valid ADC found` / `OPENAI_API_KEY is not set`
 
-Settings validation fails at startup. Ensure `.env` is present and contains the key.
+Settings validation fails at startup if the credentials for the active `RAG_LLM_PROVIDER` are missing:
+- When `RAG_LLM_PROVIDER="gemini"` (default): Ensure you have run `gcloud auth application-default login` or provided `GEMINI_API_KEY` in `.env`.
+- When `RAG_LLM_PROVIDER="openai"`: Ensure `OPENAI_API_KEY` is present in `.env`.
 
 ### `Qdrant collection 'company_filings' NOT found`
 
@@ -597,7 +618,7 @@ poetry run python -m ingestion.pipeline
 Ensure all function signatures have complete type annotations:
 
 ```bash
-poetry run mypy ingestion/ --ignore-missing-imports --disallow-untyped-defs --pretty
+poetry run mypy ingestion/ query/ retrieval/ generation/ evaluation/ observability/ api/ config/ knowledge_graph/ --ignore-missing-imports --disallow-untyped-defs --pretty
 ```
 
 ### Tests fail with `DuplicateTimeseries` Prometheus error

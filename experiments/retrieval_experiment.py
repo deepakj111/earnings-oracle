@@ -37,6 +37,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -72,8 +73,7 @@ class ExperimentConfig:
     multiquery_enabled: bool | None = None
     stepback_enabled: bool | None = None
     graphrag_enabled: bool | None = None
-    use_crag: bool | None = None
-    generation_model: str | None = "gpt-5-mini"
+    generation_model: str | None = None
 
     def to_env_patch(self) -> dict[str, str]:
         """Convert config fields to environment variable overrides."""
@@ -98,8 +98,6 @@ class ExperimentConfig:
             patch["RAG_TRANSFORM_MULTIQUERY_ENABLED"] = str(self.multiquery_enabled).lower()
         if self.stepback_enabled is not None:
             patch["RAG_TRANSFORM_STEPBACK_ENABLED"] = str(self.stepback_enabled).lower()
-        if self.use_crag is not None:
-            patch["RAG_CRAG_ENABLED"] = str(self.use_crag).lower()
         return patch
 
     def diff_vs(self, other: ExperimentConfig) -> dict[str, tuple[Any, Any]]:
@@ -116,7 +114,6 @@ class ExperimentConfig:
             "multiquery_enabled",
             "stepback_enabled",
             "graphrag_enabled",
-            "use_crag",
         ):
             a, b = getattr(self, f_name), getattr(other, f_name)
             if a != b:
@@ -312,9 +309,15 @@ class RetrievalExperiment:
         metrics: list[str],
         arm_dir: Path | None = None,
         force_recompute: bool = False,
+        batch_size: int = 5,
     ) -> ArmResult:
         """
-        Run a single experiment arm with incremental per-sample checkpointing.
+        Run a single experiment arm with incremental per-batch checkpointing.
+
+        Questions are evaluated in parallel batches of ``batch_size`` (default 5)
+        using a ``ThreadPoolExecutor``.  Each worker creates its own pipeline
+        instance to avoid data-races on the ``last_transformed_query`` /
+        ``last_retrieval_result`` / ``last_crag_result`` instance attributes.
 
         If arm_dir is provided and contains samples.json, successful sample results
         are reused to prevent redundant API calls upon restart/resumption unless
@@ -345,7 +348,8 @@ class RetrievalExperiment:
                         cached_items = json.load(f)
                     for item in cached_items:
                         if isinstance(item, dict) and not item.get("pipeline_failed", True):
-                            cached_map[item["sample_id"]] = item
+                            if item.get("generated_answer", "") != "":
+                                cached_map[item["sample_id"]] = item
                     if cached_map:
                         logger.info(
                             f"[{config.label}] Loaded {len(cached_map)} cached sample results from {cache_file}"
@@ -353,13 +357,130 @@ class RetrievalExperiment:
                 except Exception as exc:
                     logger.warning(f"Failed to read cache file {cache_file}: {exc}")
 
-        try:
+        # ── Per-sample worker (runs inside a thread pool) ─────────────────────
+        def _run_one_sample(sample: EvalSample, global_idx: int, total: int) -> dict[str, Any]:
+            """
+            Execute one pipeline call + metric scoring for a single sample.
+
+            Each invocation creates its own pipeline instance so that the
+            thread-local pipeline attributes (last_transformed_query,
+            last_retrieval_result, last_crag_result) don't race across
+            concurrent calls.
+            """
+            t_sample = time.perf_counter()
             pipeline = self._factory()
+            import asyncio
+
+            try:
+                result = asyncio.run(pipeline.ask(sample.question))
+
+                # ── Pipeline latency: query received → answer generated ────────
+                # Captured BEFORE evaluation scoring so it excludes LLM-judge
+                # API call overhead (~15–20 s per sample for 4 judge metrics).
+                pipeline_latency = round(time.perf_counter() - t_sample, 3)
+
+                # Use full text of retrieved context chunks provided to the generator
+                context_chunks = (
+                    result.retrieved_chunks
+                    if getattr(result, "retrieved_chunks", None)
+                    else [c.full_text or c.excerpt for c in result.citations]
+                )
+
+                scores = compute_all_metrics(
+                    question=sample.question,
+                    answer=result.answer,
+                    context_chunks=context_chunks,
+                    ground_truth=sample.ground_truth,
+                    metrics=metrics,
+                )
+                # Total wall time including eval scoring (kept for backward compat)
+                sample_latency = time.perf_counter() - t_sample
+                scores_str = " | ".join(
+                    f"{m[:5].capitalize()}: {v:.2f}" for m, v in list(scores.items())[:4]
+                )
+                logger.info(
+                    f"[{config.label}] Sample {global_idx}/{total}: {sample.sample_id} "
+                    f"| {sample_latency:.1f}s | {scores_str}"
+                )
+                transformed_q = getattr(pipeline, "last_transformed_query", None)
+                retrieval_res = getattr(pipeline, "last_retrieval_result", None)
+
+                telemetry = {
+                    "multi_query_count": len(transformed_q.multi_queries) if transformed_q else 1,
+                    "hyde_generated": (transformed_q.hyde_document != sample.question)
+                    if transformed_q
+                    else False,
+                    "stepback_generated": (transformed_q.stepback_query != sample.question)
+                    if transformed_q
+                    else False,
+                    "reranked": bool(retrieval_res.reranked) if retrieval_res else False,
+                    "total_candidates": retrieval_res.total_candidates if retrieval_res else 0,
+                    "chunk_sources": list({r.source for r in retrieval_res.results})
+                    if retrieval_res
+                    else [],
+                    "graph_chunks_count": sum(
+                        1 for r in retrieval_res.results if r.source == "graph"
+                    )
+                    if retrieval_res
+                    else 0,
+                }
+
+                return {
+                    "sample_id": sample.sample_id,
+                    "ticker": sample.ticker,
+                    "question": sample.question,
+                    "ground_truth": sample.ground_truth,
+                    "generated_answer": result.answer,
+                    "citations": [
+                        {
+                            "source_file": getattr(c, "source_file", ""),
+                            "excerpt": getattr(c, "excerpt", "")[:300],
+                        }
+                        for c in result.citations
+                    ],
+                    "context_chunks": context_chunks,
+                    "telemetry": telemetry,
+                    # pipeline_latency_seconds: query-to-answer only (excludes eval scoring)
+                    "pipeline_latency_seconds": pipeline_latency,
+                    # latency_seconds: legacy total wall time (includes eval scoring)
+                    "latency_seconds": round(sample_latency, 3),
+                    "scores": scores,
+                    "pipeline_failed": False,
+                }
+            except Exception as exc:
+                logger.warning(
+                    f"  [{config.label}] Sample {global_idx}/{total}: {sample.sample_id} failed: {exc}"
+                )
+                elapsed = round(time.perf_counter() - t_sample, 3)
+                return {
+                    "sample_id": sample.sample_id,
+                    "ticker": sample.ticker,
+                    "question": sample.question,
+                    "ground_truth": sample.ground_truth,
+                    "generated_answer": "",
+                    "citations": [],
+                    "context_chunks": [],
+                    # On failure, both fields reflect elapsed time at point of failure
+                    "pipeline_latency_seconds": elapsed,
+                    "latency_seconds": elapsed,
+                    "scores": {m: 0.0 for m in metrics},
+                    "pipeline_failed": True,
+                }
+            finally:
+                # Release Qdrant lock held by this per-sample pipeline instance
+                if hasattr(pipeline, "qdrant_client"):
+                    with contextlib.suppress(Exception):
+                        pipeline.qdrant_client.close()
+
+        # ── Batch-parallel execution ──────────────────────────────────────────
+        try:
             sample_scores: list[dict[str, Any]] = []
             errors = 0
 
+            # Separate already-cached samples (add them instantly) from
+            # samples that still need to be evaluated.
+            pending: list[tuple[int, EvalSample]] = []  # (1-based global_idx, sample)
             for idx, sample in enumerate(dataset, start=1):
-                # ── Check incremental cache ──────────────────────────────────
                 if sample.sample_id in cached_map:
                     cached_sample = cached_map[sample.sample_id]
                     scores_str = " | ".join(
@@ -371,105 +492,65 @@ class RetrievalExperiment:
                         f"| {cached_sample.get('latency_seconds', 0.0):.1f}s | {scores_str}"
                     )
                     sample_scores.append(cached_sample)
-                    continue
+                else:
+                    pending.append((idx, sample))
 
-                t_sample = time.perf_counter()
-                try:
-                    if config.use_crag:
-                        crag_res = pipeline.ask_with_crag(sample.question)
-                        result = crag_res.final_result
-                    else:
-                        result = pipeline.ask(sample.question)
+            logger.info(
+                f"[{config.label}] {len(sample_scores)} cached | "
+                f"{len(pending)} to evaluate | batch_size={batch_size}"
+            )
 
-                    # Use full text of retrieved context chunks provided to the generator
-                    context_chunks = (
-                        result.retrieved_chunks
-                        if getattr(result, "retrieved_chunks", None)
-                        else [c.full_text or c.excerpt for c in result.citations]
-                    )
+            # Process pending samples in parallel batches of batch_size
+            from concurrent.futures import ThreadPoolExecutor, as_completed
 
-                    scores = compute_all_metrics(
-                        question=sample.question,
-                        answer=result.answer,
-                        context_chunks=context_chunks,
-                        ground_truth=sample.ground_truth,
-                        metrics=metrics,
-                    )
-                    sample_latency = time.perf_counter() - t_sample
-                    scores_str = " | ".join(
-                        f"{m[:5].capitalize()}: {v:.2f}" for m, v in list(scores.items())[:4]
-                    )
-                    logger.info(
-                        f"[{config.label}] Sample {idx}/{len(dataset)}: {sample.sample_id} "
-                        f"| {sample_latency:.1f}s | {scores_str}"
-                    )
-                    transformed_q = getattr(pipeline, "last_transformed_query", None)
-                    retrieval_res = getattr(pipeline, "last_retrieval_result", None)
-                    crag_res = getattr(pipeline, "last_crag_result", None)
+            for batch_start in range(0, len(pending), batch_size):
+                batch = pending[batch_start : batch_start + batch_size]
+                batch_num = batch_start // batch_size + 1
+                total_batches = (len(pending) + batch_size - 1) // batch_size
+                logger.info(
+                    f"[{config.label}] Batch {batch_num}/{total_batches} "
+                    f"— submitting {len(batch)} samples concurrently"
+                )
 
-                    telemetry = {
-                        "multi_query_count": len(transformed_q.multi_queries)
-                        if transformed_q
-                        else 1,
-                        "hyde_generated": (transformed_q.hyde_document != sample.question)
-                        if transformed_q
-                        else False,
-                        "stepback_generated": (transformed_q.stepback_query != sample.question)
-                        if transformed_q
-                        else False,
-                        "reranked": bool(retrieval_res.reranked) if retrieval_res else False,
-                        "total_candidates": retrieval_res.total_candidates if retrieval_res else 0,
-                        "chunk_sources": list({r.source for r in retrieval_res.results})
-                        if retrieval_res
-                        else [],
-                        "graph_chunks_count": sum(
-                            1 for r in retrieval_res.results if r.source == "graph"
-                        )
-                        if retrieval_res
-                        else 0,
-                        "crag_action": crag_res.action.value if crag_res else None,
+                batch_results: dict[int, dict[str, Any]] = {}
+                with ThreadPoolExecutor(
+                    max_workers=len(batch), thread_name_prefix=f"ablation_batch_{batch_num}"
+                ) as executor:
+                    fut_to_idx = {
+                        executor.submit(_run_one_sample, sample, global_idx, len(dataset)): i
+                        for i, (global_idx, sample) in enumerate(batch)
                     }
-
-                    s_dict = {
-                        "sample_id": sample.sample_id,
-                        "ticker": sample.ticker,
-                        "question": sample.question,
-                        "ground_truth": sample.ground_truth,
-                        "generated_answer": result.answer,
-                        "citations": [
-                            {
-                                "source_file": getattr(c, "source_file", ""),
-                                "excerpt": getattr(c, "excerpt", "")[:300],
+                    for fut in as_completed(fut_to_idx):
+                        batch_pos = fut_to_idx[fut]
+                        try:
+                            batch_results[batch_pos] = fut.result()
+                        except Exception as exc:
+                            global_idx, sample = batch[batch_pos]
+                            logger.error(
+                                f"[{config.label}] Unhandled future error for "
+                                f"{sample.sample_id}: {exc}"
+                            )
+                            batch_results[batch_pos] = {
+                                "sample_id": sample.sample_id,
+                                "ticker": sample.ticker,
+                                "question": sample.question,
+                                "ground_truth": sample.ground_truth,
+                                "generated_answer": "",
+                                "citations": [],
+                                "context_chunks": [],
+                                "latency_seconds": 0.0,
+                                "scores": {m: 0.0 for m in metrics},
+                                "pipeline_failed": True,
                             }
-                            for c in result.citations
-                        ],
-                        "context_chunks": context_chunks,
-                        "telemetry": telemetry,
-                        "latency_seconds": round(sample_latency, 3),
-                        "scores": scores,
-                        "pipeline_failed": False,
-                    }
-                    sample_scores.append(s_dict)
-                except Exception as exc:
-                    logger.warning(
-                        f"  [{config.label}] Sample {idx}/{len(dataset)}: {sample.sample_id} failed: {exc}"
-                    )
-                    errors += 1
-                    s_dict = {
-                        "sample_id": sample.sample_id,
-                        "ticker": sample.ticker,
-                        "question": sample.question,
-                        "ground_truth": sample.ground_truth,
-                        "generated_answer": "",
-                        "citations": [],
-                        "context_chunks": [],
-                        "latency_seconds": round(time.perf_counter() - t_sample, 3),
-                        "scores": {m: 0.0 for m in metrics},
-                        "pipeline_failed": True,
-                    }
+
+                # Append batch results in original dataset order
+                for i in range(len(batch)):
+                    s_dict = batch_results[i]
+                    if s_dict["pipeline_failed"]:
+                        errors += 1
                     sample_scores.append(s_dict)
 
-                # Checkpoint to disk after every sample
+                # Checkpoint to disk after every batch
                 if cache_file is not None:
                     try:
                         with open(cache_file, "w", encoding="utf-8") as f:
@@ -480,7 +561,7 @@ class RetrievalExperiment:
                             for s in sample_scores
                             if isinstance(s, dict)
                         }
-                        with open(arm_dir / "answers.json", "w", encoding="utf-8") as f:
+                        with open(arm_dir / "answers.json", "w", encoding="utf-8") as f:  # type: ignore[operator]
                             json.dump(answers_map, f, indent=2)
                     except Exception as exc:
                         logger.warning(f"Failed to write checkpoint to {cache_file}: {exc}")
@@ -510,10 +591,6 @@ class RetrievalExperiment:
             )
 
         finally:
-            # Releasing the lock so subsequent local Qdrant clients can bind
-            if "pipeline" in locals() and hasattr(pipeline, "qdrant_client"):
-                pipeline.qdrant_client.close()
-
             for k, original_v in original_env.items():
                 if original_v is None:
                     os.environ.pop(k, None)
@@ -556,7 +633,13 @@ def _cli_main() -> None:
     from rag_pipeline import FinancialRAGPipeline
 
     def make_pipeline() -> FinancialRAGPipeline:
-        client = QdrantClient(url=settings.infra.qdrant_url)
+        try:
+            client = QdrantClient(
+                url=settings.infra.qdrant_url, timeout=10, check_compatibility=False
+            )
+            client.get_collections()
+        except Exception:
+            client = QdrantClient(path="data/qdrant_user_storage")
         return FinancialRAGPipeline(qdrant_client=client)
 
     exp = RetrievalExperiment(pipeline_factory=make_pipeline)

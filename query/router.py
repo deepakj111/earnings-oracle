@@ -5,7 +5,7 @@ Query Router — classifies incoming questions before they enter the pipeline.
 Intent classification determines the routing tier:
 
   FINANCIAL_SPECIFIC   : Ticker + metric + period detected → full pipeline (L2-L5)
-  FINANCIAL_GENERAL    : Financial domain but no specific entity → L2 + L3 + L4 (skip CRAG)
+  FINANCIAL_GENERAL    : Financial domain but no specific entity → L2 + L3 + L4
   OUT_OF_SCOPE         : Non-financial question → short-circuit with refusal
   AMBIGUOUS            : Uncertain → route to full pipeline with a low-confidence flag
 
@@ -37,36 +37,38 @@ from enum import Enum
 from typing import Any
 
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from config import settings as _settings
-from config.openai_client import get_openai_client
+from config.llm_client import parse
+
+
+def get_openai_client() -> Any:
+    """Backward-compat shim for test mocking."""
+    from config.openai_client import get_openai_client as _get
+
+    return _get()
 
 
 def _build_ticker_resolver() -> tuple[re.Pattern, dict[str, str]]:
     """
     Dynamically build ticker matching pattern and normalization mapping
-    from registered companies in COMPANY_MAP.
+    from registered companies and aliases in CompanyRegistry.
     """
-    from ingestion.metadata_extractor import COMPANY_MAP
+    from config.companies import CompanyRegistry
 
+    alias_map = CompanyRegistry.get_alias_map()
     mapping: dict[str, str] = {}
     patterns: set[str] = set()
 
-    for ticker, company_name in COMPANY_MAP.items():
+    for phrase, ticker in alias_map.items():
         t_upper = ticker.upper()
+        p_upper = phrase.upper()
         mapping[t_upper] = t_upper
+        mapping[p_upper] = t_upper
+        mapping[phrase] = t_upper
+        patterns.add(re.escape(phrase))
         patterns.add(re.escape(t_upper))
-
-        c_upper = company_name.upper()
-        mapping[c_upper] = t_upper
-        patterns.add(re.escape(company_name))
-
-        first_word = company_name.split()[0]
-        if len(first_word) >= 3:
-            fw_upper = first_word.upper()
-            if fw_upper not in mapping:
-                mapping[fw_upper] = t_upper
-            patterns.add(re.escape(first_word))
 
     sorted_patterns = sorted(patterns, key=len, reverse=True)
     combined = "|".join(sorted_patterns)
@@ -126,14 +128,16 @@ OUT_OF_SCOPE: Completely off-topic. Examples: "Write me a poem", "What is the we
   "Tell me a joke", greetings, small talk.
 
 AMBIGUOUS: Unclear whether the query needs RAG or not. Cannot confidently classify.
+"""
 
-Respond ONLY with valid JSON:
-{
-  "intent": "FINANCIAL_SPECIFIC" | "FINANCIAL_GENERAL" | "OUT_OF_SCOPE" | "AMBIGUOUS",
-  "confidence": float between 0.0 and 1.0,
-  "detected_ticker": "TICKER_SYMBOL" | null,
-  "reasoning": "one sentence explanation"
-}"""
+
+class RouterDecisionSchema(BaseModel):
+    intent: QueryIntent = Field(description="The classified intent of the user's query.")
+    confidence: float = Field(description="Confidence in the classification from 0.0 to 1.0.")
+    detected_ticker: str | None = Field(
+        default=None, description="The ticker symbol if detected, else None."
+    )
+    reasoning: str = Field(description="A short one sentence explanation of the reasoning.")
 
 
 _COMPARATIVE_KEYWORDS = frozenset(
@@ -195,6 +199,7 @@ class RoutingDecision:
     detected_year: int | None = None
     detected_quarter: str | None = None
     is_comparative: bool = False
+    refuse_probability: float = 0.0
 
     @property
     def is_specific(self) -> bool:
@@ -211,8 +216,13 @@ class RoutingDecision:
             f"intent={self.intent.value} confidence={self.confidence:.2f} "
             f"ticker={self.detected_ticker or 'none'} "
             f"skip_transform={self.skip_transform} refuse={self.should_refuse} "
+            f"refuse_prob={self.refuse_probability:.2f} "
             f"latency={self.latency_ms:.0f}ms{heuristic_tag}{comparative_tag}"
         )
+
+
+# Public alias for API consistency
+RoutingResult = RoutingDecision
 
 
 @dataclass
@@ -253,7 +263,6 @@ class QueryRouter:
     """
 
     def __init__(self) -> None:
-        self._client = get_openai_client()
         self._model = _settings.query_router.model
         self._stats = RouterStats()
         logger.info(f"QueryRouter initialised | model={self._model}")
@@ -280,6 +289,7 @@ class QueryRouter:
             latency_ms = (time.perf_counter() - t_start) * 1000
             h_intent, h_conf, h_ticker, h_reason, h_year, h_quarter, h_comp = heuristic_result
             decision = self._build_decision(
+                question_clean,
                 intent=h_intent,
                 confidence=h_conf,
                 detected_ticker=h_ticker,
@@ -297,19 +307,23 @@ class QueryRouter:
         llm_result = self._llm_classify(question_clean)
         latency_ms = (time.perf_counter() - t_start) * 1000
 
+        detected_ticker = llm_result.get("detected_ticker")
+        from query.fiscal_resolver import FiscalResolver
+
+        resolved_period = FiscalResolver.resolve(question_clean, ticker=detected_ticker)
         all_years = re.findall(r"\b(202[0-9])\b", question_clean)
         is_comparative = (
             any(kw in question_clean.lower() for kw in _COMPARATIVE_KEYWORDS)
             or len(set(all_years)) > 1
         )
-        detected_year = int(all_years[0]) if all_years else None
-        quarter_match = re.search(r"\b(q[1-4]|fy)\b", question_clean.lower())
-        detected_quarter = quarter_match.group(1).upper() if quarter_match else None
+        detected_year = resolved_period.fiscal_year
+        detected_quarter = resolved_period.quarter
 
         decision = self._build_decision(
+            question_clean,
             intent=QueryIntent(llm_result.get("intent", "AMBIGUOUS")),
             confidence=float(llm_result.get("confidence", 0.5)),
-            detected_ticker=llm_result.get("detected_ticker"),
+            detected_ticker=detected_ticker,
             reasoning=llm_result.get("reasoning", "LLM classification"),
             latency_ms=latency_ms,
             used_heuristic=False,
@@ -361,24 +375,25 @@ class QueryRouter:
         ticker_match = ticker_pattern.search(question)
         has_financial_kw = any(kw in lower for kw in _FINANCIAL_KEYWORDS)
 
-        all_years = re.findall(r"\b(202[0-9])\b", question)
-        detected_year = int(all_years[0]) if all_years else None
-
-        quarter_match = re.search(r"\b(q[1-4]|fy)\b", lower)
-        detected_quarter = quarter_match.group(1).upper() if quarter_match else None
-
-        is_comparative = any(kw in lower for kw in _COMPARATIVE_KEYWORDS) or len(set(all_years)) > 1
-
         if ticker_match and has_financial_kw:
             raw_match = ticker_match.group(0).upper()
             canonical = ticker_map.get(raw_match, raw_match)
+
+            from query.fiscal_resolver import FiscalResolver
+
+            resolved_period = FiscalResolver.resolve(question, ticker=canonical)
+            all_years = re.findall(r"\b(202[0-9])\b", question)
+            is_comparative = (
+                any(kw in lower for kw in _COMPARATIVE_KEYWORDS) or len(set(all_years)) > 1
+            )
+
             return (
                 QueryIntent.FINANCIAL_SPECIFIC,
                 0.92,
                 canonical,
                 f"Detected ticker {canonical} with financial keyword",
-                detected_year,
-                detected_quarter,
+                resolved_period.fiscal_year,
+                resolved_period.quarter,
                 is_comparative,
             )
 
@@ -386,33 +401,18 @@ class QueryRouter:
 
     def _llm_classify(self, question: str) -> dict:
         """Call the LLM for structured classification. Returns parsed JSON dict."""
-        import json
-
         try:
-            kwargs: dict[str, Any] = {
-                "model": self._model,
-                "messages": [
+            result = parse(
+                messages=[
                     {"role": "system", "content": _ROUTER_SYSTEM_PROMPT},
                     {"role": "user", "content": question},
                 ],
-                "max_completion_tokens": _settings.query_router.max_tokens,
-                "response_format": {"type": "json_object"},
-            }
-            if _settings.query_router.temperature != 1.0 and not self._model.startswith(
-                ("gpt-5", "o1", "o3")
-            ):
-                kwargs["temperature"] = _settings.query_router.temperature
-
-            try:
-                response = self._client.chat.completions.create(**kwargs)
-            except Exception as exc:
-                if "temperature" in str(exc).lower() and "temperature" in kwargs:
-                    kwargs.pop("temperature")
-                    response = self._client.chat.completions.create(**kwargs)
-                else:
-                    raise
-            raw = response.choices[0].message.content or "{}"
-            return json.loads(raw)
+                schema=RouterDecisionSchema,
+                model=self._model,
+                temperature=_settings.query_router.temperature,
+                max_tokens=_settings.query_router.max_tokens,
+            )
+            return result.model_dump()
         except Exception as exc:
             logger.warning(f"Router LLM call failed ({exc}), defaulting to AMBIGUOUS")
             return {
@@ -424,6 +424,7 @@ class QueryRouter:
 
     def _build_decision(
         self,
+        question: str,
         intent: QueryIntent,
         confidence: float,
         detected_ticker: str | None,
@@ -434,12 +435,40 @@ class QueryRouter:
         detected_quarter: str | None = None,
         is_comparative: bool = False,
     ) -> RoutingDecision:
+        # Strict HyDE Gating (2026 SOTA Financial RAG Standard):
+        # HyDE synthesizes a hypothetical SEC filing passage. For queries that are already
+        # well-grounded or anchored to specific entities/periods/filings, HyDE is wasteful
+        # (adds 1-2s latency) and harmful (causes hallucination drift from exact SEC numbers).
+        # HyDE is skipped if ANY anchor or high description is present:
+        lower_q = question.lower()
+        has_filing_token = bool(
+            re.search(
+                r"\b(?:form\s*)?10[-‑]?[kq]\b|\b8[-‑]?k\b|\bannual\s+report\b|\bproxy\b", lower_q
+            )
+        )
+        is_well_described = len(question.strip().split()) >= 6
+
+        skip_hyde = (
+            intent != QueryIntent.FINANCIAL_SPECIFIC
+            or detected_ticker is not None
+            or detected_year is not None
+            or detected_quarter is not None
+            or has_filing_token
+            or is_well_described
+        )
+
+        refuse_prob = (
+            confidence
+            if (intent == QueryIntent.OUT_OF_SCOPE)
+            else (round(max(0.0, 1.0 - confidence), 3) if intent == QueryIntent.AMBIGUOUS else 0.0)
+        )
+
         return RoutingDecision(
             intent=intent,
             confidence=confidence,
             detected_ticker=detected_ticker,
             reasoning=reasoning,
-            skip_hyde=(intent != QueryIntent.FINANCIAL_SPECIFIC),
+            skip_hyde=skip_hyde,
             skip_transform=(intent in (QueryIntent.OUT_OF_SCOPE, QueryIntent.FINANCIAL_GENERAL)),
             should_refuse=(intent == QueryIntent.OUT_OF_SCOPE),
             latency_ms=latency_ms,
@@ -447,6 +476,7 @@ class QueryRouter:
             detected_year=detected_year,
             detected_quarter=detected_quarter,
             is_comparative=is_comparative,
+            refuse_probability=refuse_prob,
         )
 
     def _update_stats(self, decision: RoutingDecision) -> None:

@@ -64,3 +64,42 @@ class TestTimingMiddleware:
         resp = client.get("/health/live")
         assert "x-request-id" in resp.headers
         assert "x-response-time-ms" in resp.headers
+
+
+class TestRateLimitMiddleware:
+    def test_rate_limit_headers_on_query_endpoint(self, client: TestClient) -> None:
+        resp = client.post("/query/", json={"question": "x"})
+        assert "x-ratelimit-limit" in resp.headers
+        assert "x-ratelimit-remaining" in resp.headers
+        assert "x-ratelimit-reset" in resp.headers
+
+    def test_exempt_health_endpoint_passes(self, client: TestClient) -> None:
+        resp = client.get("/health/live")
+        assert resp.status_code == 200
+
+    def test_rate_limit_throttle_triggers_429(self) -> None:
+        from fastapi import FastAPI
+        from fastapi.responses import JSONResponse
+
+        from api.middleware import RateLimitMiddleware
+
+        test_app = FastAPI()
+        test_app.add_middleware(RateLimitMiddleware, rpm=2)
+
+        @test_app.get("/test")
+        def endpoint():
+            return JSONResponse({"ok": True})
+
+        test_client = TestClient(test_app)
+        r1 = test_client.get("/test")
+        assert r1.status_code == 200
+        assert r1.headers["x-ratelimit-remaining"] == "1"
+
+        r2 = test_client.get("/test")
+        assert r2.status_code == 200
+        assert r2.headers["x-ratelimit-remaining"] == "0"
+
+        r3 = test_client.get("/test")
+        assert r3.status_code == 429
+        assert "retry-after" in r3.headers
+        assert r3.json()["error"] == "Too Many Requests"

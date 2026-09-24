@@ -25,6 +25,7 @@ Usage (programmatic):
 
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -89,10 +90,14 @@ class EvaluationHarness:
 
         # Run pipeline
         try:
-            result, _q_summary, _r_summary = self._pipeline.ask_verbose(
+            call_res = self._pipeline.ask_verbose(
                 question=sample.question,
                 metadata_filter=meta_filter,
             )
+            if asyncio.iscoroutine(call_res):
+                result, _q_summary, _r_summary = asyncio.run(call_res)
+            else:
+                result, _q_summary, _r_summary = call_res
         except Exception as exc:
             logger.warning(f"Pipeline failed for sample={sample.sample_id}: {exc}")
             return EvalSampleResult(
@@ -185,6 +190,13 @@ class EvaluationHarness:
         t_total = time.perf_counter()
         sample_results: list[EvalSampleResult] = [None] * len(samples)  # type: ignore[list-item]
 
+        try:
+            from tqdm import tqdm
+
+            pbar = tqdm(total=len(samples), desc="Evaluating QA samples", unit="sample")
+        except ImportError:
+            pbar = None
+
         with ThreadPoolExecutor(max_workers=_eval_cfg.max_workers) as pool:
             fut_to_idx = {
                 pool.submit(self._run_sample, s, selected_metrics): i for i, s in enumerate(samples)
@@ -202,6 +214,11 @@ class EvaluationHarness:
                         pipeline_failed=True,
                         error_message=str(exc),
                     )
+                if pbar is not None:
+                    pbar.update(1)
+
+        if pbar is not None:
+            pbar.close()
 
         # Compute aggregate metric averages (exclude failed samples)
         successful = [r for r in sample_results if not r.pipeline_failed]
@@ -275,7 +292,21 @@ if __name__ == "__main__":
     from rag_pipeline import FinancialRAGPipeline
 
     parser = argparse.ArgumentParser(description="Run the RAG evaluation harness.")
-    parser.add_argument("--n", type=int, default=0, help="Number of samples (0 = all)")
+    parser.add_argument(
+        "-n",
+        "--n",
+        "--sample-size",
+        type=int,
+        default=0,
+        help="Number of samples (0 = all)",
+    )
+    parser.add_argument(
+        "-t",
+        "--ticker",
+        type=str,
+        default=None,
+        help="Filter golden evaluation samples to a specific company ticker (e.g. NVDA, WMT)",
+    )
     parser.add_argument(
         "--metrics",
         nargs="+",
@@ -283,21 +314,48 @@ if __name__ == "__main__":
         choices=_ALL_METRICS,
         help="Metrics to compute",
     )
-    parser.add_argument("--name", default="golden_dataset", help="Report name")
+    parser.add_argument("--name", default="full_stack_production_eval", help="Report name")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Generation model override for pipeline answers (default: RAG_GENERATION_MODEL from settings)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate dataset samples and pipeline initialization without making LLM calls",
+    )
     args = parser.parse_args()
 
     _settings.validate()
     try:
-        client = QdrantClient(url=_settings.infra.qdrant_url, timeout=2, check_compatibility=False)
+        client = QdrantClient(url=_settings.infra.qdrant_url, timeout=10, check_compatibility=False)
         client.get_collections()
     except Exception:
         client = QdrantClient(path="data/qdrant_user_storage")
-    pipeline = FinancialRAGPipeline(qdrant_client=client, generation_model="gpt-5-mini")
+    gen_model = args.model or _settings.generation.model
+    pipeline = FinancialRAGPipeline(qdrant_client=client, generation_model=gen_model)
     harness = EvaluationHarness(pipeline)
 
-    from evaluation.dataset import get_dataset_subset
+    from evaluation.dataset import get_dataset_by_ticker, get_dataset_subset
 
-    samples = get_dataset_subset(args.n) if args.n > 0 else None
+    if args.ticker:
+        ticker_samples = get_dataset_by_ticker(args.ticker)
+        samples = ticker_samples[: args.n] if args.n > 0 else ticker_samples
+    else:
+        samples = get_dataset_subset(args.n) if args.n > 0 else None
+
+    if args.dry_run:
+        target_count = len(samples) if samples else len(GOLDEN_DATASET)
+        ticker_info = f" for ticker '{args.ticker.upper()}'" if args.ticker else ""
+        print(
+            f"[Dry Run] Successfully initialized pipeline and verified {target_count} eval samples{ticker_info}."
+        )
+        import sys
+
+        sys.exit(0)
+
     report = harness.run(dataset=samples, metrics=args.metrics, dataset_name=args.name)
     print(report.summary())
     harness.save_report(report)

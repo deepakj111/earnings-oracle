@@ -1,0 +1,94 @@
+{
+  "arm_label": "Tier 2: Dynamic Production SOTA Tier",
+  "sample_count": 129,
+  "error_count": 0,
+  "avg_latency_s": 2.541,
+  "latency_std_s": 3.142,
+  "latency_ci_95_lo": 2.096,
+  "latency_ci_95_hi": 3.131,
+  "latency_source": "pipeline_only",
+  "total_latency_seconds": 586.6,
+  "avg_latency_seconds": 2.541,
+  "metric_summary": {
+    "faithfulness": {
+      "mean": 0.9318,
+      "min": 0.0,
+      "max": 1.0,
+      "std_dev": 0.1793,
+      "ci_95_lo": 0.9006,
+      "ci_95_hi": 0.9606
+    },
+    "answer_relevancy": {
+      "mean": 0.8566,
+      "min": 0.0,
+      "max": 1.0,
+      "std_dev": 0.302,
+      "ci_95_lo": 0.8046,
+      "ci_95_hi": 0.9062
+    },
+    "context_precision": {
+      "mean": 0.8455,
+      "min": 0.0,
+      "max": 1.0,
+      "std_dev": 0.2845,
+      "ci_95_lo": 0.7925,
+      "ci_95_hi": 0.8929
+    },
+    "context_recall": {
+      "mean": 0.8014,
+      "min": 0.0,
+      "max": 1.0,
+      "std_dev": 0.2828,
+      "ci_95_lo": 0.7539,
+      "ci_95_hi": 0.8494
+    },
+    "token_f1": {
+      "mean": 0.6312,
+      "min": 0.0377,
+      "max": 0.9136,
+      "std_dev": 0.1519,
+      "ci_95_lo": 0.606,
+      "ci_95_hi": 0.6563
+    },
+    "rouge1_f1": {
+      "mean": 0.6312,
+      "min": 0.0377,
+      "max": 0.9136,
+      "std_dev": 0.1519,
+      "ci_95_lo": 0.606,
+      "ci_95_hi": 0.6563
+    },
+    "rouge2_f1": {
+      "mean": 0.4567,
+      "min": 0.0,
+      "max": 0.8625,
+      "std_dev": 0.175,
+      "ci_95_lo": 0.427,
+      "ci_95_hi": 0.4861
+    },
+    "rougeL_f1": {
+      "mean": 0.5093,
+      "min": 0.0377,
+      "max": 0.8844,
+      "std_dev": 0.1759,
+      "ci_95_lo": 0.4811,
+      "ci_95_hi": 0.5406
+    },
+    "bleu_4": {
+      "mean": 0.3598,
+      "min": 0.0,
+      "max": 0.8022,
+      "std_dev": 0.1735,
+      "ci_95_lo": 0.3291,
+      "ci_95_hi": 0.3885
+    },
+    "semantic_similarity": {
+      "mean": 0.934,
+      "min": 0.2628,
+      "max": 0.991,
+      "std_dev": 0.0716,
+      "ci_95_lo": 0.9202,
+      "ci_95_hi": 0.9442
+    }
+  }
+}

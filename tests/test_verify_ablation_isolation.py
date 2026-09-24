@@ -14,7 +14,6 @@ class TestVerifyArmIsolation:
                     "reranked": False,
                     "chunk_sources": ["dense"],
                     "graph_chunks_count": 0,
-                    "crag_action": None,
                 },
             }
         ]
@@ -32,7 +31,6 @@ class TestVerifyArmIsolation:
                     "reranked": True,  # LEAKAGE
                     "chunk_sources": ["dense"],
                     "graph_chunks_count": 0,
-                    "crag_action": None,
                 },
             }
         ]
@@ -51,7 +49,6 @@ class TestVerifyArmIsolation:
                     "reranked": False,
                     "chunk_sources": ["dense", "bm25"],  # LEAKAGE
                     "graph_chunks_count": 0,
-                    "crag_action": None,
                 },
             }
         ]
@@ -70,7 +67,6 @@ class TestVerifyArmIsolation:
                     "reranked": False,
                     "chunk_sources": ["dense", "bm25"],
                     "graph_chunks_count": 0,
-                    "crag_action": None,
                 },
             }
         ]
@@ -90,7 +86,6 @@ class TestVerifyArmIsolation:
                     "reranked": False,  # MISSING
                     "chunk_sources": ["dense", "bm25"],
                     "graph_chunks_count": 0,
-                    "crag_action": None,
                 },
             }
         ]
@@ -98,10 +93,10 @@ class TestVerifyArmIsolation:
         assert len(violations) == 1
         assert "Reranker was NOT executed" in violations[0]
 
-    def test_arm6_valid(self):
+    def test_arm5_sota_valid(self):
         samples = [
             {
-                "sample_id": "s6",
+                "sample_id": "s5",
                 "telemetry": {
                     "multi_query_count": 4,
                     "hyde_generated": True,
@@ -109,9 +104,8 @@ class TestVerifyArmIsolation:
                     "reranked": True,
                     "chunk_sources": ["dense", "bm25", "graph"],
                     "graph_chunks_count": 1,
-                    "crag_action": "correct",
                 },
             }
         ]
-        violations = verify_arm_isolation(6, "arm_6_crag", samples)
+        violations = verify_arm_isolation(5, "arm_5_enterprise_sota", samples)
         assert violations == []

@@ -1,0 +1,748 @@
+{
+  "summary": {
+    "total_documents_processed": 43,
+    "total_pipeline_time_seconds": 4054.8437,
+    "average_document_time_seconds": 2147.2427,
+    "step_totals_seconds": {
+      "parse_html": 5.1132,
+      "extract_metadata": 0.0018,
+      "create_chunks": 6.483,
+      "embedding": 1768.0061,
+      "qdrant_upsert": 63.7017,
+      "kg_extraction": 14051.7883
+    }
+  },
+  "documents": [
+    {
+      "file_name": "UNH_10-Q_2026-05-05_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q1 2026",
+      "raw_text_length": 107078,
+      "parent_chunks": 41,
+      "child_chunks": 99,
+      "timings_seconds": {
+        "parse_html": 0.0779,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.0744,
+        "embedding": 64.2031,
+        "qdrant_upsert": 0.3671,
+        "kg_extraction": 100.5968,
+        "total_document": 165.4527
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2025-08-29_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q2 2026",
+      "raw_text_length": 151957,
+      "parent_chunks": 62,
+      "child_chunks": 153,
+      "timings_seconds": {
+        "parse_html": 0.0662,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.0676,
+        "embedding": 75.8554,
+        "qdrant_upsert": 0.2096,
+        "kg_extraction": 153.4043,
+        "total_document": 229.7114
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2026-07-17_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q2 2026",
+      "raw_text_length": 158454,
+      "parent_chunks": 71,
+      "child_chunks": 142,
+      "timings_seconds": {
+        "parse_html": 0.0983,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.0736,
+        "embedding": 68.6832,
+        "qdrant_upsert": 0.323,
+        "kg_extraction": 222.5349,
+        "total_document": 291.86
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2026-05-20_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q1 2027",
+      "raw_text_length": 155214,
+      "parent_chunks": 71,
+      "child_chunks": 197,
+      "timings_seconds": {
+        "parse_html": 0.1313,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0708,
+        "embedding": 78.5,
+        "qdrant_upsert": 0.217,
+        "kg_extraction": 213.1769,
+        "total_document": 292.2274
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2025-12-03_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q3 2026",
+      "raw_text_length": 156008,
+      "parent_chunks": 60,
+      "child_chunks": 154,
+      "timings_seconds": {
+        "parse_html": 0.081,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0748,
+        "embedding": 40.4766,
+        "qdrant_upsert": 0.2836,
+        "kg_extraction": 176.4027,
+        "total_document": 509.2096
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2026-08-26_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q2 2027",
+      "raw_text_length": 172048,
+      "parent_chunks": 74,
+      "child_chunks": 208,
+      "timings_seconds": {
+        "parse_html": 0.0642,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.1055,
+        "embedding": 44.8832,
+        "qdrant_upsert": 0.4331,
+        "kg_extraction": 213.4841,
+        "total_document": 550.3073
+      }
+    },
+    {
+      "file_name": "NFLX_10-K_2025-01-27_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "FY 2024",
+      "raw_text_length": 288643,
+      "parent_chunks": 119,
+      "child_chunks": 327,
+      "timings_seconds": {
+        "parse_html": 0.0795,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1346,
+        "embedding": 36.9556,
+        "qdrant_upsert": 0.3864,
+        "kg_extraction": 349.6533,
+        "total_document": 552.709
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2026-08-10_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q2 2026",
+      "raw_text_length": 127611,
+      "parent_chunks": 44,
+      "child_chunks": 107,
+      "timings_seconds": {
+        "parse_html": 0.1237,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.2054,
+        "embedding": 17.2607,
+        "qdrant_upsert": 1.8135,
+        "kg_extraction": 138.2354,
+        "total_document": 667.1827
+      }
+    },
+    {
+      "file_name": "NVDA_10-K_2024-02-21_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "FY 2024",
+      "raw_text_length": 367995,
+      "parent_chunks": 145,
+      "child_chunks": 464,
+      "timings_seconds": {
+        "parse_html": 0.0939,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.186,
+        "embedding": 44.1943,
+        "qdrant_upsert": 0.4136,
+        "kg_extraction": 474.5493,
+        "total_document": 749.1422
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2026-05-29_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q1 2027",
+      "raw_text_length": 137186,
+      "parent_chunks": 59,
+      "child_chunks": 145,
+      "timings_seconds": {
+        "parse_html": 0.0848,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0647,
+        "embedding": 19.1788,
+        "qdrant_upsert": 0.5876,
+        "kg_extraction": 166.4477,
+        "total_document": 935.6319
+      }
+    },
+    {
+      "file_name": "NFLX_10-K_2026-01-23_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "FY 2025",
+      "raw_text_length": 309470,
+      "parent_chunks": 124,
+      "child_chunks": 359,
+      "timings_seconds": {
+        "parse_html": 0.2748,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.3859,
+        "embedding": 77.8787,
+        "qdrant_upsert": 1.3948,
+        "kg_extraction": 433.9901,
+        "total_document": 1064.5329
+      }
+    },
+    {
+      "file_name": "UNH_10-K_2024-02-28_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "FY 2023",
+      "raw_text_length": 350042,
+      "parent_chunks": 126,
+      "child_chunks": 390,
+      "timings_seconds": {
+        "parse_html": 0.1182,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1757,
+        "embedding": 44.9624,
+        "qdrant_upsert": 0.7703,
+        "kg_extraction": 393.9589,
+        "total_document": 1107.4741
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2024-04-22_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q1 2024",
+      "raw_text_length": 116935,
+      "parent_chunks": 57,
+      "child_chunks": 122,
+      "timings_seconds": {
+        "parse_html": 0.0742,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0546,
+        "embedding": 16.8173,
+        "qdrant_upsert": 0.9196,
+        "kg_extraction": 140.4852,
+        "total_document": 1223.0135
+      }
+    },
+    {
+      "file_name": "NVDA_10-K_2025-02-26_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "FY 2025",
+      "raw_text_length": 376658,
+      "parent_chunks": 152,
+      "child_chunks": 484,
+      "timings_seconds": {
+        "parse_html": 0.1064,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1858,
+        "embedding": 87.1164,
+        "qdrant_upsert": 0.5412,
+        "kg_extraction": 597.6182,
+        "total_document": 1238.6973
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2026-08-28_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q2 2027",
+      "raw_text_length": 150631,
+      "parent_chunks": 63,
+      "child_chunks": 162,
+      "timings_seconds": {
+        "parse_html": 0.0838,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0713,
+        "embedding": 40.9262,
+        "qdrant_upsert": 0.8177,
+        "kg_extraction": 210.0701,
+        "total_document": 1490.8428
+      }
+    },
+    {
+      "file_name": "WMT_10-K_2024-03-15_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "FY 2024",
+      "raw_text_length": 408122,
+      "parent_chunks": 163,
+      "child_chunks": 504,
+      "timings_seconds": {
+        "parse_html": 0.1829,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.3468,
+        "embedding": 54.2411,
+        "qdrant_upsert": 2.4664,
+        "kg_extraction": 668.6096,
+        "total_document": 1661.8343
+      }
+    },
+    {
+      "file_name": "NVDA_10-K_2026-02-25_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "FY 2026",
+      "raw_text_length": 366477,
+      "parent_chunks": 147,
+      "child_chunks": 473,
+      "timings_seconds": {
+        "parse_html": 0.1166,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.2137,
+        "embedding": 51.5497,
+        "qdrant_upsert": 1.9637,
+        "kg_extraction": 565.8335,
+        "total_document": 1727.4836
+      }
+    },
+    {
+      "file_name": "UNH_10-K_2026-03-02_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "FY 2025",
+      "raw_text_length": 371536,
+      "parent_chunks": 136,
+      "child_chunks": 414,
+      "timings_seconds": {
+        "parse_html": 0.1655,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.2168,
+        "embedding": 69.8427,
+        "qdrant_upsert": 1.4406,
+        "kg_extraction": 602.7504,
+        "total_document": 1897.7299
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2024-05-09_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q1 2024",
+      "raw_text_length": 93768,
+      "parent_chunks": 36,
+      "child_chunks": 82,
+      "timings_seconds": {
+        "parse_html": 0.1035,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1066,
+        "embedding": 14.3942,
+        "qdrant_upsert": 0.6465,
+        "kg_extraction": 102.0103,
+        "total_document": 2015.1128
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2024-07-19_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q2 2024",
+      "raw_text_length": 141234,
+      "parent_chunks": 74,
+      "child_chunks": 140,
+      "timings_seconds": {
+        "parse_html": 0.1298,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.1389,
+        "embedding": 21.7502,
+        "qdrant_upsert": 1.6559,
+        "kg_extraction": 343.6536,
+        "total_document": 2029.3536
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2024-05-29_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q1 2025",
+      "raw_text_length": 155921,
+      "parent_chunks": 71,
+      "child_chunks": 189,
+      "timings_seconds": {
+        "parse_html": 0.1024,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.1101,
+        "embedding": 24.9734,
+        "qdrant_upsert": 0.5436,
+        "kg_extraction": 297.1736,
+        "total_document": 2050.5852
+      }
+    },
+    {
+      "file_name": "WMT_10-K_2025-03-14_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "FY 2025",
+      "raw_text_length": 403740,
+      "parent_chunks": 159,
+      "child_chunks": 493,
+      "timings_seconds": {
+        "parse_html": 0.2654,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.4599,
+        "embedding": 54.6056,
+        "qdrant_upsert": 2.4609,
+        "kg_extraction": 651.8171,
+        "total_document": 2200.9088
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2024-10-18_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q3 2024",
+      "raw_text_length": 151807,
+      "parent_chunks": 75,
+      "child_chunks": 149,
+      "timings_seconds": {
+        "parse_html": 0.1025,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0727,
+        "embedding": 54.7662,
+        "qdrant_upsert": 2.0973,
+        "kg_extraction": 270.9006,
+        "total_document": 2357.5944
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2024-08-09_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q2 2024",
+      "raw_text_length": 112921,
+      "parent_chunks": 40,
+      "child_chunks": 90,
+      "timings_seconds": {
+        "parse_html": 0.1373,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1718,
+        "embedding": 18.3152,
+        "qdrant_upsert": 1.2919,
+        "kg_extraction": 137.6374,
+        "total_document": 2358.6288
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2024-08-28_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q2 2025",
+      "raw_text_length": 168678,
+      "parent_chunks": 76,
+      "child_chunks": 198,
+      "timings_seconds": {
+        "parse_html": 0.0802,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0808,
+        "embedding": 62.9261,
+        "qdrant_upsert": 2.6459,
+        "kg_extraction": 362.9628,
+        "total_document": 2479.6171
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2025-04-18_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q1 2025",
+      "raw_text_length": 122293,
+      "parent_chunks": 56,
+      "child_chunks": 114,
+      "timings_seconds": {
+        "parse_html": 0.0613,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0552,
+        "embedding": 33.4259,
+        "qdrant_upsert": 0.452,
+        "kg_extraction": 229.2863,
+        "total_document": 2622.0497
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2024-06-07_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q1 2025",
+      "raw_text_length": 138576,
+      "parent_chunks": 60,
+      "child_chunks": 151,
+      "timings_seconds": {
+        "parse_html": 0.0527,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0852,
+        "embedding": 37.046,
+        "qdrant_upsert": 0.5371,
+        "kg_extraction": 290.6243,
+        "total_document": 2686.0495
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2024-11-04_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q3 2024",
+      "raw_text_length": 116597,
+      "parent_chunks": 41,
+      "child_chunks": 92,
+      "timings_seconds": {
+        "parse_html": 0.1116,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1105,
+        "embedding": 18.6113,
+        "qdrant_upsert": 1.352,
+        "kg_extraction": 185.653,
+        "total_document": 2828.0548
+      }
+    },
+    {
+      "file_name": "WMT_10-K_2026-03-13_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "FY 2026",
+      "raw_text_length": 393514,
+      "parent_chunks": 153,
+      "child_chunks": 474,
+      "timings_seconds": {
+        "parse_html": 0.1676,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.239,
+        "embedding": 101.6926,
+        "qdrant_upsert": 2.6826,
+        "kg_extraction": 791.3065,
+        "total_document": 2911.7821
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2024-11-20_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q3 2025",
+      "raw_text_length": 162768,
+      "parent_chunks": 74,
+      "child_chunks": 192,
+      "timings_seconds": {
+        "parse_html": 0.1425,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1768,
+        "embedding": 27.3332,
+        "qdrant_upsert": 0.9413,
+        "kg_extraction": 406.8653,
+        "total_document": 2915.3016
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2024-08-30_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q2 2025",
+      "raw_text_length": 148897,
+      "parent_chunks": 61,
+      "child_chunks": 162,
+      "timings_seconds": {
+        "parse_html": 0.1972,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1831,
+        "embedding": 31.9727,
+        "qdrant_upsert": 1.6018,
+        "kg_extraction": 259.3213,
+        "total_document": 2979.5922
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2025-05-07_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q1 2025",
+      "raw_text_length": 94089,
+      "parent_chunks": 34,
+      "child_chunks": 80,
+      "timings_seconds": {
+        "parse_html": 0.0936,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.098,
+        "embedding": 13.7609,
+        "qdrant_upsert": 1.2526,
+        "kg_extraction": 156.2976,
+        "total_document": 3151.2247
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2025-07-18_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q2 2025",
+      "raw_text_length": 146498,
+      "parent_chunks": 69,
+      "child_chunks": 128,
+      "timings_seconds": {
+        "parse_html": 0.2107,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.2012,
+        "embedding": 43.6601,
+        "qdrant_upsert": 0.8927,
+        "kg_extraction": 266.5461,
+        "total_document": 3223.824
+      }
+    },
+    {
+      "file_name": "NFLX_10-K_2024-01-26_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "FY 2023",
+      "raw_text_length": 267708,
+      "parent_chunks": 110,
+      "child_chunks": 308,
+      "timings_seconds": {
+        "parse_html": 0.1092,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.216,
+        "embedding": 37.4664,
+        "qdrant_upsert": 2.3164,
+        "kg_extraction": 500.5342,
+        "total_document": 3368.9553
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2025-05-28_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q1 2026",
+      "raw_text_length": 152508,
+      "parent_chunks": 71,
+      "child_chunks": 187,
+      "timings_seconds": {
+        "parse_html": 0.107,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.1251,
+        "embedding": 45.506,
+        "qdrant_upsert": 2.9659,
+        "kg_extraction": 454.9674,
+        "total_document": 3419.1545
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2024-12-06_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q3 2025",
+      "raw_text_length": 155590,
+      "parent_chunks": 62,
+      "child_chunks": 167,
+      "timings_seconds": {
+        "parse_html": 0.108,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1562,
+        "embedding": 24.0189,
+        "qdrant_upsert": 1.2425,
+        "kg_extraction": 324.4003,
+        "total_document": 3501.329
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2025-10-22_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q3 2025",
+      "raw_text_length": 151507,
+      "parent_chunks": 69,
+      "child_chunks": 132,
+      "timings_seconds": {
+        "parse_html": 0.0981,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1289,
+        "embedding": 25.4027,
+        "qdrant_upsert": 8.3152,
+        "kg_extraction": 301.753,
+        "total_document": 3559.7677
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2025-08-11_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q2 2025",
+      "raw_text_length": 115596,
+      "parent_chunks": 41,
+      "child_chunks": 87,
+      "timings_seconds": {
+        "parse_html": 0.0994,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.0779,
+        "embedding": 19.3936,
+        "qdrant_upsert": 0.2283,
+        "kg_extraction": 183.5732,
+        "total_document": 3622.6459
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2025-08-27_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q2 2026",
+      "raw_text_length": 155928,
+      "parent_chunks": 71,
+      "child_chunks": 189,
+      "timings_seconds": {
+        "parse_html": 0.1103,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.2016,
+        "embedding": 28.6148,
+        "qdrant_upsert": 2.7664,
+        "kg_extraction": 390.531,
+        "total_document": 3791.4079
+      }
+    },
+    {
+      "file_name": "WMT_10-Q_2025-06-06_0000104169.htm",
+      "ticker": "WMT",
+      "fiscal_period": "Q1 2026",
+      "raw_text_length": 143806,
+      "parent_chunks": 59,
+      "child_chunks": 149,
+      "timings_seconds": {
+        "parse_html": 0.0986,
+        "extract_metadata": 0.0001,
+        "create_chunks": 0.1215,
+        "embedding": 23.0533,
+        "qdrant_upsert": 3.3526,
+        "kg_extraction": 374.4315,
+        "total_document": 3902.5931
+      }
+    },
+    {
+      "file_name": "NFLX_10-Q_2026-04-17_0001065280.htm",
+      "ticker": "NFLX",
+      "fiscal_period": "Q1 2026",
+      "raw_text_length": 122866,
+      "parent_chunks": 56,
+      "child_chunks": 113,
+      "timings_seconds": {
+        "parse_html": 0.0897,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1532,
+        "embedding": 17.6555,
+        "qdrant_upsert": 2.3124,
+        "kg_extraction": 328.2138,
+        "total_document": 3908.3391
+      }
+    },
+    {
+      "file_name": "NVDA_10-Q_2025-11-19_0001045810.htm",
+      "ticker": "NVDA",
+      "fiscal_period": "Q3 2026",
+      "raw_text_length": 173730,
+      "parent_chunks": 78,
+      "child_chunks": 214,
+      "timings_seconds": {
+        "parse_html": 0.0971,
+        "extract_metadata": 0.0,
+        "create_chunks": 0.1212,
+        "embedding": 30.6285,
+        "qdrant_upsert": 0.6623,
+        "kg_extraction": 390.2082,
+        "total_document": 4044.5468
+      }
+    },
+    {
+      "file_name": "UNH_10-Q_2025-10-28_0000731766.htm",
+      "ticker": "UNH",
+      "fiscal_period": "Q3 2025",
+      "raw_text_length": 119566,
+      "parent_chunks": 42,
+      "child_chunks": 92,
+      "timings_seconds": {
+        "parse_html": 0.2143,
+        "extract_metadata": 0.0002,
+        "create_chunks": 0.1836,
+        "embedding": 23.5074,
+        "qdrant_upsert": 3.1368,
+        "kg_extraction": 229.3185,
+        "total_document": 4047.9756
+      }
+    }
+  ]
+}

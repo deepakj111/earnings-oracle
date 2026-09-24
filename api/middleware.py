@@ -110,3 +110,110 @@ class TimingMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_timing)
+
+
+class RateLimitMiddleware:
+    """
+    In-memory sliding window rate limiter per client IP.
+
+    - Adds standard RFC/IETF headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+    - Returns 429 Too Many Requests if rate limit is exceeded
+    - Skips rate limiting for health checks, metrics, and documentation endpoints
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        rpm: int = 120,
+        exempt_paths: set[str] | None = None,
+    ) -> None:
+        self.app = app
+        self.rpm = rpm
+        self.exempt_paths = exempt_paths or {
+            "/health",
+            "/health/live",
+            "/health/ready",
+            "/metrics",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+        }
+        self._requests: dict[str, list[float]] = {}
+        self._last_cleanup = time.time()
+
+    def _clean_stale(self, now: float) -> None:
+        if now - self._last_cleanup > 60.0:
+            window_start = now - 60.0
+            cleaned = {}
+            for ip, ts_list in self._requests.items():
+                valid = [t for t in ts_list if t > window_start]
+                if valid:
+                    cleaned[ip] = valid
+            self._requests = cleaned
+            self._last_cleanup = now
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or self.rpm <= 0:
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if path in self.exempt_paths:
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+            request.client.host if request.client else "unknown"
+        )
+
+        now = time.time()
+        self._clean_stale(now)
+
+        window_start = now - 60.0
+        timestamps = [t for t in self._requests.get(client_ip, []) if t > window_start]
+        current_count = len(timestamps)
+
+        remaining = max(0, self.rpm - current_count)
+        reset_seconds = int(max(1.0, 60.0 - (now - timestamps[0]))) if timestamps else 60
+
+        if current_count >= self.rpm:
+            headers = [
+                (b"content-type", b"application/json"),
+                (b"retry-after", str(reset_seconds).encode()),
+                (b"x-ratelimit-limit", str(self.rpm).encode()),
+                (b"x-ratelimit-remaining", b"0"),
+                (b"x-ratelimit-reset", str(reset_seconds).encode()),
+            ]
+            rid = getattr(request.state, "request_id", "-")
+            logger.warning(
+                f"[{rid}] Rate limit exceeded for {client_ip} on {path} ({self.rpm} RPM)"
+            )
+            body = (
+                f'{{"error":"Too Many Requests","detail":"Rate limit of {self.rpm} req/min exceeded.",'
+                f'"retry_after":{reset_seconds}}}'
+            ).encode()
+            await send({"type": "http.response.start", "status": 429, "headers": headers})
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        timestamps.append(now)
+        self._requests[client_ip] = timestamps
+        remaining = max(0, self.rpm - len(timestamps))
+
+        async def send_with_rate_limit_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                h = MutableHeaders(scope=message)
+                h["X-RateLimit-Limit"] = str(self.rpm)
+                h["X-RateLimit-Remaining"] = str(remaining)
+                h["X-RateLimit-Reset"] = str(reset_seconds)
+            await send(message)
+
+        await self.app(scope, receive, send_with_rate_limit_headers)
+
+
+__all__ = [
+    "RequestIDMiddleware",
+    "TimingMiddleware",
+    "RateLimitMiddleware",
+]

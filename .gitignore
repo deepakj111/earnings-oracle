@@ -11,6 +11,9 @@ data/*backup*.txt
 
 repo_code.py
 repo_export.txt
+repo_qna.md
+*qna*.md
+
 
 # Python
 __pycache__/
@@ -41,10 +44,26 @@ MANIFEST
 *.sqlite
 *.sqlite3
 
-# Qdrant / Data / ML Caches
-/data/*
+# Qdrant / Raw Filings / ML Caches / Runtime State
+/data/company_filings/
+/data/qdrant_user_storage/
+/data/qdrant_storage/
+/data/cache/
+/data/transcripts/
+/data/audit_logs/
+/data/traces/
+/data/*.pkl
+/data/*.db
+/data/*.bak
+/data/*backup*.txt
+*.pkl
+*.pickle
+
+# Explicitly keep evaluation artifacts & golden dataset
 !/data/.gitkeep
 !/data/golden_dataset.json
+!/data/eval_reports/
+!/data/ablation_results/
 
 mypy_report.txt
 
@@ -78,3 +97,6 @@ cover/
 
 # One-time repair scripts
 scripts/repair_*.py
+
+# Internal design references (not for public distribution)
+docs/SYSTEM_DESIGN_INTERVIEW.md

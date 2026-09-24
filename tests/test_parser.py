@@ -127,3 +127,37 @@ class TestParseHtml:
         path.write_bytes((MINIMAL_HTML + "\nCaf\xe9 revenue grew strongly.").encode("latin-1"))
         result = parse_html(path)
         assert result is not None
+
+    def test_ixbrl_facts_extraction_with_10q_period(self, tmp_htm) -> None:
+        ixbrl_html = f"""
+        <html><body>
+          <p>{_BODY}</p>
+          <ix:nonFraction name="us-gaap:Revenues" scale="6" unitRef="USD">26,044</ix:nonFraction>
+        </body></html>
+        """
+        path = tmp_htm("NVDA_10-Q_2025-05-28_0001045810", ixbrl_html)
+        result = parse_html(path)
+        assert result is not None
+        assert len(result.extracted_facts) == 1
+        fact = result.extracted_facts[0]
+        assert fact.ticker == "NVDA"
+        assert fact.value == 26044.0
+        assert fact.scale == "millions"
+        assert fact.fiscal_year == 2026
+        assert fact.quarter == "Q1"
+
+    def test_ixbrl_facts_extraction_with_10k_period(self, tmp_htm) -> None:
+        ixbrl_html = f"""
+        <html><body>
+          <p>{_BODY}</p>
+          <ix:nonFraction name="us-gaap:Revenues" scale="6" unitRef="USD">60,922</ix:nonFraction>
+        </body></html>
+        """
+        path = tmp_htm("NVDA_10-K_2024-02-21_0001045810", ixbrl_html)
+        result = parse_html(path)
+        assert result is not None
+        assert len(result.extracted_facts) == 1
+        fact = result.extracted_facts[0]
+        assert fact.ticker == "NVDA"
+        assert fact.fiscal_year == 2024
+        assert fact.quarter == "FY"

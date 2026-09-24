@@ -251,6 +251,43 @@ class TestDownloadDocument:
                     str(tmp_path),
                 )
 
+    def test_reuses_cached_file_without_network_request(self, tmp_path) -> None:
+        # Pre-create the filing file
+        file_path = tmp_path / "AAPL_10-K_2024-10-31_0001234567.htm"
+        file_path.write_text("<html>cached content</html>", encoding="utf-8")
+
+        with patch("ingestion.download_filings.requests.get") as mock_get:
+            result = download_document(
+                "0000320193",
+                "0001234567-24-000001",
+                "form10k.htm",
+                self._filing_meta(),
+                str(tmp_path),
+                overwrite=False,
+            )
+            assert result == str(file_path)
+            mock_get.assert_not_called()
+
+    def test_overwrites_cached_file_when_overwrite_true(self, tmp_path) -> None:
+        file_path = tmp_path / "AAPL_10-K_2024-10-31_0001234567.htm"
+        file_path.write_text("<html>old content</html>", encoding="utf-8")
+
+        with patch(
+            "ingestion.download_filings.requests.get",
+            return_value=_mock_response(text="<html>new content</html>"),
+        ) as mock_get:
+            result = download_document(
+                "0000320193",
+                "0001234567-24-000001",
+                "form10k.htm",
+                self._filing_meta(),
+                str(tmp_path),
+                overwrite=True,
+            )
+            assert result == str(file_path)
+            mock_get.assert_called_once()
+            assert file_path.read_text(encoding="utf-8") == "<html>new content</html>"
+
 
 class TestEdgeCases:
     def test_get_company_filings_timeout(self) -> None:

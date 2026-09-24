@@ -32,10 +32,13 @@ class TransformedQuery:
         seen: set[str] = set()
         result: list[str] = []
         for q in self.multi_queries + [self.stepback_query]:
-            normalized = q.strip().lower()
+            cleaned = q.strip()
+            if not cleaned:
+                continue
+            normalized = cleaned.lower()
             if normalized not in seen:
                 seen.add(normalized)
-                result.append(q.strip())
+                result.append(cleaned)
         return result
 
     def summary(self) -> str:

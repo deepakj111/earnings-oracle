@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -60,7 +61,14 @@ def _env_bool(key: str, default: bool) -> bool:
 class QueryRouterConfig:
     """Configuration for query/router.py (Layer 1 — query intent classification)."""
 
-    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_ROUTER_MODEL", "gpt-5-mini"))
+    model: str = field(
+        default_factory=lambda: _env_str(
+            "RAG_QUERY_ROUTER_MODEL",
+            "gemini-2.5-flash"
+            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            else "gpt-5-mini",
+        )
+    )
     temperature: float = field(default_factory=lambda: _env_float("RAG_QUERY_ROUTER_TEMP", 0.0))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_QUERY_ROUTER_MAX_TOKENS", 2048))
 
@@ -72,7 +80,14 @@ class QueryRouterConfig:
 class QueryTransformConfig:
     """Configuration for query/transformer.py (Layer 2 — HyDE + Multi-Query + Step-Back)."""
 
-    model: str = field(default_factory=lambda: _env_str("RAG_QUERY_TRANSFORM_MODEL", "gpt-5-mini"))
+    model: str = field(
+        default_factory=lambda: _env_str(
+            "RAG_QUERY_TRANSFORM_MODEL",
+            "gemini-2.5-flash"
+            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            else "gpt-5-mini",
+        )
+    )
 
     # Per-technique temperatures — intentionally different
     temperature_hyde: float = field(
@@ -85,15 +100,15 @@ class QueryTransformConfig:
         default_factory=lambda: _env_float("RAG_QUERY_TRANSFORM_TEMP_STEPBACK", 0.1)
     )
 
-    # Max output tokens per technique
+    # Max output tokens per technique (tight 2026 caps for sub-second transform latency)
     max_tokens_hyde: int = field(
-        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_HYDE", 4096)
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_HYDE", 120)
     )
     max_tokens_multi_query: int = field(
-        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_MULTI_QUERY", 4096)
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_MULTI_QUERY", 80)
     )
     max_tokens_stepback: int = field(
-        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_STEPBACK", 4096)
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_STEPBACK", 40)
     )
 
     # Per-technique toggles
@@ -111,6 +126,14 @@ class QueryTransformConfig:
     max_retries: int = field(default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_RETRIES", 3))
     retry_base_delay_seconds: float = field(
         default_factory=lambda: _env_float("RAG_QUERY_TRANSFORM_RETRY_DELAY", 1.0)
+    )
+
+    # Sub-query decomposition (2026 SOTA for complex multi-part queries)
+    decomposition_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_QUERY_DECOMPOSITION_ENABLED", False)
+    )
+    max_tokens_decomposition: int = field(
+        default_factory=lambda: _env_int("RAG_QUERY_TRANSFORM_MAX_TOKENS_DECOMPOSITION", 150)
     )
 
     # In-memory LRU cache size
@@ -136,6 +159,8 @@ class RerankerConfig:
     )
     top_k_pre_rerank: int = field(default_factory=lambda: _env_int("RAG_RERANKER_TOP_K_PRE", 20))
     enabled: bool = field(default_factory=lambda: _env_bool("RAG_RERANKER_ENABLED", True))
+    ce_weight: float = field(default_factory=lambda: _env_float("RAG_RERANKER_CE_WEIGHT", 0.65))
+    rrf_weight: float = field(default_factory=lambda: _env_float("RAG_RERANKER_RRF_WEIGHT", 0.35))
 
 
 # ── Layer 4: Generation ────────────────────────────────────────────────────────
@@ -149,7 +174,14 @@ class GenerationConfig:
     max_context_tokens: hard cap on total tokens in the retrieved context block.
     """
 
-    model: str = field(default_factory=lambda: _env_str("RAG_GENERATION_MODEL", "gpt-5"))
+    model: str = field(
+        default_factory=lambda: _env_str(
+            "RAG_GENERATION_MODEL",
+            "gemini-2.5-flash"
+            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            else "gpt-5",
+        )
+    )
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_TOKENS", 4096))
     max_context_tokens: int = field(
@@ -158,6 +190,22 @@ class GenerationConfig:
     max_retries: int = field(default_factory=lambda: _env_int("RAG_GENERATION_MAX_RETRIES", 3))
     retry_base_delay_seconds: float = field(
         default_factory=lambda: _env_float("RAG_GENERATION_RETRY_DELAY", 1.0)
+    )
+    context_mmr_threshold: float = field(
+        default_factory=lambda: _env_float("RAG_CONTEXT_MMR_THRESHOLD", 0.92)
+    )
+    # When True, runs full sentence-level NLI claim entailment verification on every answer
+    # (the "Strict Verification SOTA" configuration described in the documentation).
+    # Enable via RAG_GENERATION_STRICT_VERIFICATION=true for compliance-critical workloads.
+    strict_verification: bool = field(
+        default_factory=lambda: _env_bool("RAG_GENERATION_STRICT_VERIFICATION", False)
+    )
+    # When True, requests structured JSON output from the LLM with machine-readable
+    # answer, citations, calculations, and confidence_rationale fields.
+    # Follows the 2026 production pattern for downstream API consumers.
+    # Enable via RAG_GENERATION_STRUCTURED_OUTPUT=true.
+    structured_output: bool = field(
+        default_factory=lambda: _env_bool("RAG_GENERATION_STRUCTURED_OUTPUT", False)
     )
 
 
@@ -173,9 +221,28 @@ class EmbeddingConfig:
     """
 
     model: str = field(
-        default_factory=lambda: _env_str("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
+        default_factory=lambda: _env_str(
+            "RAG_EMBEDDING_MODEL",
+            # Default to text-embedding-004 (768-dim) when using Gemini/Vertex AI provider.
+            # Switch to text-embedding-3-small (1536-dim) for OpenAI.
+            "text-embedding-004"
+            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            else "text-embedding-3-small",
+        )
     )
-    vector_dim: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_VECTOR_DIM", 1536))
+    vector_dim: int = field(
+        default_factory=lambda: _env_int(
+            "RAG_EMBEDDING_VECTOR_DIM",
+            # text-embedding-004 outputs 768-dim; OpenAI text-embedding-3-small outputs 1536-dim.
+            768 if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai") else 1536,
+        )
+    )
+
+    colbert_enabled: bool = field(default_factory=lambda: _env_bool("RAG_COLBERT_ENABLED", True))
+    colbert_model: str = field(
+        default_factory=lambda: _env_str("RAG_COLBERT_MODEL", "colbert-ir/colbertv2.0")
+    )
+
     collection_name: str = field(
         default_factory=lambda: _env_str("RAG_QDRANT_COLLECTION", "company_filings")
     )
@@ -189,6 +256,12 @@ class EmbeddingConfig:
         default_factory=lambda: _env_int("RAG_INGESTION_MAX_CONCURRENCY", 4)
     )
     threads: int = field(default_factory=lambda: _env_int("RAG_EMBEDDING_THREADS", 0))
+    rate_limit_delay_seconds: float = field(
+        default_factory=lambda: _env_float("RAG_EMBEDDING_RATE_LIMIT_DELAY", 0.5)
+    )
+    contextual_retrieval_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_CONTEXTUAL_RETRIEVAL_ENABLED", False)
+    )
 
 
 # ── Layer 3: Retrieval ─────────────────────────────────────────────────────────
@@ -217,6 +290,23 @@ class RetrievalConfig:
     dense_weight: float = field(
         default_factory=lambda: _env_float("RAG_RETRIEVAL_DENSE_WEIGHT", 1.0)
     )
+    # For comparative queries (2+ company entities), the interleaved merge result cap
+    # is scaled by this multiplier per additional entity (capped at top_k_comparative_max).
+    # e.g. 2 entities × multiplier 4 = 8 total results guaranteed (4 per company).
+    # Override with RAG_RETRIEVAL_COMPARATIVE_MULTIPLIER env var.
+    top_k_comparative_multiplier: int = field(
+        default_factory=lambda: _env_int("RAG_RETRIEVAL_COMPARATIVE_MULTIPLIER", 4)
+    )
+    top_k_comparative_max: int = field(
+        default_factory=lambda: _env_int("RAG_RETRIEVAL_COMPARATIVE_MAX", 16)
+    )
+    # Contextual compression (2026 SOTA post-rerank sentence/table extraction)
+    contextual_compression_enabled: bool = field(
+        default_factory=lambda: _env_bool("RAG_CONTEXT_COMPRESSION_ENABLED", False)
+    )
+    compression_max_sentences: int = field(
+        default_factory=lambda: _env_int("RAG_COMPRESSION_MAX_SENTENCES", 3)
+    )
 
 
 # ── Infrastructure ─────────────────────────────────────────────────────────────
@@ -228,47 +318,31 @@ class InfraConfig:
 
     qdrant_url: str = field(default_factory=lambda: _env_str("QDRANT_URL", "http://localhost:6333"))
     openai_api_key: str = field(default_factory=lambda: _env_str("OPENAI_API_KEY", ""))
+    # Gemini API key — set via GEMINI_API_KEY env var.
+    # Required when RAG_LLM_PROVIDER=gemini or when using gemini/* model names.
+    gemini_api_key: str = field(default_factory=lambda: _env_str("GEMINI_API_KEY", ""))
+    # Active LLM provider. Controls default model names and which API key is validated.
+    # Values: "gemini" | "vertex_ai" | "openai" | "anthropic" | "auto"
+    provider: str = field(default_factory=lambda: _env_str("RAG_LLM_PROVIDER", "gemini"))
+    # Google Cloud project and location for Application Default Credentials (ADC) / Vertex AI
+    google_cloud_project: str = field(
+        default_factory=lambda: _env_str(
+            "GOOGLE_CLOUD_PROJECT", _env_str("VERTEXAI_PROJECT", "gleaming-vision-509507-j6")
+        )
+    )
+    google_cloud_location: str = field(
+        default_factory=lambda: _env_str(
+            "GOOGLE_CLOUD_LOCATION", _env_str("VERTEXAI_LOCATION", "us-central1")
+        )
+    )
     sec_user_agent: str = field(
         default_factory=lambda: _env_str("SEC_USER_AGENT", "Your Name your@email.com")
     )
     log_format: str = field(default_factory=lambda: _env_str("LOG_FORMAT", "text"))
-
-
-# ── Layer 5: CRAG ──────────────────────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class CRAGConfig:
-    """Configuration for Layer 5 — Corrective RAG (crag/corrector.py & crag/grader.py)."""
-
-    # Disabled by default: ablation studies (Arm 6) showed CRAG degrades performance
-    # (-10pp Context Precision, -13pp Answer Relevancy) when the corpus is already
-    # well-grounded (Faithfulness=1.0). Enable only for fallback experiments or when
-    # dealing with domains where the corpus may be incomplete.
-    enabled: bool = field(default_factory=lambda: _env_bool("RAG_CRAG_ENABLED", False))
-    grader_model: str = field(
-        default_factory=lambda: _env_str("RAG_CRAG_GRADER_MODEL", "gpt-5-mini")
+    cache_ttl_hours: int = field(default_factory=lambda: _env_int("RAG_CACHE_TTL_HOURS", 24))
+    openai_max_concurrency: int = field(
+        default_factory=lambda: _env_int("RAG_OPENAI_MAX_CONCURRENCY", 10)
     )
-    grader_temperature: float = field(
-        default_factory=lambda: _env_float("RAG_CRAG_GRADER_TEMP", 0.0)
-    )
-    grader_max_tokens: int = field(
-        default_factory=lambda: _env_int("RAG_CRAG_GRADER_MAX_TOKENS", 2048)
-    )
-    high_relevance_threshold: float = field(
-        default_factory=lambda: _env_float("RAG_CRAG_HIGH_THRESHOLD", 0.6)
-    )
-    low_relevance_threshold: float = field(
-        default_factory=lambda: _env_float("RAG_CRAG_LOW_THRESHOLD", 0.2)
-    )
-    grade_even_if_grounded: bool = field(
-        default_factory=lambda: _env_bool("RAG_CRAG_GRADE_IF_GROUNDED", False)
-    )
-    grader_max_workers: int = field(default_factory=lambda: _env_int("RAG_CRAG_GRADER_WORKERS", 2))
-    web_search_max_results: int = field(
-        default_factory=lambda: _env_int("RAG_CRAG_WEB_MAX_RESULTS", 4)
-    )
-    tavily_api_key: str = field(default_factory=lambda: _env_str("TAVILY_API_KEY", ""))
 
 
 # ── Evaluation ─────────────────────────────────────────────────────────────────
@@ -278,7 +352,14 @@ class CRAGConfig:
 class EvaluationConfig:
     """Configuration for evaluation/harness.py & metrics.py (LLMOps evaluation harness)."""
 
-    model: str = field(default_factory=lambda: _env_str("RAG_EVAL_MODEL", "gpt-5-mini"))
+    model: str = field(
+        default_factory=lambda: _env_str(
+            "RAG_EVAL_MODEL",
+            "gemini-2.5-flash"
+            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            else "gpt-5-mini",
+        )
+    )
     temperature: float = field(default_factory=lambda: _env_float("RAG_EVAL_TEMP", 0.0))
     max_tokens: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_TOKENS", 2048))
     max_workers: int = field(default_factory=lambda: _env_int("RAG_EVAL_MAX_WORKERS", 2))
@@ -335,7 +416,12 @@ class KnowledgeGraphConfig:
         default_factory=lambda: _env_bool("RAG_KG_RETRIEVAL_ENABLED", True)
     )
     extraction_model: str = field(
-        default_factory=lambda: _env_str("RAG_KG_EXTRACTION_MODEL", "gpt-5-mini")
+        default_factory=lambda: _env_str(
+            "RAG_KG_EXTRACTION_MODEL",
+            "gemini-2.5-flash"
+            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            else "gpt-5-mini",
+        )
     )
     extraction_temperature: float = field(
         default_factory=lambda: _env_float("RAG_KG_EXTRACTION_TEMP", 1.0)
@@ -370,7 +456,6 @@ class Settings:
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     reranker: RerankerConfig = field(default_factory=RerankerConfig)
     infra: InfraConfig = field(default_factory=InfraConfig)
-    crag: CRAGConfig = field(default_factory=CRAGConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     knowledge_graph: KnowledgeGraphConfig = field(default_factory=KnowledgeGraphConfig)
@@ -384,25 +469,61 @@ class Settings:
         object.__setattr__(self, "retrieval", RetrievalConfig())
         object.__setattr__(self, "reranker", RerankerConfig())
         object.__setattr__(self, "infra", InfraConfig())
-        object.__setattr__(self, "crag", CRAGConfig())
         object.__setattr__(self, "evaluation", EvaluationConfig())
         object.__setattr__(self, "observability", ObservabilityConfig())
         object.__setattr__(self, "knowledge_graph", KnowledgeGraphConfig())
 
-        import sys
+    def describe(self) -> dict[str, Any]:
+        """Return full configuration hierarchy as a nested dictionary."""
+        from dataclasses import asdict
 
-        if "crag.corrector" in sys.modules:
-            setattr(sys.modules["crag.corrector"], "_cfg", self.crag)  # noqa: B010
+        return asdict(self)
+
+    def _has_adc_credentials(self) -> bool:
+        """Check if Google Cloud Application Default Credentials (ADC) are configured."""
+        adc_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.path.expanduser(
+            "~/.config/gcloud/application_default_credentials.json"
+        )
+        if os.path.exists(adc_path):
+            return True
+        win_adc = "/mnt/c/Users/deepa/AppData/Roaming/gcloud/application_default_credentials.json"
+        return os.path.exists(win_adc)
 
     def validate(self) -> None:
-        if not self.infra.openai_api_key:
-            raise OSError("OPENAI_API_KEY is not set. Add it to your .env file.")
+        provider = self.infra.provider.lower()
+        if provider in ("gemini", "vertex_ai"):
+            if not self.infra.gemini_api_key and not self._has_adc_credentials():
+                raise OSError(
+                    "Neither GEMINI_API_KEY nor Google Cloud Application Default Credentials (ADC) "
+                    "were found. Add GEMINI_API_KEY to your .env file or authenticate via "
+                    "'gcloud auth application-default login'."
+                )
+        elif provider == "openai":
+            if not self.infra.openai_api_key:
+                raise OSError("OPENAI_API_KEY is not set. Add it to your .env file.")
+        else:
+            # For 'auto' or custom providers: require at least one key or ADC
+            if (
+                not self.infra.gemini_api_key
+                and not self.infra.openai_api_key
+                and not self._has_adc_credentials()
+            ):
+                raise OSError(
+                    "No API key or ADC configured. Set GEMINI_API_KEY, OPENAI_API_KEY, "
+                    "or authenticate via 'gcloud auth application-default login'."
+                )
         if not self.infra.qdrant_url:
             raise OSError("QDRANT_URL is not set. Add it to your .env file.")
         if not self.infra.sec_user_agent or self.infra.sec_user_agent == "Your Name your@email.com":
             raise OSError(
                 "SEC_USER_AGENT is not set. "
                 "Add 'FirstName LastName email@example.com' to your .env file (SEC fair-use policy)."
+            )
+        if self.retrieval.top_k_final < 1:
+            raise ValueError(f"top_k_final must be >= 1, got {self.retrieval.top_k_final}")
+        if self.generation.max_context_tokens < 512:
+            raise ValueError(
+                f"max_context_tokens must be >= 512, got {self.generation.max_context_tokens}"
             )
 
 

@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 from datetime import date
@@ -22,6 +23,32 @@ HEADERS = {
 }
 
 
+def _sec_get(url: str, max_retries: int = 4, base_delay: float = 1.0) -> requests.Response:
+    """
+    Perform a GET request to SEC EDGAR with rate-limit exponential backoff on HTTP 429.
+    Preserves and raises network/timeout exceptions for caller handling.
+    """
+    delay = base_delay
+    last_resp: requests.Response | None = None
+    for attempt in range(max_retries):
+        resp = requests.get(url, headers=HEADERS, timeout=30)
+        if resp.status_code == 429:
+            last_resp = resp
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+                delay *= 2.0
+                continue
+        elif resp.status_code == 403:
+            print(
+                f"\n[SEC 403 Forbidden] Access denied for URL: {url}\n"
+                f"SEC EDGAR requires a User-Agent in the format 'Sample Company AdminContact@<sample company domain>.com'.\n"
+                f"Current User-Agent: '{HEADERS.get('User-Agent')}'.\n"
+                "Please configure SEC_USER_AGENT in your .env file.\n"
+            )
+        return resp
+    return last_resp if last_resp is not None else resp
+
+
 def get_company_filings(
     cik: str,
     ticker: str,
@@ -31,7 +58,7 @@ def get_company_filings(
 ) -> list[dict]:
     """Fetch 10-K filings for a specific company CIK within a date range, including older files."""
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
-    resp = requests.get(url, headers=HEADERS, timeout=30)
+    resp = _sec_get(url)
     resp.raise_for_status()
     data = resp.json()
 
@@ -68,7 +95,7 @@ def get_company_filings(
             # If the archive's latest filing (filingTo) is >= our start_date, it might contain what we need
             if archive["filingTo"] >= start_date:
                 archive_url = f"https://data.sec.gov/submissions/{archive['name']}"
-                archive_resp = requests.get(archive_url, headers=HEADERS, timeout=30)
+                archive_resp = _sec_get(archive_url)
                 if archive_resp.status_code == 200:
                     archive_data = archive_resp.json()
                     all_results.extend(extract_filings(archive_data))
@@ -90,7 +117,7 @@ def get_filing_documents(cik: str, accession: str) -> list[dict]:
         f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession_clean}/{accession}-index.htm"
     )
 
-    resp = requests.get(url, headers=HEADERS, timeout=30)
+    resp = _sec_get(url)
     if resp.status_code != 200:
         print(f"  Index failed ({resp.status_code}): {url}")
         return []
@@ -149,39 +176,97 @@ def download_document(
     doc_name: str,
     filing_meta: dict,
     output_dir: str,
+    overwrite: bool = False,
 ) -> str | None:
     """Download the specific SEC EDGAR document HTML file."""
     accession_clean = accession.replace("-", "")
     cik_int = int(cik)
-
-    url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession_clean}/{doc_name}"
-    resp = requests.get(url, headers=HEADERS, timeout=30)
-
-    if resp.status_code != 200:
-        print(f"  Download failed ({resp.status_code}): {url}")
-        return None
 
     ticker = filing_meta["ticker"]
     form = filing_meta.get("form", "10-K")
     filing_date = filing_meta["date"]
     safe_acc = accession_clean[:10]
     file_path = Path(output_dir) / f"{ticker}_{form}_{filing_date}_{safe_acc}.htm"
+
+    # Check if file already exists locally with content
+    if not overwrite and file_path.exists() and file_path.stat().st_size > 0:
+        print(f"  Already cached: {file_path.name}  [{doc_name}]")
+        return str(file_path)
+
+    url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession_clean}/{doc_name}"
+    resp = _sec_get(url)
+
+    if resp.status_code != 200:
+        print(f"  Download failed ({resp.status_code}): {url}")
+        return None
+
     file_path.write_text(resp.text, encoding="utf-8")
     print(f"  Downloaded: {file_path.name}  [{doc_name}]")
     return str(file_path)
 
 
-def main() -> None:
-    # --- Main ---
-    os.makedirs("data/company_filings", exist_ok=True)
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Download SEC Form 10-K and 10-Q filings from EDGAR for registered companies."
+    )
+    parser.add_argument(
+        "-t",
+        "--tickers",
+        type=str,
+        default=None,
+        help="Comma-separated list of company tickers (e.g. NVDA,AAPL).",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help="Download filings for all companies configured in CompanyRegistry with a CIK.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default="data/company_filings",
+        help="Target directory for downloaded HTML filings (default: data/company_filings).",
+    )
+    parser.add_argument(
+        "--force",
+        "--overwrite",
+        action="store_true",
+        default=False,
+        help="Re-download filings even if they already exist locally in output directory.",
+    )
+    args = parser.parse_args(argv)
 
-    # Core portfolio tickers to download
-    target_tickers = ["NVDA", "WMT", "UNH", "NFLX"]
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    if (
+        not _settings.infra.sec_user_agent
+        or _settings.infra.sec_user_agent == "Your Name your@email.com"
+    ):
+        print(
+            "Note: SEC_USER_AGENT is currently set to the default value ('Your Name your@email.com').\n"
+            "If requests fail with HTTP 403 Forbidden, configure SEC_USER_AGENT='Your Name your@email.com' "
+            "with your real name/email in your .env file per SEC EDGAR policy.\n"
+        )
+
+    if args.tickers:
+        target_tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+    elif args.all:
+        target_tickers = [p.ticker for p in CompanyRegistry.get_all_companies() if p.cik.strip()]
+    else:
+        target_tickers = CompanyRegistry.get_default_portfolio_tickers()
+
+    if not target_tickers:
+        print("No target tickers specified or configured.")
+        return
+
     all_filings = []
 
     for ticker in target_tickers:
         prof = CompanyRegistry.get_company(ticker)
         if not prof or not prof.cik:
+            print(f"Warning: No profile or CIK found for ticker '{ticker}' — skipping.")
             continue
         print(f"Fetching 10-K, 10-Q filing lists for {prof.name} ({prof.ticker})...")
         filings = get_company_filings(
@@ -229,7 +314,12 @@ def main() -> None:
             continue
 
         result = download_document(
-            filing["cik"], filing["accession"], best_doc, filing, "data/company_filings"
+            filing["cik"],
+            filing["accession"],
+            best_doc,
+            filing,
+            args.output_dir,
+            overwrite=args.force,
         )
 
         if result:

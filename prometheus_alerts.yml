@@ -1,0 +1,90 @@
+# prometheus_alerts.yml
+# Production Alerting Rules for Financial Earnings Oracle RAG Stack
+# Enforces SLOs/SLIs on latency, groundedness, citation coverage, and retrieval health.
+
+groups:
+  - name: financial_rag_slo_alerts
+    rules:
+      # ── Latency SLO Alerts ───────────────────────────────────────────────────
+      - alert: RAGHighQueryLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(rag_query_duration_seconds_bucket[5m])) by (le)) > 3.5
+        for: 5m
+        labels:
+          severity: warning
+          tier: latency
+        annotations:
+          summary: "Financial RAG P95 latency exceeds 3.5s SLA"
+          description: "P95 end-to-end query latency is {{ $value | printf \"%.2f\" }}s over the last 5 minutes (target: < 3.5s)."
+
+      - alert: RAGCriticalLatencyP99
+        expr: histogram_quantile(0.99, sum(rate(rag_query_duration_seconds_bucket[5m])) by (le)) > 5.0
+        for: 2m
+        labels:
+          severity: critical
+          tier: latency
+        annotations:
+          summary: "Financial RAG P99 latency exceeds 5.0s critical threshold"
+          description: "P99 latency is {{ $value | printf \"%.2f\" }}s. Upstream LLM reasoning or cross-encoder bottlenecks detected."
+
+      # ── Groundedness & Hallucination SLI Alerts ───────────────────────────────
+      - alert: RAGLowGroundedRate
+        expr: (sum(rate(rag_grounded_responses_total{grounded="true"}[15m])) / sum(rate(rag_grounded_responses_total[15m]))) < 0.90
+        for: 10m
+        labels:
+          severity: critical
+          tier: quality
+        annotations:
+          summary: "Rolling Grounded Rate dropped below 90% SLI"
+          description: "Only {{ $value | humanizePercentage }} of generated responses are strictly grounded in verified SEC context over the last 15 minutes."
+
+      - alert: RAGHighUngroundedResponseSurge
+        expr: (sum(rate(rag_grounded_responses_total{grounded="false"}[15m])) / sum(rate(rag_grounded_responses_total[15m]))) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          tier: quality
+        annotations:
+          summary: "Ungrounded response rate exceeded 15%"
+          description: "Ungrounded responses represent {{ $value | humanizePercentage }} of total volume. Potential knowledge base drift or out-of-scope query surge."
+
+      - alert: RAGLowCitationCoverage
+        expr: (sum(rate(rag_citations_total{valid="true"}[15m])) / sum(rate(rag_citations_total[15m]))) < 0.95
+        for: 10m
+        labels:
+          severity: critical
+          tier: compliance
+        annotations:
+          summary: "Citation coverage dropped below 95% compliance threshold"
+          description: "Validated citation rate is {{ $value | humanizePercentage }}. Claims are being generated with invalid or missing SEC accession references."
+
+      # ── Infrastructure & Retrieval Failure Alerts ─────────────────────────────
+      - alert: RAGHighRetrievalFailureRate
+        expr: (sum(rate(rag_retrieval_failed_total[5m])) / sum(rate(rag_http_requests_total{endpoint="/query"}[5m]))) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          tier: infrastructure
+        annotations:
+          summary: "Retrieval failure rate exceeds 5%"
+          description: "Retrieval layer is failing for {{ $value | humanizePercentage }} of query requests. Check Qdrant or BM25 index health."
+
+      - alert: RAGHighAPIErrorRate5xx
+        expr: (sum(rate(rag_http_requests_total{status=~"5.."}[5m])) / sum(rate(rag_http_requests_total[5m]))) > 0.01
+        for: 3m
+        labels:
+          severity: critical
+          tier: availability
+        annotations:
+          summary: "FastAPI 5xx error rate exceeds 1%"
+          description: "High rate of server errors: {{ $value | humanizePercentage }} of all requests failing."
+
+      # ── Cost & Token Consumption Anomaly Alert ───────────────────────────────
+      - alert: RAGTokenConsumptionSpike
+        expr: sum(rate(rag_llm_tokens_total[5m])) * 60 > 100000
+        for: 5m
+        labels:
+          severity: warning
+          tier: cost
+        annotations:
+          summary: "Abnormal token consumption rate (> 100k tokens/min)"
+          description: "Current token burn rate is {{ $value | printf \"%.0f\" }} tokens per minute. Check for runaway recursion or DoS traffic."

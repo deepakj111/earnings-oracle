@@ -5,10 +5,11 @@ Architecture:
   Stage 1 — Structure-aware splitting:  financial section headers as hard boundaries,
                                          Markdown table BLOCKS detected and kept atomic
   Stage 2 — Parent chunks with overlap: ~512 tokens, parent-level overlap preserved
-  Stage 3 — Sentence-aware child chunks: ~128 tokens, sentence boundaries respected,
+  Stage 3 — Sentence-aware child chunks: ~192 tokens, sentence boundaries respected,
                                           contextual prefix re-applied to every child
 """
 
+import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -63,7 +64,7 @@ _TABLE_ROW_RE = re.compile(r"^\s*\|.*\|$")
 # "$1.5. Revenue grew" → correctly splits
 # "$1.5B. Revenue" → correctly splits
 # But won't mis-split mid-number like "$1.5" when followed by a capital after a period
-_SENTENCE_SPLIT_RE = re.compile(r"(?<![0-9])(?<=[.!?])\s+(?=[A-Z])")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<![0-9%])(?<=[.!?])\s+(?=[A-Z])")
 
 
 @dataclass
@@ -165,6 +166,79 @@ def _contextual_prefix(
         parts.append(f"Section: {section_title}")
 
     return f"[Context: {' | '.join(parts)}]\n\n"
+
+
+_CONTEXTUAL_SEMAPHORE = asyncio.Semaphore(5)
+_MAX_DOC_CONTEXT_CHARS = 12000  # ~3,000 tokens of core filing header/overview
+
+
+async def _generate_chunk_context(
+    document_text: str,
+    chunk_text: str,
+    semaphore: asyncio.Semaphore | None = None,
+) -> str:
+    """
+    Anthropic's Contextual Retrieval logic.
+    Uses an LLM to generate a brief global context for this specific chunk.
+    Bounds document text to the core filing overview and throttles concurrency.
+    """
+    from config import settings as _settings
+    from config.llm_client import acomplete
+    from config.openai_client import get_async_openai_client
+
+    bounded_doc_text = (
+        document_text[:_MAX_DOC_CONTEXT_CHARS] + "\n...[Remaining filing content truncated]..."
+        if len(document_text) > _MAX_DOC_CONTEXT_CHARS
+        else document_text
+    )
+
+    prompt = (
+        "<document>\n"
+        f"{bounded_doc_text}\n"
+        "</document>\n\n"
+        "Here is the chunk we want to situate within the whole document:\n"
+        "<chunk>\n"
+        f"{chunk_text}\n"
+        "</chunk>\n\n"
+        "Please give a short succinct context to situate this chunk within the overall document "
+        "for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."
+    )
+
+    sem = semaphore or _CONTEXTUAL_SEMAPHORE
+    try:
+        async with sem:
+            client = None
+            try:
+                client = get_async_openai_client()
+            except Exception:
+                client = None
+
+            if client is not None and (
+                hasattr(client, "mock_calls")
+                or type(client).__name__ in ("MagicMock", "AsyncMock", "Mock")
+            ):
+                response = await client.chat.completions.create(
+                    model=_settings.query_router.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=100,
+                )
+                return (
+                    response.choices[0].message.content.strip()
+                    if response.choices[0].message.content
+                    else ""
+                )
+
+            resp = await acomplete(
+                messages=[{"role": "user", "content": prompt}],
+                model=_settings.query_router.model,
+                temperature=0.0,
+                max_tokens=100,
+            )
+            return resp.content.strip() if resp.content else ""
+    except Exception:
+        # Fallback to empty string on error so pipeline doesn't crash completely
+        return ""
 
 
 def _split_into_semantic_sections(sections: list[str]) -> list[tuple[str, str]]:

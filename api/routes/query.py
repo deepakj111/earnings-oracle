@@ -61,11 +61,10 @@ FIX 2 (Bug): Producer future in _consume() was silently discarded.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -74,8 +73,8 @@ from loguru import logger
 from api.dependencies import get_pipeline
 from api.metrics import record_generation_result  # ← NEW
 from api.models import AskRequest, AskResponse, CitationOut, ContextOut, UsageOut
-from crag.models import CRAGResult
 from generation.models import GenerationResult
+from query.guardrails import QueryGuardrails
 from rag_pipeline import FinancialRAGPipeline
 from retrieval.models import MetadataFilter
 
@@ -116,14 +115,10 @@ def _serialise(
     verbose: bool,
     query_summary: str | None,
     retrieval_summary: str | None,
-    crag_action: str | None = None,
-    was_corrected: bool | None = None,
-    web_search_triggered: bool | None = None,
     overall_latency: float | None = None,
 ) -> AskResponse:
     """
     Convert the internal GenerationResult dataclass into the public AskResponse.
-
 
     Verbose fields are included only when the caller requested them to keep
     the default response payload compact.
@@ -147,6 +142,12 @@ def _serialise(
             for c in result.citations
         ],
         grounded=result.grounded,
+        confidence_score=round(
+            getattr(result, "confidence_score", None)
+            if getattr(result, "confidence_score", 1.0) != 1.0
+            else getattr(result, "computed_confidence_score", 1.0),
+            3,
+        ),
         retrieval_failed=result.retrieval_failed,
         model=result.model,
         usage=UsageOut(
@@ -163,11 +164,12 @@ def _serialise(
         ),
         unique_tickers=result.unique_tickers,
         unique_sources=result.unique_sources,
+        calculations=getattr(result, "calculations", []),
+        numerical_hallucination_warnings=getattr(result, "numerical_hallucination_warnings", []),
+        citation_integrity_warnings=getattr(result, "citation_integrity_warnings", []),
+        reflexion_attempts=getattr(result, "reflexion_attempts", 0),
         query_summary=query_summary if verbose else None,
         retrieval_summary=retrieval_summary if verbose else None,
-        crag_action=crag_action,
-        was_corrected=was_corrected,
-        web_search_triggered=web_search_triggered,
     )
 
 
@@ -186,10 +188,8 @@ def _serialise(
         "(3 concurrent LLM calls, ~0.8–1.2 s)\n"
         "- **L3 Hybrid Retrieval** — BM25 + Qdrant dense search → RRF fusion → "
         "FlashRank cross-encoder reranking (~0.3–0.8 s)\n"
-        "- **L4 Answer Generation** — GPT synthesis with grounded [N] citations "
-        "(~0.8–2.0 s)\n"
-        "- **L5 CRAG (Optional)** — Corrective RAG loop if `use_crag=true` (~1.5–3.0 s extra)\n\n"
-        "**Total typical latency:** 2–4 s (standard) or 4–6 s (with CRAG).\n\n"
+        "- **L4 Answer Generation** — GPT synthesis with grounded [N] citations and PAL Math (~0.8–1.8 s)\n\n"
+        "**Total typical latency:** 1.5–2.5 s.\n\n"
         "Set `verbose=true` to receive `query_summary` and `retrieval_summary` "
         "diagnostic strings in the response — useful for debugging and evaluation."
     ),
@@ -217,65 +217,40 @@ async def ask(
     logger.info(
         f"[{rid}] POST /query | "
         f"q={body.question!r:.80} | "
-        f"filter={body.filter} | verbose={body.verbose} | use_crag={body.use_crag}"
+        f"filter={body.filter} | verbose={body.verbose}"
     )
 
+    # ── Input Guardrails ───────────────────────────────────────────────────
+    guardrails = QueryGuardrails()
+    gr_result = guardrails.validate(body.question)
+    if not gr_result.passed and gr_result.has_critical_violation:
+        violation_messages = "; ".join(v.message for v in gr_result.violations)
+        logger.warning(f"[{rid}] Query rejected by security guardrails: {violation_messages}")
+        raise ValueError(f"Security guardrail rejected query: {violation_messages}")
+
+    sanitized_question = gr_result.sanitized_query
     metadata_filter = _to_metadata_filter(body)
-    # FIX 1: get_running_loop() is correct inside an async handler;
-    # get_event_loop() is deprecated in Python 3.10+ with a running loop.
-    loop = asyncio.get_running_loop()
 
-    crag_action: str | None = None
-    was_corrected: bool | None = None
-    web_search_triggered: bool | None = None
-    overall_latency: float | None = None
-
-    if body.use_crag:
-
-        def _run_crag() -> CRAGResult:
-            return pipeline.ask_with_crag(
-                question=body.question,
-                metadata_filter=metadata_filter,
-            )
-
-        crag_res = await loop.run_in_executor(_THREAD_POOL, _run_crag)
-        result = crag_res.final_result
-        query_summary = retrieval_summary = None
-        crag_action = crag_res.action.value
-        was_corrected = crag_res.was_corrected
-        web_search_triggered = crag_res.web_search_triggered
-        overall_latency = crag_res.latency_seconds
-    elif body.verbose:
-
-        def _run_verbose() -> tuple[GenerationResult, str, str]:
-            return pipeline.ask_verbose(
-                question=body.question,
-                metadata_filter=metadata_filter,
-            )
-
-        result, query_summary, retrieval_summary = await loop.run_in_executor(
-            _THREAD_POOL, _run_verbose
+    if body.verbose:
+        result, query_summary, retrieval_summary = await pipeline.ask_verbose(
+            question=sanitized_question,
+            metadata_filter=metadata_filter,
         )
     else:
-
-        def _run() -> GenerationResult:
-            return pipeline.ask(
-                question=body.question,
-                metadata_filter=metadata_filter,
-                request_id=rid,
-                endpoint="/query",
-            )
-
-        result = await loop.run_in_executor(_THREAD_POOL, _run)
+        result = await pipeline.ask(
+            question=sanitized_question,
+            metadata_filter=metadata_filter,
+            request_id=rid,
+            endpoint="/query",
+        )
         query_summary = retrieval_summary = None
 
-    # ← NEW: record LLM + generation metrics after successful pipeline run
     record_generation_result(result)
 
     logger.info(
         f"[{rid}] answer ready | grounded={result.grounded} | "
         f"citations={len(result.citations)} | tokens={result.total_tokens} | "
-        f"latency={result.latency_seconds:.2f}s | crag={crag_action}"
+        f"latency={result.latency_seconds:.2f}s"
     )
 
     return _serialise(
@@ -283,10 +258,6 @@ async def ask(
         verbose=body.verbose,
         query_summary=query_summary,
         retrieval_summary=retrieval_summary,
-        crag_action=crag_action,
-        was_corrected=was_corrected,
-        web_search_triggered=web_search_triggered,
-        overall_latency=overall_latency,
     )
 
 
@@ -329,74 +300,35 @@ async def ask_stream(
     logger.info(f"[{rid}] POST /query/stream | q={body.question!r:.80}")
 
     metadata_filter = _to_metadata_filter(body)
-    # FIX 1: get_running_loop() — correct inside an async handler
-    loop = asyncio.get_running_loop()
 
-    # Bounded queue provides backpressure: the producer thread slows down
-    # if the consumer (HTTP client) is reading slowly.  maxsize=128 gives
-    # ~128 token buffer before the producer blocks.
-    queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=128)
-
-    def _produce() -> None:
+    async def _consume() -> AsyncGenerator[str, None]:
         """
-        Synchronous producer running in a thread pool worker.
-
-
-        Iterates over the blocking pipeline.ask_streaming() generator and
-        pushes each token onto the asyncio queue via run_coroutine_threadsafe.
-        Sends None as a sentinel to signal end-of-stream.
+        Async consumer: reads tokens directly and yields SSE data strings.
         """
         try:
-            for item in pipeline.ask_streaming(
+            stream: Any = pipeline.ask_streaming(
                 question=body.question,
                 metadata_filter=metadata_filter,
                 request_id=rid,
                 endpoint="/query/stream",
-            ):
-                if isinstance(item, dict):
-                    payload = json.dumps(item)
-                else:
-                    payload = json.dumps({"token": item})
-                # .result(timeout) provides backpressure — blocks if queue is full
-                asyncio.run_coroutine_threadsafe(queue.put(payload), loop).result(timeout=30)
+            )
+            if hasattr(stream, "__aiter__"):
+                async for item in stream:
+                    if isinstance(item, dict):
+                        payload = json.dumps(item)
+                    else:
+                        payload = json.dumps({"token": item})
+                    yield f"data: {payload}\n\n"
+            else:
+                for item in stream:
+                    if isinstance(item, dict):
+                        payload = json.dumps(item)
+                    else:
+                        payload = json.dumps({"token": item})
+                    yield f"data: {payload}\n\n"
         except Exception as exc:
             logger.error(f"[{rid}] Streaming pipeline error: {type(exc).__name__}: {exc}")
-            error_payload = json.dumps({"error": str(exc)})
-            asyncio.run_coroutine_threadsafe(queue.put(error_payload), loop).result(timeout=5)
-        finally:
-            # Sentinel — always sent, even after errors, so _consume() terminates
-            asyncio.run_coroutine_threadsafe(queue.put(None), loop).result(timeout=5)
-
-    async def _consume() -> AsyncGenerator[str, None]:
-        """
-        Async consumer: reads tokens from the queue and yields SSE strings.
-
-
-        FIX 2: The producer future is now stored.  If _produce() raises before
-        placing the sentinel, the future's exception is logged and _consume()
-        exits cleanly rather than hanging until the 60-second timeout fires.
-        """
-        # FIX 2: store the future so we can detect producer-side failures
-        producer_future = loop.run_in_executor(_THREAD_POOL, _produce)
-
-        try:
-            while True:
-                try:
-                    item = await asyncio.wait_for(queue.get(), timeout=60.0)
-                except TimeoutError:
-                    logger.error(f"[{rid}] SSE stream timed out waiting for producer.")
-                    yield f"data: {json.dumps({'error': 'Stream timed out.'})}\n\n"
-                    break
-
-                if item is None:  # sentinel — stream complete
-                    break
-
-                yield f"data: {item}\n\n"
-
-        finally:
-            # Ensure the producer thread is not abandoned on early consumer exit.
-            # cancel() is a no-op if the future already completed normally.
-            producer_future.cancel()
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
 
         yield "data: [DONE]\n\n"
 
@@ -410,3 +342,40 @@ async def ask_stream(
             "X-Request-ID": rid,
         },
     )
+
+
+@router.post(
+    "/cache/invalidate",
+    summary="Invalidate semantic cache entries",
+    description=(
+        "Invalidate cached query responses in Qdrant. "
+        "Provide a ticker (e.g. ?ticker=NVDA) to invalidate entries for a specific company, "
+        "or omit to flush the entire semantic cache."
+    ),
+    responses={
+        200: {"description": "Cache entries invalidated successfully."},
+    },
+)
+async def invalidate_cache(
+    pipeline: _Pipeline,
+    ticker: str | None = None,
+) -> dict[str, Any]:
+    """Invalidate semantic cache entries by ticker or flush the entire cache."""
+    cache = getattr(pipeline, "_cache", None)
+    if cache is None:
+        return {"status": "skipped", "message": "Semantic cache not configured", "deleted": 0}
+
+    if ticker:
+        t_clean = ticker.strip().upper()
+        count = await cache.invalidate_ticker(t_clean)
+        return {"status": "success", "ticker": t_clean, "deleted": count}
+
+    try:
+        if await cache.client.collection_exists(cache.COLLECTION_NAME):
+            await cache.client.delete_collection(cache.COLLECTION_NAME)
+            cache._initialized = False
+            await cache._ensure_collection()
+        return {"status": "success", "message": "Semantic cache flushed completely"}
+    except Exception as exc:
+        logger.warning(f"Failed to flush semantic cache: {exc}")
+        return {"status": "error", "message": str(exc)}

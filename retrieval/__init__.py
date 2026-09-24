@@ -39,6 +39,7 @@ def retrieve(
     query: TransformedQuery,
     qdrant_client: QdrantClient,
     metadata_filter: MetadataFilter | None = None,
+    pre_computed_query_vector: list[float] | None = None,
 ) -> RetrievalResult:
     """Perform hybrid retrieval, cross-encoder reranking, and fetch context parent chunks."""
     # 3a — Hybrid search + RRF (BM25 + Qdrant)
@@ -46,6 +47,7 @@ def retrieve(
         query=query,
         qdrant_client=qdrant_client,
         metadata_filter=metadata_filter,
+        pre_computed_query_vector=pre_computed_query_vector,
     )
 
     # 3b — Fetch parent texts so cross-encoder evaluates full table context
@@ -70,7 +72,43 @@ def retrieve(
         if graph_chunks:
             top_children = top_children + graph_chunks
     except Exception as exc:
-        logger.debug(f"Graph retrieval skipped (fail-open): {exc}")  # nosec B110
+        logger.debug(f"Graph retrieval skipped (fail-open): {exc}")
+
+    # 3e — Structured SEC GAAP Facts Injection (Dual-Path Ground Truth)
+    if metadata_filter and metadata_filter.ticker:
+        try:
+            from config.companies import CompanyRegistry
+            from ingestion.facts_store import FactStore
+
+            facts = FactStore.query(
+                ticker=metadata_filter.ticker,
+                fiscal_year=metadata_filter.year,
+                quarter=metadata_filter.quarter,
+            )
+            if facts:
+                facts_text = FactStore.format_as_context(facts)
+                prof = CompanyRegistry.get_company(metadata_filter.ticker)
+                company_name = prof.name if prof else facts[0].ticker
+                facts_chunk = SearchResult(
+                    chunk_id=f"fact_{metadata_filter.ticker}_{metadata_filter.year or 'all'}",
+                    parent_id=None,
+                    text=facts_text,
+                    parent_text=facts_text,
+                    rrf_score=1.0,
+                    rerank_score=1.0,
+                    ticker=metadata_filter.ticker,
+                    company=company_name,
+                    date=facts[0].period_end,
+                    year=facts[0].fiscal_year,
+                    quarter=facts[0].quarter,
+                    fiscal_period=f"{facts[0].quarter} {facts[0].fiscal_year}",
+                    section_title="Authoritative SEC Financial Statements",
+                    doc_type="10-K/10-Q GAAP Facts",
+                    source="facts",
+                )
+                top_children.insert(0, facts_chunk)
+        except Exception as exc:
+            logger.debug(f"Fact injection skipped: {exc}")
 
     return RetrievalResult(
         query=query.original,

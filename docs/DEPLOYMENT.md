@@ -102,18 +102,21 @@ Published to GitHub Container Registry (`ghcr.io`):
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| `qdrant` | `qdrant/qdrant:v1.9.2` | 6333, 6334 | Vector database |
-| `api` | `financial-rag:latest` (built) | 8000 | FastAPI backend |
+| `qdrant` | `qdrant/qdrant:v1.11.0` | 6333, 6334 | Vector database (Dense HNSW + Semantic Cache collection) |
+| `redis` | `redis:7-alpine` | 6379 | Optional cache layer (available for future use) |
+| `jaeger` | `jaegertracing/all-in-one:latest` | 16686, 4317, 4318 | APM distributed tracing & flamegraphs |
+| `api` | `financial-rag:latest` (built) | 8000 | FastAPI backend & web frontend |
 | `ui` | `financial-rag:latest` (built) | 8501 | Streamlit frontend |
 | `prometheus` | `prom/prometheus:v2.51.2` | 9090 | Metrics scraping |
-| `grafana` | `grafana/grafana:10.4.2` | 3000 | Metrics dashboards |
+| `grafana` | `grafana/grafana:10.4.2` | 3000 | Real-time metrics dashboards |
 
 ### Startup
 
 ```bash
 # 1. Copy and fill environment
 cp .env.example .env
-# Edit .env: OPENAI_API_KEY, SEC_USER_AGENT, GRAFANA_ADMIN_PASSWORD
+# Edit .env: RAG_LLM_PROVIDER, GOOGLE_CLOUD_PROJECT (or OPENAI_API_KEY), SEC_USER_AGENT, GRAFANA_ADMIN_PASSWORD
+# If using Google Cloud ADC, authenticate via: gcloud auth application-default login
 
 # 2. Start all services
 docker compose up -d
@@ -250,15 +253,24 @@ Only the default `GITHUB_TOKEN` is required to push to GHCR:
 ### Recommended `.env` for production
 
 ```dotenv
-# Required
-OPENAI_API_KEY=sk-...
+# Option A: Google Cloud ADC (Zero API Keys) [Recommended]
+RAG_LLM_PROVIDER=gemini
+GOOGLE_CLOUD_PROJECT=gleaming-vision-509507-j6
+GOOGLE_CLOUD_LOCATION=us-central1
+
+# Option B: OpenAI API Key (Alternative)
+# RAG_LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-...
+
 SEC_USER_AGENT="Company Name ops@company.com"
 QDRANT_URL=http://qdrant:6333              # Docker service name
 
-# LLM
-RAG_GENERATION_MODEL=gpt-5-mini
-RAG_QUERY_TRANSFORM_MODEL=gpt-5-mini
-RAG_EVAL_MODEL=gpt-5-mini
+# Models (Defaults to Gemini 2.5 Flash / text-embedding-004)
+RAG_GENERATION_MODEL=gemini-2.5-flash
+RAG_QUERY_TRANSFORM_MODEL=gemini-2.5-flash
+RAG_EMBEDDING_MODEL=text-embedding-004
+RAG_EMBEDDING_VECTOR_DIM=768
+RAG_EVAL_MODEL=gemini-2.5-flash
 
 # Retrieval tuning
 RAG_RETRIEVAL_TOP_K_DENSE=10
@@ -267,11 +279,10 @@ RAG_RETRIEVAL_TOP_K_FINAL=5
 RAG_RERANKER_ENABLED=true
 RAG_RERANKER_TOP_K_PRE=20
 
-# CRAG
-RAG_CRAG_ENABLED=true
-RAG_CRAG_HIGH_THRESHOLD=0.6
-RAG_CRAG_LOW_THRESHOLD=0.2
-TAVILY_API_KEY=tvly-...                    # Recommended for web search quality
+# Knowledge Graph & Retrieval
+RAG_KG_RETRIEVAL_ENABLED=true
+RAG_CONTEXT_COMPRESSION_ENABLED=true
+RAG_AUDIT_ENABLED=true
 
 # Observability
 GRAFANA_ADMIN_PASSWORD=<strong-password>
@@ -342,7 +353,7 @@ readinessProbe:
     },
     "pipeline": {
       "status": "ok",
-      "detail": "generation=gpt-5-mini | transform=gpt-5-mini"
+      "detail": "generation=gemini-2.5-flash | transform=gemini-2.5-flash"
     },
     "bm25_index": {
       "status": "ok",
@@ -427,6 +438,8 @@ spec:
 
 ## Operational Runbooks
 
+> 📖 **Master Operations Runbook**: For the exhaustive, step-by-step operational guide covering all commands, CLI flags, multi-stage ingestion modes, and granular ablation studies in exact chronological execution order, see **[RUNBOOK.md](RUNBOOK.md)**.
+
 ### Runbook: Full re-index
 
 **When**: Qdrant storage was wiped, or store index files are corrupt.
@@ -447,75 +460,54 @@ docker compose start api
 
 ### Runbook: Add new company
 
-**When**: Expanding beyond the current 10 tickers.
+**When**: Registering an additional company into the system.
 
 ```python
-# 1. Add to ingestion/download_filings.py
-COMPANIES = {
-    ...
-    "GOOGL": "0001652044",   # Alphabet Inc.
-}
+# 1. Register company profile in config/companies.py
+# CompanyRegistry holds CIK, fiscal year end, and sector info
 
-# 2. Add to ingestion/metadata_extractor.py
-COMPANY_MAP = {
-    ...
-    "GOOGL": "Alphabet",
-}
+# 2. Add to ingestion/download_filings.py if scraping new SEC filings
 
-# 3. Add to api/models.py
-_VALID_TICKERS = frozenset({..., "GOOGL"})
-
-# 4. Add to ui/app.py
-_TICKERS = ["(all)", ..., "GOOGL"]
-
-# 5. Download and ingest new company filings
+# 3. Ingest new company filings
 poetry run python -m ingestion.download_filings
-poetry run python -m ingestion.pipeline   # Checkpoint ensures existing files are skipped
+poetry run python -m ingestion.pipeline   # Idempotent state manager skips existing filings
 ```
 
 ### Runbook: Diagnose high latency
 
 ```bash
-# 1. Check Grafana dashboard for per-layer latency
-# rag_pipeline_latency_seconds{layer="L2"} — query transform
-# rag_pipeline_latency_seconds{layer="L3"} — retrieval
-# rag_pipeline_latency_seconds{layer="L4"} — generation
+# 1. Check Jaeger UI for distributed trace flamegraphs (L2/L3/L4 breakdown)
+# http://localhost:16686
 
-# 2. Check OpenAI API status
-# https://status.openai.com/
+# 2. Check Prometheus metrics & Grafana dashboards
+# http://localhost:9090 and http://localhost:3000
 
 # 3. Check Qdrant health
-curl http://localhost:6333/healthz
+curl http://localhost:6333/readyz
 
-# 4. Disable reranker if FlashRank is slow on CPU
+# 4. Check Redis cache connectivity
+docker compose exec redis redis-cli ping
+
+# 5. Disable reranker if FlashRank is slow on CPU
 RAG_RERANKER_ENABLED=false docker compose restart api
-
-# 5. Check BM25 index size (large index = slow search)
-poetry run python scripts/inspect_index.py
 ```
 
 ### Runbook: Diagnose poor answer quality
 
 ```bash
 # 1. Enable verbose mode in a test query
-curl -X POST http://localhost:8000/query/ \
+curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "your question", "verbose": true}'
+  -d '{"question": "your question", "verbose": true}' | python3 -m json.tool
 
 # 2. Check retrieval_summary — are relevant chunks being retrieved?
 # Check query_summary — are all three techniques producing good variants?
 
 # 3. Run evaluation harness
-poetry run python -m evaluation.harness --n 5 --metrics faithfulness context_precision
+poetry run python evaluation/harness.py
 
-# 4. Common root causes:
-# - grounded=false → CRAG not enabled or web search not configured
-# - context_precision=low → reranker not enabled or BM25 not returning good results
-# - faithfulness=low → context window too small (increase RAG_GENERATION_MAX_CONTEXT_TOKENS)
-
-# 5. Check if ingestion is fresh
-poetry run python scripts/inspect_index.py
-# Look for: "OK: BM25 and Qdrant counts are consistent"
+# 4. Check if ingestion is fresh and consistent
+poetry run inspect-data
 ```
 
 ### Runbook: Prometheus metrics not appearing

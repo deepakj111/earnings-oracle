@@ -40,12 +40,12 @@ import math
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
 
 from loguru import logger
 
 from config import settings as _settings
-from config.openai_client import get_openai_client
+from config.llm_client import complete as _llm_complete
+from config.llm_client import embed as _llm_embed
 from evaluation.models import MetricScore
 
 _eval_cfg = _settings.evaluation
@@ -53,32 +53,20 @@ _JSON_RE = re.compile(r"\{[^}]*\}", re.DOTALL)
 
 
 def _call(prompt: str) -> str:
-    client = get_openai_client()
-    call_kwargs: dict[str, Any] = {
-        "model": _eval_cfg.model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens": max(_eval_cfg.max_tokens, 4096),
-        "response_format": {"type": "json_object"},
-    }
-    if _eval_cfg.temperature != 1.0 and not _eval_cfg.model.startswith(("gpt-5", "o1", "o3")):
-        call_kwargs["temperature"] = _eval_cfg.temperature
+    """
+    Call the evaluation LLM via config.llm_client (provider-agnostic).
 
-    try:
-        resp = client.chat.completions.create(**call_kwargs)
-        content = (resp.choices[0].message.content or "").strip()
-        if not content:
-            # Fallback for reasoning models if completion token budget was consumed by reasoning
-            call_kwargs["max_completion_tokens"] = 8192
-            resp = client.chat.completions.create(**call_kwargs)
-            content = (resp.choices[0].message.content or "").strip()
-        return content
-    except Exception as exc:
-        if "temperature" in str(exc).lower() and "temperature" in call_kwargs:
-            call_kwargs.pop("temperature")
-            resp = client.chat.completions.create(**call_kwargs)
-            return (resp.choices[0].message.content or "").strip()
-        else:
-            raise
+    Retry logic (tenacity exponential backoff) is handled inside _llm_complete().
+    Always requests JSON output for reliable score parsing.
+    """
+    resp = _llm_complete(
+        messages=[{"role": "user", "content": prompt}],
+        model=_eval_cfg.model,
+        temperature=_eval_cfg.temperature,
+        max_tokens=max(_eval_cfg.max_tokens, 4096),
+        response_format={"type": "json_object"},
+    )
+    return resp.content
 
 
 def _parse_score(raw: str, metric: str) -> tuple[float, str]:
@@ -379,15 +367,13 @@ def score_bleu(answer: str, ground_truth: str) -> MetricScore:
 
 
 def score_semantic_similarity(answer: str, ground_truth: str) -> MetricScore:
-    """Cosine similarity of embeddings using text-embedding-3-small."""
-    client = get_openai_client()
+    """Cosine similarity of embeddings using the configured embedding model."""
     try:
-        res = client.embeddings.create(
-            input=[answer[:1000], ground_truth[:1000]],
-            model=_settings.embedding.model,
-        )
-        vec_ans = res.data[0].embedding
-        vec_gt = res.data[1].embedding
+        vectors = _llm_embed([answer[:1000], ground_truth[:1000]])
+        if len(vectors) < 2:
+            raise ValueError("Expected 2 embedding vectors, got fewer.")
+        vec_ans = vectors[0]
+        vec_gt = vectors[1]
         dot = sum(a * b for a, b in zip(vec_ans, vec_gt, strict=False))
         norm_a = math.sqrt(sum(a * a for a in vec_ans))
         norm_b = math.sqrt(sum(b * b for b in vec_gt))

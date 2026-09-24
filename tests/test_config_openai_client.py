@@ -64,3 +64,30 @@ class TestConfigOpenAIClient:
 
         assert c1 is c2
         assert mock_class.call_count == 1
+
+    def test_async_semaphore_singleton_reused(self):
+        from config.openai_client import get_async_openai_semaphore
+
+        sem1 = get_async_openai_semaphore(5)
+        sem2 = get_async_openai_semaphore(5)
+        assert sem1 is sem2
+
+    def test_sync_semaphore_singleton_reused(self):
+        from config.openai_client import get_sync_openai_semaphore
+
+        sem1 = get_sync_openai_semaphore(5)
+        sem2 = get_sync_openai_semaphore(5)
+        assert sem1 is sem2
+        # Ensure it functions as a context manager
+        with sem1:
+            pass
+
+    def test_settings_describe_returns_dict_with_all_sections(self):
+        from config import settings
+
+        desc = settings.describe()
+        assert isinstance(desc, dict)
+        assert "infra" in desc
+        assert "retrieval" in desc
+        assert "generation" in desc
+        assert desc["infra"]["openai_max_concurrency"] >= 1

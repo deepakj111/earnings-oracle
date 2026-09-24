@@ -7,6 +7,9 @@ import lxml.html
 from bs4 import XMLParsedAsHTMLWarning
 from lxml import etree
 
+from config.companies import CompanyRegistry
+from ingestion.facts_store import FinancialFact
+
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 
@@ -17,6 +20,7 @@ class ParsedDocument:
     file_path: str
     raw_text: str
     sections: list[str] = field(default_factory=list)
+    extracted_facts: list[FinancialFact] = field(default_factory=list)
 
 
 def _table_to_markdown(table_elem: etree._Element) -> str:
@@ -66,15 +70,23 @@ def parse_html(file_path: Path) -> ParsedDocument | None:
     date_match = re.search(r"\d{4}-\d{2}-\d{2}", stem)
     if date_match:
         date = date_match.group(0)
-    elif len(stem_parts) > 1:
+    elif len(stem_parts) > 1 and re.match(r"\d{4}", stem_parts[1]):
         date = stem_parts[1]
     else:
         date = "unknown"
+
+    form_type = (
+        stem_parts[1]
+        if len(stem_parts) >= 2 and stem_parts[1] in ("10-K", "10-Q", "8-K")
+        else ("10-K" if "10-K" in stem else "unknown")
+    )
+    fiscal_year, quarter, _ = CompanyRegistry.derive_fiscal_period(ticker, form_type, date)
 
     raw_bytes = file_path.read_bytes()
     if not raw_bytes or not raw_bytes.strip():
         return None
 
+    extracted_facts: list[FinancialFact] = []
     try:
         # Fast C-based HTML parsing via lxml (bytes input avoids XML declaration encoding errors)
         parser = lxml.html.HTMLParser(encoding="utf-8", recover=True)
@@ -94,7 +106,49 @@ def parse_html(file_path: Path) -> ParsedDocument | None:
                 with_tail=False,
             )
 
-            # 2. Purge Inline XBRL (iXBRL) header/metadata nodes that contain raw schema URLs
+            # 2. Extract structured iXBRL GAAP facts (Revenues, Operating Income, Net Income, EPS)
+            for elem in tree.xpath(
+                '//*[contains(local-name(), "nonfraction") or contains(local-name(), "nonFraction")]'
+            ):
+                concept_name = elem.attrib.get("name", "")
+                if any(
+                    k in concept_name.lower()
+                    for k in (
+                        "revenue",
+                        "operatingincome",
+                        "netincome",
+                        "earningspershare",
+                        "grossprofit",
+                    )
+                ):
+                    raw_val = elem.text_content().replace(",", "").strip()
+                    try:
+                        val = float(raw_val)
+                        scale = (
+                            "millions"
+                            if elem.attrib.get("scale") == "6"
+                            else ("thousands" if elem.attrib.get("scale") == "3" else "units")
+                        )
+                        concept = concept_name.split(":")[-1]
+                        label = re.sub(r"([a-z])([A-Z])", r"\1 \2", concept)
+                        extracted_facts.append(
+                            FinancialFact(
+                                ticker=ticker,
+                                concept=concept,
+                                label=label,
+                                fiscal_year=fiscal_year,
+                                quarter=quarter,
+                                period_end=date,
+                                value=val,
+                                unit=elem.attrib.get("unitRef", "USD"),
+                                scale=scale,
+                                source_file=str(file_path),
+                            )
+                        )
+                    except ValueError:
+                        pass
+
+            # 3. Purge Inline XBRL (iXBRL) header/metadata nodes that contain raw schema URLs
             for elem in tree.xpath('//*[starts-with(name(), "ix:")]'):
                 tag_local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
                 if tag_local.lower() in (
@@ -154,4 +208,5 @@ def parse_html(file_path: Path) -> ParsedDocument | None:
         file_path=str(file_path),
         raw_text=text,
         sections=sections,
+        extracted_facts=extracted_facts,
     )

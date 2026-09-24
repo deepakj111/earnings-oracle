@@ -120,7 +120,7 @@ jobs:
           query/
           retrieval/
           generation/
-          crag/
+          evaluation/
           observability/
           api/
           config/
@@ -265,7 +265,6 @@ jobs:
           QDRANT_URL: "http://localhost:6333"
           SEC_USER_AGENT: "CI Pipeline ci@example.com"
           RAG_RERANKER_ENABLED: "false"
-          RAG_CRAG_ENABLED: "false"
         run: >
           poetry run pytest tests/
           -v
@@ -276,7 +275,8 @@ jobs:
           --cov=query
           --cov=retrieval
           --cov=generation
-          --cov=crag
+          --cov=observability
+          --cov=knowledge_graph
           --cov=evaluation
           --cov=api
           --cov=config

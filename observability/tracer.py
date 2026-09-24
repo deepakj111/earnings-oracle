@@ -40,7 +40,10 @@ Persistence:
 from __future__ import annotations
 
 import json
+import threading
+from collections import deque
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -57,6 +60,33 @@ from observability.trace_models import (
     RetrievalSpan,
     SpanStatus,
 )
+
+
+class LatencyReservoir:
+    """Thread-safe bounded reservoir for tracking request latency percentiles (P50, P90, P95, P99)."""
+
+    def __init__(self, max_size: int = 1000) -> None:
+        self._max_size = max_size
+        self._samples: deque[float] = deque(maxlen=max_size)
+        self._lock = threading.Lock()
+
+    def add(self, latency: float) -> None:
+        with self._lock:
+            self._samples.append(latency)
+
+    def summary(self) -> dict[str, Any]:
+        with self._lock:
+            if not self._samples:
+                return {"count": 0, "p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0}
+            sorted_s = sorted(self._samples)
+            n = len(sorted_s)
+            return {
+                "count": n,
+                "p50": round(sorted_s[int(n * 0.50)], 3),
+                "p90": round(sorted_s[min(int(n * 0.90), n - 1)], 3),
+                "p95": round(sorted_s[min(int(n * 0.95), n - 1)], 3),
+                "p99": round(sorted_s[min(int(n * 0.99), n - 1)], 3),
+            }
 
 
 class RAGTracer:
@@ -91,6 +121,7 @@ class RAGTracer:
             alert_per_request_usd=cost_alert_per_request_usd,
             alert_per_session_usd=cost_alert_per_session_usd,
         )
+        self._reservoir = LatencyReservoir()
 
         if enabled:
             logger.info(
@@ -167,7 +198,14 @@ class RAGTracer:
         if self._audit_writer:
             self._audit_writer.write(trace)
 
+        # Track rolling latency distribution
+        self._reservoir.add(total_latency)
+
         return trace
+
+    def latency_summary(self) -> dict[str, Any]:
+        """Return rolling latency percentiles (P50, P90, P95, P99) across recent requests."""
+        return self._reservoir.summary()
 
     # ── Layer span recording ───────────────────────────────────────────────
 

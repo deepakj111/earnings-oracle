@@ -12,7 +12,9 @@ Allows zero hardcoding of ticker names or filing dates in business logic.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -28,6 +30,8 @@ class CompanyProfile:
         12  # 1 = January (WMT/NVDA), 12 = December (NFLX/UNH), 9 = Sept (AAPL), 6 = June (MSFT)
     )
     download_start_date: str = "2024-01-01"  # SEC EDGAR filing download start date
+    default_portfolio: bool = False
+    aliases: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,10 +41,25 @@ class CompanyProfile:
             "sector": self.sector,
             "fiscal_year_end_month": self.fiscal_year_end_month,
             "download_start_date": self.download_start_date,
+            "default_portfolio": self.default_portfolio,
+            "aliases": self.aliases,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CompanyProfile:
+        return cls(
+            ticker=data["ticker"].upper().strip(),
+            name=data["name"].strip(),
+            cik=data.get("cik", "").strip(),
+            sector=data.get("sector", "General").strip(),
+            fiscal_year_end_month=int(data.get("fiscal_year_end_month", 12)),
+            download_start_date=data.get("download_start_date", "2024-01-01").strip(),
+            default_portfolio=bool(data.get("default_portfolio", False)),
+            aliases=[str(a).strip().lower() for a in data.get("aliases", []) if str(a).strip()],
+        )
 
-# Single source of truth for company metadata and fiscal configurations
+
+# Fallback company profiles in case external configuration is unavailable
 _REGISTRY_COMPANIES: list[CompanyProfile] = [
     CompanyProfile(
         ticker="NVDA",
@@ -49,6 +68,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Technology / Semiconductors",
         fiscal_year_end_month=1,
         download_start_date="2024-01-01",
+        default_portfolio=True,
+        aliases=["nvidia", "geforce", "mellanox", "nvd"],
     ),
     CompanyProfile(
         ticker="WMT",
@@ -57,6 +78,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Consumer Staples / Retail",
         fiscal_year_end_month=1,
         download_start_date="2024-01-01",
+        default_portfolio=True,
+        aliases=["walmart", "sam's club", "sams club", "wal-mart"],
     ),
     CompanyProfile(
         ticker="NFLX",
@@ -65,6 +88,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Communication Services / Streaming",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=True,
+        aliases=["netflix"],
     ),
     CompanyProfile(
         ticker="UNH",
@@ -73,6 +98,14 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Healthcare / Managed Care",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=True,
+        aliases=[
+            "optum",
+            "united health",
+            "unitedhealthcare",
+            "united health group",
+            "change healthcare",
+        ],
     ),
     CompanyProfile(
         ticker="AAPL",
@@ -81,6 +114,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Technology / Consumer Electronics",
         fiscal_year_end_month=9,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["apple", "iphone", "ipad", "macbook"],
     ),
     CompanyProfile(
         ticker="MSFT",
@@ -89,6 +124,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Technology / Software",
         fiscal_year_end_month=6,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["microsoft", "azure", "windows", "xbox"],
     ),
     CompanyProfile(
         ticker="AMZN",
@@ -97,6 +134,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Consumer Discretionary / E-Commerce",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["amazon", "aws", "prime video"],
     ),
     CompanyProfile(
         ticker="META",
@@ -105,6 +144,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Communication Services / Interactive Media",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["meta", "facebook", "instagram", "whatsapp", "oculus"],
     ),
     CompanyProfile(
         ticker="JPM",
@@ -113,6 +154,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Financials / Banking",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["jpmorgan", "jp morgan", "chase"],
     ),
     CompanyProfile(
         ticker="TSLA",
@@ -121,6 +164,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Consumer Discretionary / Automotive",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["tesla"],
     ),
     CompanyProfile(
         ticker="XOM",
@@ -129,6 +174,8 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
         sector="Energy / Oil & Gas",
         fiscal_year_end_month=12,
         download_start_date="2024-01-01",
+        default_portfolio=False,
+        aliases=["exxon", "exxonmobil", "mobil"],
     ),
 ]
 
@@ -136,16 +183,45 @@ _REGISTRY_COMPANIES: list[CompanyProfile] = [
 class CompanyRegistry:
     """
     Singleton registry managing company profiles and generic fiscal calendar logic.
+    Loads dynamically from config/companies.json or registered at runtime.
     """
 
+    CONFIG_PATH: Path = Path(__file__).parent / "companies.json"
     _profiles: dict[str, CompanyProfile] = {}
 
     @classmethod
-    def initialize(cls) -> None:
-        """Initialize registry from internal company profiles."""
+    def initialize(cls, config_path: Path | str | None = None) -> None:
+        """Initialize registry from companies.json, falling back to internal defaults."""
         cls._profiles.clear()
+        target_path = Path(config_path) if config_path else cls.CONFIG_PATH
+
+        if target_path.exists():
+            try:
+                content = target_path.read_text(encoding="utf-8")
+                raw_list = json.loads(content)
+                if isinstance(raw_list, list):
+                    for item in raw_list:
+                        if isinstance(item, dict) and "ticker" in item and "name" in item:
+                            prof = CompanyProfile.from_dict(item)
+                            cls._profiles[prof.ticker] = prof
+                    if cls._profiles:
+                        logger.debug(
+                            f"CompanyRegistry initialized with {len(cls._profiles)} companies from {target_path}"
+                        )
+                        return
+            except Exception as exc:
+                logger.warning(
+                    f"Failed to load company registry from {target_path} ({exc}). Using internal defaults."
+                )
+
+        # Fallback to internal profiles
         for p in _REGISTRY_COMPANIES:
             cls._profiles[p.ticker.upper()] = p
+
+    @classmethod
+    def load_from_json(cls, config_path: Path | str | None = None) -> None:
+        """Explicitly reload registry from a JSON configuration file."""
+        cls.initialize(config_path)
 
     @classmethod
     def register_company(
@@ -156,6 +232,8 @@ class CompanyRegistry:
         sector: str = "General",
         fiscal_year_end_month: int = 12,
         download_start_date: str = "2024-01-01",
+        default_portfolio: bool = False,
+        aliases: list[str] | None = None,
     ) -> None:
         """Dynamically register a new company profile at runtime."""
         t_upper = ticker.upper().strip()
@@ -166,6 +244,8 @@ class CompanyRegistry:
             sector=sector.strip(),
             fiscal_year_end_month=fiscal_year_end_month,
             download_start_date=download_start_date,
+            default_portfolio=default_portfolio,
+            aliases=[str(a).strip().lower() for a in (aliases or []) if str(a).strip()],
         )
         cls._profiles[t_upper] = prof
         logger.info(f"Registered company profile for {t_upper} ({name})")
@@ -189,6 +269,56 @@ class CompanyRegistry:
         if not cls._profiles:
             cls.initialize()
         return sorted(cls._profiles.keys())
+
+    @classmethod
+    def get_default_portfolio_tickers(cls) -> list[str]:
+        """Return list of tickers designated as the default portfolio."""
+        if not cls._profiles:
+            cls.initialize()
+        return sorted([t for t, p in cls._profiles.items() if p.default_portfolio])
+
+    @classmethod
+    def get_all_companies(cls) -> list[CompanyProfile]:
+        """Return all registered CompanyProfile instances."""
+        if not cls._profiles:
+            cls.initialize()
+        return list(cls._profiles.values())
+
+    @classmethod
+    def get_alias_map(cls) -> dict[str, str]:
+        """
+        Dynamically build mapping of lowercased entity names/aliases to uppercase tickers.
+        Includes ticker, company name, filtered distinctive words, and all custom aliases.
+        """
+        if not cls._profiles:
+            cls.initialize()
+
+        mapping: dict[str, str] = {}
+        for ticker, prof in cls._profiles.items():
+            t_upper = ticker.upper()
+            mapping[t_upper.lower()] = t_upper
+            mapping[prof.name.lower()] = t_upper
+
+            # Common prefixes/short words (e.g., 'netflix', 'walmart')
+            for word in prof.name.lower().split():
+                if len(word) >= 4 and word not in (
+                    "corporation",
+                    "company",
+                    "group",
+                    "inc.",
+                    "holdings",
+                    "platforms",
+                    "services",
+                ):
+                    mapping[word] = t_upper
+
+            # Distinctive configured aliases
+            for alias in prof.aliases:
+                clean_alias = alias.lower().strip()
+                if clean_alias:
+                    mapping[clean_alias] = t_upper
+
+        return mapping
 
     @classmethod
     def derive_fiscal_period(

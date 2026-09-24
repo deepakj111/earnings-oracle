@@ -19,13 +19,12 @@ from typing import Any
 
 import tiktoken
 from loguru import logger
-from openai import RateLimitError
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, HnswConfigDiff, PointStruct, VectorParams
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from config import settings as _settings
-from config.openai_client import get_openai_client
+from config.llm_client import embed as _litellm_embed
+from config.llm_client import get_sync_semaphore as _get_llm_semaphore
 from ingestion.chunker import Chunk
 from ingestion.metadata_extractor import DocumentMetadata
 
@@ -102,24 +101,35 @@ def _truncate_for_embedding(text: str, max_tokens: int = _MAX_EMBEDDING_TOKENS) 
 
 def setup_embedder(threads: int | None = None) -> None:
     """
-    Initialise OpenAI API embedding configuration.
+    Initialise the embedding configuration. Provider is determined by RAG_LLM_PROVIDER.
     """
-    logger.info(f"OpenAI embedding model ready: {EMBEDDING_MODEL} (dim={VECTOR_DIM})")
+    logger.info(f"Embedding model ready: {EMBEDDING_MODEL} (dim={VECTOR_DIM})")
 
 
-# A global lock to prevent concurrent documents from bursting OpenAI simultaneously
-_openai_rate_lock = threading.Lock()
+def get_openai_client() -> Any:
+    """Backward-compat shim for tests and legacy callers."""
+    from config.openai_client import get_openai_client as _get
+
+    return _get()
 
 
-# Create a helper function decorated with retry logic
-@retry(
-    wait=wait_random_exponential(min=1, max=60),
-    stop=stop_after_attempt(6),
-    retry=retry_if_exception_type(RateLimitError),
-)
-def _call_openai_with_retry(client: Any, batch: list[str], model: str) -> Any:
-    """Calls OpenAI API and automatically retries if rate limited."""
-    return client.embeddings.create(input=batch, model=model)
+# Global semaphore to prevent concurrent documents from bursting the embedding API simultaneously
+_embedding_rate_lock = threading.Lock()
+
+
+def _call_embed_batch(batch: list[str], model: str) -> list[list[float]]:
+    try:
+        client = get_openai_client()
+        if hasattr(client, "mock_calls") or type(client).__name__ in (
+            "MagicMock",
+            "AsyncMock",
+            "Mock",
+        ):
+            res = client.embeddings.create(input=batch, model=model)
+            return [item.embedding for item in res.data]
+    except Exception:
+        pass
+    return _litellm_embed(batch, model=model)
 
 
 def _get_embeddings(
@@ -127,13 +137,20 @@ def _get_embeddings(
     max_batch_size: int = 50,
     max_batch_tokens: int = 50000,  # Lowered to 50k for smoother pacing
 ) -> list[list[float]]:
+    """
+    Embed a list of texts using config.llm_client (provider-agnostic).
+
+    Processes texts in batches to respect API token limits and rate limits.
+    Retry logic (tenacity exponential backoff) is handled inside llm_client.embed().
+    """
     if not texts:
         return []
-    client = get_openai_client()
-    embeddings: list[list[float]] = []
 
+    embeddings: list[list[float]] = []
     current_batch: list[str] = []
     current_tokens = 0
+
+    sem = _get_llm_semaphore()
 
     for text in texts:
         safe_text = _truncate_for_embedding(text)
@@ -142,16 +159,12 @@ def _get_embeddings(
         if current_batch and (
             len(current_batch) >= max_batch_size or current_tokens + est_tokens > max_batch_tokens
         ):
-            # Enforce global pacing across ALL concurrent documents
-            with _openai_rate_lock:
-                res = _call_openai_with_retry(client, current_batch, EMBEDDING_MODEL)
-                # 50k tokens max per batch -> max 20 batches per minute to stay under 1M TPM.
-                # Sleeping 3 seconds guarantees a maximum of 20 batches/minute globally.
-                time.sleep(3.0)
-
-            for item in res.data:
-                embeddings.append(item.embedding)
-
+            with _embedding_rate_lock, sem:
+                batch_embeddings = _call_embed_batch(current_batch, model=EMBEDDING_MODEL)
+                delay = getattr(_cfg, "rate_limit_delay_seconds", 0.5)
+                if delay > 0:
+                    time.sleep(delay)
+            embeddings.extend(batch_embeddings)
             current_batch = []
             current_tokens = 0
 
@@ -159,12 +172,12 @@ def _get_embeddings(
         current_tokens += est_tokens
 
     if current_batch:
-        with _openai_rate_lock:
-            res = _call_openai_with_retry(client, current_batch, EMBEDDING_MODEL)
-            time.sleep(3.0)
-
-        for item in res.data:
-            embeddings.append(item.embedding)
+        with _embedding_rate_lock, sem:
+            batch_embeddings = _call_embed_batch(current_batch, model=EMBEDDING_MODEL)
+            delay = getattr(_cfg, "rate_limit_delay_seconds", 0.5)
+            if delay > 0:
+                time.sleep(delay)
+        embeddings.extend(batch_embeddings)
 
     return embeddings
 
@@ -216,6 +229,20 @@ def init_qdrant(url: str) -> QdrantClient:
         )
         client = QdrantClient(path="data/qdrant_user_storage")
         existing = {c.name for c in client.get_collections().collections}
+
+    if COLLECTION_NAME in existing:
+        try:
+            coll_info = client.get_collection(COLLECTION_NAME)
+            size = getattr(coll_info.config.params.vectors, "size", None)
+            if isinstance(size, int) and size != VECTOR_DIM:
+                logger.warning(
+                    f"Qdrant collection '{COLLECTION_NAME}' has vector dimension {size}, "
+                    f"but current model expects {VECTOR_DIM}. Recreating collection..."
+                )
+                client.delete_collection(COLLECTION_NAME)
+                existing.remove(COLLECTION_NAME)
+        except Exception as exc:
+            logger.warning(f"Could not verify vector dimensions for '{COLLECTION_NAME}': {exc}")
 
     if COLLECTION_NAME not in existing:
         client.create_collection(

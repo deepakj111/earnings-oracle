@@ -32,7 +32,7 @@ class SearchResult:
     """
     A single retrieved chunk after RRF fusion and parent fetch.
 
-    text        : child chunk text (128 tokens) — what was matched by retrieval
+    text        : child chunk text (192 tokens) — what was matched by retrieval
     parent_text : full parent chunk text (512 tokens) — what gets passed to the LLM
     rrf_score   : Reciprocal Rank Fusion score before reranking (higher = more relevant)
     rerank_score: FlashRank cross-encoder score (set after reranking; -inf before)
@@ -54,6 +54,8 @@ class SearchResult:
     section_title: str
     doc_type: str
     source: str  # "dense" | "bm25" | "both"
+    chunk_type: str = "child"
+    bm25_score: float = 0.0
 
     @classmethod
     def from_payload(
@@ -83,6 +85,8 @@ class SearchResult:
             section_title=payload.get("section_title", ""),
             doc_type=payload.get("doc_type", ""),
             source=source,
+            chunk_type=payload.get("chunk_type", "child"),
+            bm25_score=float(payload.get("bm25_score", 0.0)),
         )
 
 

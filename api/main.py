@@ -61,13 +61,14 @@ from qdrant_client import QdrantClient
 
 from api.errors import register_exception_handlers
 from api.metrics import PrometheusMiddleware  # ← NEW
-from api.middleware import RequestIDMiddleware, TimingMiddleware
+from api.middleware import RateLimitMiddleware, RequestIDMiddleware, TimingMiddleware
 from api.routes import (
+    companies,
     health,
     metrics_route,  # ← NEW
     query,
 )
-from config import settings
+from config import configure_logging, settings
 from rag_pipeline import FinancialRAGPipeline
 
 # UNIX timestamp at import time — used by /health to compute uptime
@@ -90,7 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
       2. Open Qdrant TCP connection
       3. Instantiate FinancialRAGPipeline — this triggers model downloads
          and loads all ONNX models into memory:
-            OpenAI text-embedding-3-small  (API embedding)
+            Dense Vector Embeddings (text-embedding-004 or text-embedding-3-small)
            BM25 index                 ~30-100 MB (keyword search)
            ms-marco-MiniLM-L-12-v2   ~66 MB (reranker, if enabled)
 
@@ -112,8 +113,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise  # Process exits; Kubernetes restarts the pod
 
     # ── Step 2: Qdrant connection ──────────────────────────────────────────────
-    logger.info(f"Connecting to Qdrant at {settings.infra.qdrant_url} ...")
-    qdrant = QdrantClient(url=settings.infra.qdrant_url)
+    try:
+        qdrant = QdrantClient(url=settings.infra.qdrant_url, timeout=10, check_compatibility=False)
+        qdrant.get_collections()
+    except Exception as exc:
+        logger.warning(
+            f"Could not connect to Qdrant at {settings.infra.qdrant_url} ({exc}). Using local path storage 'data/qdrant_user_storage'..."
+        )
+        qdrant = QdrantClient(path="data/qdrant_user_storage")
     logger.info("Qdrant connection established.")
 
     # ── Step 3: Pipeline init (pre-loads all models) ───────────────────────────
@@ -159,9 +166,9 @@ def create_app() -> FastAPI:
         description=(
             "Production-grade Retrieval-Augmented Generation system for querying "
             "SEC 10-K Annual Reports and 10-Q Quarterly Filings from 4 major public companies.\n\n"
-            "Uses a hybrid retrieval approach — dense vector search (OpenAI text-embedding-3-small + "
-            "Qdrant) combined with sparse keyword search (BM25) — fused via Reciprocal Rank "
-            "Fusion and reranked with a FlashRank cross-encoder.  Query transformation uses "
+            "Uses a hybrid retrieval approach — dense vector search (Google text-embedding-004 / OpenAI "
+            "text-embedding-3-small + Qdrant) combined with sparse keyword search (BM25) — fused via Reciprocal Rank "
+            "Fusion and reranked with a FlashRank cross-encoder. Query transformation uses "
             "HyDE, multi-query expansion, and step-back prompting for maximum recall."
         ),
         version="0.1.0",
@@ -183,8 +190,17 @@ def create_app() -> FastAPI:
                     "Designed for Kubernetes probes and monitoring dashboards."
                 ),
             },
+            {
+                "name": "Companies",
+                "description": (
+                    "Directory of configured SEC filers, fiscal calendars, and corporate aliases. "
+                    "Enables zero-code dynamic ticker onboarding for clients and frontends."
+                ),
+            },
         ],
     )
+
+    configure_logging()
 
     # ── Middleware ─────────────────────────────────────────────────────────────
     # Registration order is REVERSED — Starlette wraps from inside out.
@@ -198,18 +214,27 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID", "X-Response-Time-Ms"],
+        expose_headers=[
+            "X-Request-ID",
+            "X-Response-Time-Ms",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+        ],
     )
 
     # 2. Timing — reads request_id set by RequestIDMiddleware below
     app.add_middleware(TimingMiddleware)
 
-    # 3. Request ID — innermost, sets request.state.request_id first
+    # 3. Rate Limiting — returns 429 when IP budget is exceeded
+    app.add_middleware(RateLimitMiddleware)
+
+    # 4. Request ID — sets request.state.request_id early
     app.add_middleware(RequestIDMiddleware)
 
-    # 4. Prometheus — innermost of all, records metrics for every route
+    # 5. Prometheus — innermost of all, records metrics for every route
     #    including /metrics itself so you get full observability coverage.
-    app.add_middleware(PrometheusMiddleware)  # ← NEW
+    app.add_middleware(PrometheusMiddleware)
 
     # ── Exception handlers ────────────────────────────────────────────────────
     register_exception_handlers(app)
@@ -217,6 +242,7 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(query.router, prefix="/query", tags=["Query"])
     app.include_router(health.router, prefix="/health", tags=["Health"])
+    app.include_router(companies.router, prefix="/companies", tags=["Companies"])
     app.include_router(metrics_route.router)  # mounts GET /metrics
 
     # ── Frontend static files ─────────────────────────────────────────────────

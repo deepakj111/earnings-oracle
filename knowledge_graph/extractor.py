@@ -202,12 +202,12 @@ async def _call_llm_extract(
     """
     Call the LLM to extract entities and relationships from text asynchronously.
 
-    Returns parsed JSON dict or empty dict on failure.
+    Uses config.llm_client for provider-agnostic extraction (OpenAI, Gemini, etc.).
+    Returns parsed JSON dict or empty dict on failure (fail-open behaviour).
     """
     try:
-        from config.openai_client import get_async_openai_client
+        from config.llm_client import acomplete
 
-        client = get_async_openai_client()
         # Token-level truncation prevents mid-sentence cuts that character
         # slicing (text[:4000]) could produce on multibyte or BPE-split content.
         truncated_text = _truncate_to_tokens(text)
@@ -222,58 +222,14 @@ async def _call_llm_extract(
                 ),
             },
         ]
-        kwargs: dict[str, Any] = {
-            "model": settings.knowledge_graph.extraction_model,
-            "messages": messages,
-            "response_format": {"type": "json_object"},
-        }
-
-        # Attempt 1: Try max_completion_tokens; only add temperature if model supports it
-        call_kwargs = dict(kwargs)
-        call_kwargs["max_completion_tokens"] = settings.knowledge_graph.extraction_max_tokens
-        if settings.knowledge_graph.extraction_temperature != 1.0:
-            call_kwargs["temperature"] = settings.knowledge_graph.extraction_temperature
-
-        try:
-            response = await client.chat.completions.create(**call_kwargs)
-        except Exception as first_exc:
-            err_msg = str(first_exc)
-            logger.debug(
-                f"KG LLM Attempt 1 failed ({err_msg[:120]}), retrying with fallback params"
-            )
-            if "429" in err_msg or "rate limit" in err_msg.lower():
-                await asyncio.sleep(2.0)
-
-            retry_kwargs = dict(kwargs)
-
-            # Explicitly skip temperature if it caused the first failure
-            if (
-                "temperature" not in err_msg
-                and settings.knowledge_graph.extraction_temperature != 1.0
-            ):
-                retry_kwargs["temperature"] = settings.knowledge_graph.extraction_temperature
-            # else: temperature is omitted entirely so the model uses its default (1.0)
-
-            # Alternate token limit parameter if max_completion_tokens failed
-            if "max_completion_tokens" in err_msg or "unsupported_parameter" in err_msg:
-                retry_kwargs["max_tokens"] = settings.knowledge_graph.extraction_max_tokens
-            else:
-                retry_kwargs["max_completion_tokens"] = (
-                    settings.knowledge_graph.extraction_max_tokens
-                )
-
-            try:
-                response = await client.chat.completions.create(**retry_kwargs)
-            except Exception as second_exc:
-                second_err = str(second_exc)
-                if "429" in second_err or "rate limit" in second_err.lower():
-                    await asyncio.sleep(4.0)
-                    response = await client.chat.completions.create(**retry_kwargs)
-                else:
-                    raise
-
-        content = response.choices[0].message.content or "{}"
-        return _parse_json_response(content)
+        resp = await acomplete(
+            messages=messages,
+            model=settings.knowledge_graph.extraction_model,
+            temperature=settings.knowledge_graph.extraction_temperature,
+            max_tokens=settings.knowledge_graph.extraction_max_tokens,
+            response_format={"type": "json_object"},
+        )
+        return _parse_json_response(resp.content)
     except Exception as exc:
         logger.warning(f"LLM entity extraction failed (fail-open): {exc}")
         return {}
@@ -292,7 +248,7 @@ async def _extract_single_chunk(
     kg_lock: asyncio.Lock | None = None,
     store_lock: asyncio.Lock | None = None,
 ) -> tuple[list[Entity], list[Relationship]]:
-    """Extract entities and relationships from a single chunk using OpenAI LLM."""
+    """Extract entities and relationships from a single chunk using the configured LLM."""
     async with semaphore:
         raw = await _call_llm_extract(chunk.text, ticker, fiscal_period)
         entities: list[Entity] = []
@@ -380,7 +336,7 @@ async def extract_entities_from_chunks(
     """
     Extract financial entities and relationships from parent chunks asynchronously.
 
-    Runs OpenAI LLM extraction per parent chunk in parallel with controlled concurrency,
+    Runs LLM extraction per parent chunk in parallel with controlled concurrency,
     ensuring exhaustive financial data extraction and accurate chunk provenance.
 
     Args:

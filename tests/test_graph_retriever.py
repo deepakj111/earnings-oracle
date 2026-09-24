@@ -144,17 +144,21 @@ class TestChunkCollection:
     """Verify relationship traversal and chunk ID collection."""
 
     def test_collects_direct_chunk_ids(self, sample_graph: KnowledgeGraph) -> None:
-        chunk_ids = _collect_related_chunk_ids(["iphone"], sample_graph, existing_chunk_ids=set())
+        chunk_ids, _ = _collect_related_chunk_ids(
+            ["iphone"], sample_graph, existing_chunk_ids=set()
+        )
         assert "aapl_c1" in chunk_ids
         assert "aapl_c2" in chunk_ids
 
     def test_collects_related_chunk_ids(self, sample_graph: KnowledgeGraph) -> None:
-        chunk_ids = _collect_related_chunk_ids(["iphone"], sample_graph, existing_chunk_ids=set())
+        chunk_ids, _ = _collect_related_chunk_ids(
+            ["iphone"], sample_graph, existing_chunk_ids=set()
+        )
         # iPhone is PART_OF services → should include services chunks
         assert "aapl_c4" in chunk_ids
 
     def test_deduplicates_against_existing(self, sample_graph: KnowledgeGraph) -> None:
-        chunk_ids = _collect_related_chunk_ids(
+        chunk_ids, _ = _collect_related_chunk_ids(
             ["iphone"], sample_graph, existing_chunk_ids={"aapl_c1"}
         )
         # aapl_c1 already exists, should not be in result

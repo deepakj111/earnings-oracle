@@ -79,12 +79,26 @@ def rerank(
         min_rrf, max_rrf = min(rrf_scores), max(rrf_scores)
         range_rrf = (max_rrf - min_rrf) if max_rrf > min_rrf else 1.0
 
+        # Adaptive CE/RRF blending: if tables dominate top candidates, balance 50/50
+        top5 = candidates[:5]
+        table_count = sum(
+            1
+            for c in top5
+            if getattr(c, "chunk_type", "") == "table" or "table" in (c.section_title or "").lower()
+        )
+        if table_count >= 3:
+            ce_w, rrf_w = 0.50, 0.50
+            logger.debug(f"Table-heavy candidates ({table_count}/5): applying 50/50 CE/RRF blend")
+        else:
+            ce_w = getattr(settings.reranker, "ce_weight", 0.65)
+            rrf_w = getattr(settings.reranker, "rrf_weight", 0.35)
+
         for i, result in enumerate(candidates):
             raw_ce = id_to_score.get(i, min_ce)
             norm_ce = (raw_ce - min_ce) / range_ce
             norm_rrf = (result.rrf_score - min_rrf) / range_rrf
-            # Soft score interpolation: 65% cross-encoder + 35% RRF confidence
-            result.rerank_score = 0.65 * norm_ce + 0.35 * norm_rrf
+            # Blended score interpolation
+            result.rerank_score = ce_w * norm_ce + rrf_w * norm_rrf
 
         candidates.sort(key=lambda r: r.rerank_score, reverse=True)
         top = candidates[:top_k_final]

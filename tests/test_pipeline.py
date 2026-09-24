@@ -51,6 +51,7 @@ class TestRunPipeline:
         mock_qdrant.collection_exists.return_value = False
         metrics_path = bm25_path.parent / "ingestion_metrics.json"
         bm25_corpus_path = bm25_path.parent / "bm25_corpus.pkl"
+        state_db_path = bm25_path.parent / "ingestion_state.db"
 
         with (
             patch("ingestion.pipeline.setup_embedder"),
@@ -58,6 +59,7 @@ class TestRunPipeline:
             patch("ingestion.pipeline.BM25_INDEX_PATH", bm25_path),
             patch("ingestion.pipeline.BM25_CORPUS_PATH", bm25_corpus_path),
             patch("ingestion.pipeline.INGESTION_METRICS_PATH", metrics_path),
+            patch("ingestion.pipeline.STATE_DB_PATH", state_db_path),
             patch("ingestion.pipeline.init_qdrant", return_value=mock_qdrant),
             patch(
                 "ingestion.pipeline.index_document",

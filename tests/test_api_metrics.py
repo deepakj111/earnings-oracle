@@ -12,7 +12,7 @@ Design:
 from __future__ import annotations
 
 from collections.abc import Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
@@ -125,13 +125,6 @@ def _make_retrieval_result(
     return result
 
 
-def _make_crag_result(action_value: str = "correct") -> MagicMock:
-    result = MagicMock()
-    result.action = MagicMock()
-    result.action.value = action_value
-    return result
-
-
 def _make_mock_result() -> MagicMock:
     """
     Build a MagicMock that has real Python types for every attribute
@@ -193,15 +186,16 @@ def client() -> Generator[TestClient, None, None]:
     """
     mock_result = _make_mock_result()
     mock_pipeline_instance = MagicMock()
-    mock_pipeline_instance.ask.return_value = mock_result
+    mock_pipeline_instance.ask = AsyncMock(return_value=mock_result)
     mock_pipeline_instance.ask_streaming.return_value = iter(
         ["Apple reported ", "$90.1B ", "in Q4 2024."]
     )
 
     with patch("api.main.FinancialRAGPipeline", return_value=mock_pipeline_instance):
         with patch("api.main.QdrantClient"):
-            with TestClient(app) as client:
-                yield client
+            with patch("config.settings.Settings.validate"):  # Skip API key check in tests
+                with TestClient(app) as client:
+                    yield client
 
 
 # ── PrometheusMiddleware tests ────────────────────────────────────────────────
@@ -352,19 +346,4 @@ class TestRecordRetrievalResult:
         before = _sample_value("rag_retrieval_results_returned_count")
         record_retrieval_result(result)
         after = _sample_value("rag_retrieval_results_returned_count")
-        assert after - before == pytest.approx(1.0)
-
-
-# ── record_crag_result tests ──────────────────────────────────────────────────
-
-
-class TestRecordCragResult:
-    @pytest.mark.parametrize("action", ["correct", "ambiguous", "incorrect"])
-    def test_increments_crag_action_counter(self, action: str) -> None:
-        from api.metrics import record_crag_result
-
-        result = _make_crag_result(action_value=action)
-        before = _sample_value("rag_crag_actions_total", {"action": action})
-        record_crag_result(result)
-        after = _sample_value("rag_crag_actions_total", {"action": action})
         assert after - before == pytest.approx(1.0)

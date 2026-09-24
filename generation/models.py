@@ -98,8 +98,47 @@ class GenerationResult:
     retrieval_failed: bool
     trace_id: str | None = None  # set by tracer for request correlation
     retrieved_chunks: list[str] = field(default_factory=list)
+    grounding_score: float = 1.0
+    confidence_score: float = 1.0
+    verified_claims: list[str] = field(default_factory=list)
+    ungrounded_claims: list[str] = field(default_factory=list)
+    calculations: list[dict] = field(default_factory=list)
+    numerical_hallucination_warnings: list[str] = field(default_factory=list)
+    citation_integrity_warnings: list[str] = field(default_factory=list)
+    reflexion_attempts: int = 0
 
     # ── Derived properties ────────────────────────────────────────────────────
+
+    @property
+    def computed_confidence_score(self) -> float:
+        """
+        Compute a calibrated composite confidence score (0.0 to 1.0).
+        Blends:
+          - NLI grounding verification score (50%)
+          - Top cross-encoder reranker score (30%)
+          - Citation coverage and density (20%)
+
+        Hard-clamps to 0.0 on abstention, retrieval failure, or empty citations (ADR-018).
+        Penalizes low-rerank retrieval evidence (<0.30 capped to <=0.55).
+        """
+        if (
+            not self.grounded
+            or self.retrieval_failed
+            or not self.citations
+            or bool(self.numerical_hallucination_warnings)
+        ):
+            return 0.0
+
+        grounding = max(0.0, min(1.0, self.grounding_score))
+        rerank_scores = [c.rerank_score for c in self.citations if c.rerank_score > 0]
+        top_rerank = max(rerank_scores) if rerank_scores else 0.5
+        top_rerank_norm = min(1.0, max(0.0, top_rerank))
+        citation_density = min(1.0, len(self.citations) / 2.0)
+
+        score = (0.50 * grounding) + (0.30 * top_rerank_norm) + (0.20 * citation_density)
+        if top_rerank < 0.30:
+            score = min(score, 0.55)
+        return round(min(1.0, max(0.0, score)), 3)
 
     @property
     def unique_tickers(self) -> list[str]:
@@ -166,9 +205,16 @@ class GenerationResult:
             },
             "latency_seconds": round(self.latency_seconds, 3),
             "grounded": self.grounded,
+            "confidence_score": self.confidence_score
+            if self.confidence_score != 1.0
+            else self.computed_confidence_score,
             "retrieval_failed": self.retrieval_failed,
             "unique_tickers": self.unique_tickers,
             "unique_sources": self.unique_sources,
+            "numerical_hallucination_warnings": self.numerical_hallucination_warnings,
+            "citation_integrity_warnings": self.citation_integrity_warnings,
+            "reflexion_attempts": self.reflexion_attempts,
+            "calculations": self.calculations,
         }
         if self.trace_id:
             d["trace_id"] = self.trace_id
@@ -195,6 +241,11 @@ class GenerationResult:
             grounded=data.get("grounded", True),
             retrieval_failed=data.get("retrieval_failed", False),
             trace_id=data.get("trace_id"),
+            confidence_score=data.get("confidence_score", 1.0),
+            numerical_hallucination_warnings=data.get("numerical_hallucination_warnings", []),
+            citation_integrity_warnings=data.get("citation_integrity_warnings", []),
+            reflexion_attempts=data.get("reflexion_attempts", 0),
+            calculations=data.get("calculations", []),
         )
 
     def to_json(self, indent: int = 2) -> str:

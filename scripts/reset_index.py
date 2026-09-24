@@ -23,6 +23,10 @@ FILES_TO_REMOVE = [
     Path("data/bm25_corpus.pkl"),
     Path("data/ingested_filings_checkpoint.txt"),
     Path("data/ingestion_metrics.json"),
+    Path("data/ingestion_state.db"),
+    Path("data/ingestion_state.db-wal"),
+    Path("data/ingestion_state.db-shm"),
+    Path("data/financial_facts.json"),
 ]
 KG_FILE = Path("data/knowledge_graph.json")
 
@@ -36,11 +40,12 @@ def reset_all(wipe_kg: bool = False) -> None:
     try:
         client = QdrantClient(url=qdrant_url, timeout=30, check_compatibility=False)
         existing = {c.name for c in client.get_collections().collections}
-        if collection_name in existing:
-            client.delete_collection(collection_name=collection_name)
-            logger.info(f"Deleted Qdrant collection '{collection_name}' successfully.")
-        else:
-            logger.info(f"Qdrant collection '{collection_name}' does not exist — skipping.")
+        for col in [collection_name, "semantic_cache"]:
+            if col in existing:
+                client.delete_collection(collection_name=col)
+                logger.info(f"Deleted Qdrant collection '{col}' successfully.")
+            else:
+                logger.debug(f"Qdrant collection '{col}' does not exist — skipping.")
     except Exception as exc:
         logger.error(f"Failed to clear Qdrant collection: {exc}")
 

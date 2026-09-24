@@ -112,7 +112,8 @@ def _collect_related_chunk_ids(
     matched_entities: list[str],
     graph: KnowledgeGraph,
     existing_chunk_ids: set[str],
-) -> list[str]:
+    ticker_filter: str | None = None,
+) -> tuple[list[str], int]:
     """
     Traverse the knowledge graph to find chunk IDs related to matched entities.
 
@@ -120,27 +121,54 @@ def _collect_related_chunk_ids(
     2. Related chunks: chunks of entities connected via relationships
 
     Deduplicates against existing_chunk_ids (already in retrieval results).
+
+    Args:
+        matched_entities   : Entity names matched from the user question
+        graph              : The loaded KnowledgeGraph
+        existing_chunk_ids : Chunk IDs already present in retrieval results
+        ticker_filter      : If provided, only collect chunk IDs from entities
+                             belonging to this company ticker. This prevents
+                             cross-company contamination where a generic entity
+                             name like 'revenue' or 'operating margin' exists
+                             across all tickers and would otherwise inject
+                             irrelevant context from other companies.
+
+    Returns:
+        Tuple of (candidate_chunk_ids, n_filtered_out).
+        n_filtered_out counts chunks skipped due to ticker mismatch (for logging).
     """
     candidate_chunk_ids: list[str] = []
     seen: set[str] = set(existing_chunk_ids)
+    n_filtered_out: int = 0
 
     for entity_name in matched_entities:
-        # Direct entity chunks
-        for chunk_id in graph.get_entity_chunk_ids(entity_name):
+        # Direct entity chunks — use ticker-scoped lookup when filter is active
+        if ticker_filter:
+            direct_ids = graph.get_entity_chunk_ids_for_ticker(entity_name, ticker_filter)
+            # Count how many would have been returned without the filter
+            all_ids = graph.get_entity_chunk_ids(entity_name)
+            n_filtered_out += max(0, len(all_ids) - len(direct_ids))
+        else:
+            direct_ids = graph.get_entity_chunk_ids(entity_name)
+
+        for chunk_id in direct_ids:
             if chunk_id not in seen:
                 candidate_chunk_ids.append(chunk_id)
                 seen.add(chunk_id)
 
-        # Related entity chunks (one hop)
+        # Related entity chunks (one hop) — filter by ticker on related entities too
         for _rel, related_entity in graph.find_related(entity_name):
             if related_entity is None:
+                continue
+            if ticker_filter and related_entity.ticker.upper() != ticker_filter.upper():
+                n_filtered_out += len(related_entity.chunk_ids)
                 continue
             for chunk_id in related_entity.chunk_ids:
                 if chunk_id not in seen:
                     candidate_chunk_ids.append(chunk_id)
                     seen.add(chunk_id)
 
-    return candidate_chunk_ids
+    return candidate_chunk_ids, n_filtered_out
 
 
 def _fetch_chunks_by_ids(
@@ -234,10 +262,21 @@ def graph_retrieve(
             span.latency_seconds = time.perf_counter() - start_t
             return [], span
 
-        # 2. Traverse relationships to collect related chunk IDs
+        # 2. Traverse relationships to collect related chunk IDs.
+        # Pass ticker from metadata_filter so traversal is scoped to one company.
+        # Without this, generic entity names like 'revenue' or 'operating margin'
+        # match entities across all 4 tickers and inject cross-company noise.
+        ticker_filter: str | None = metadata_filter.ticker if metadata_filter else None
         existing_chunk_ids = {r.chunk_id for r in existing_results}
-        related_chunk_ids = _collect_related_chunk_ids(matched, graph, existing_chunk_ids)
+        related_chunk_ids, n_filtered = _collect_related_chunk_ids(
+            matched, graph, existing_chunk_ids, ticker_filter=ticker_filter
+        )
         span.relationships_traversed = len(related_chunk_ids)
+        if n_filtered > 0:
+            logger.debug(
+                f"[GraphRAG] ticker_filter={ticker_filter!r} | "
+                f"filtered out {n_filtered} cross-company chunk IDs from traversal"
+            )
 
         # 3. Fetch chunks from Qdrant
         max_chunks = settings.knowledge_graph.max_graph_chunks

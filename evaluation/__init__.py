@@ -18,8 +18,23 @@ CLI:
     poetry run python -m evaluation.harness --n 5 --metrics faithfulness answer_relevancy
 """
 
-from evaluation.harness import EvaluationHarness
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from evaluation.models import EvalReport, EvalSample, EvalSampleResult, MetricScore
+
+if TYPE_CHECKING:
+    from evaluation.harness import EvaluationHarness
+
+
+def __getattr__(name: str) -> Any:
+    if name == "EvaluationHarness":
+        from evaluation.harness import EvaluationHarness
+
+        return EvaluationHarness
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "EvaluationHarness",

@@ -15,7 +15,6 @@ Exported symbols used by the rest of the codebase:
   record_generation_result(result)
   record_retrieval_result(result)
   record_pipeline_latency(layer, seconds)
-  record_crag_result(result)
 """
 
 from __future__ import annotations
@@ -103,13 +102,6 @@ rag_retrieval_failed_total = Counter(
     registry=RAG_REGISTRY,
 )
 
-# ── CRAG metrics ───────────────────────────────────────────────────────────────
-rag_crag_actions_total = Counter(
-    "rag_crag_actions_total",
-    "CRAG corrective actions taken (correct / ambiguous / incorrect)",
-    ["action"],
-    registry=RAG_REGISTRY,
-)
 
 # ── Pipeline layer latency ─────────────────────────────────────────────────────
 rag_pipeline_latency_seconds = Histogram(
@@ -230,9 +222,3 @@ def record_retrieval_result(result: RetrievalResult) -> None:
 def record_pipeline_latency(layer: str, seconds: float) -> None:
     """Record per-layer pipeline latency (call once per layer per request)."""
     rag_pipeline_latency_seconds.labels(layer=layer).observe(seconds)
-
-
-def record_crag_result(result: typing.Any) -> None:
-    """Push CRAG action counter from a CRAGResult."""
-    action = result.action.value if hasattr(result.action, "value") else str(result.action)
-    rag_crag_actions_total.labels(action=action).inc()

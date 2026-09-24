@@ -24,7 +24,7 @@ from __future__ import annotations
 import time
 from collections.abc import Generator
 from contextlib import asynccontextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -44,8 +44,11 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     These values never reach real external services — all network calls are mocked.
     """
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-0000000000000000000000000000000000000000000000")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key-000000000000000000000000000000000000")
+    monkeypatch.setenv("RAG_LLM_PROVIDER", "gemini")
     monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     monkeypatch.setenv("SEC_USER_AGENT", "Test User test@example.com")
+    monkeypatch.setenv("RAG_EMBEDDING_RATE_LIMIT_DELAY", "0.0")
 
 
 # ── Domain object factories ────────────────────────────────────────────────────
@@ -137,6 +140,15 @@ def mock_pipeline(
     pipeline.ask_streaming.return_value = iter(
         ["Apple ", "reported ", "$94.9B ", "in ", "revenue [1]."]
     )
+
+    mock_cache = MagicMock()
+    mock_cache.COLLECTION_NAME = "semantic_cache"
+    mock_cache.invalidate_ticker = AsyncMock(return_value=1)
+    mock_cache.client = MagicMock()
+    mock_cache.client.collection_exists = AsyncMock(return_value=True)
+    mock_cache.client.delete_collection = AsyncMock(return_value=True)
+    mock_cache._ensure_collection = AsyncMock()
+    pipeline._cache = mock_cache
 
     return pipeline
 
