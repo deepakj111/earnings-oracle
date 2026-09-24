@@ -4,7 +4,7 @@ Unit tests for retrieval/contextual_compression.py (Layer 3f — Contextual Comp
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -97,3 +97,37 @@ class TestContextualCompressor:
             assert len(compressed_list) == 2
             assert compressed_list[0].parent_text == mock_extracted
             assert compressed_list[1].parent_text == mock_extracted
+
+    def test_is_enabled_property(self) -> None:
+        compressor = ContextualCompressor()
+        assert isinstance(compressor.is_enabled, bool)
+
+    @pytest.mark.asyncio
+    async def test_compress_all_empty(self) -> None:
+        compressor = ContextualCompressor()
+        with patch.object(compressor, "_enabled", True):
+            assert await compressor.compress_all("query", []) == []
+
+    @pytest.mark.asyncio
+    async def test_compress_text_acomplete_execution(self) -> None:
+        compressor = ContextualCompressor()
+        mock_resp = MagicMock(content="Apple Services revenue was $24.2B.")
+        with (
+            patch(
+                "retrieval.contextual_compression.get_async_openai_client", side_effect=RuntimeError
+            ),
+            patch("config.llm_client.acomplete", new_callable=AsyncMock, return_value=mock_resp),
+        ):
+            extracted = await compressor._compress_text("Services revenue?", "Long text passage...")
+            assert extracted == "Apple Services revenue was $24.2B."
+
+    @pytest.mark.asyncio
+    async def test_compress_result_exception_handled_gracefully(self) -> None:
+        compressor = ContextualCompressor()
+        r = _make_sample_result()
+        with (
+            patch.object(compressor, "_enabled", True),
+            patch.object(compressor, "_compress_text", side_effect=RuntimeError("LLM error")),
+        ):
+            compressed = await compressor.compress_result("Services revenue?", r)
+            assert compressed.parent_text == r.parent_text
