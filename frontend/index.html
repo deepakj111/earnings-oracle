@@ -1110,10 +1110,20 @@
         <div class="topbar-subtitle" id="chat-subtitle">Ask a financial question to get started</div>
       </div>
       <div class="topbar-actions">
+        <div class="user-profile-badge" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px;">
+          <span>👤</span>
+          <select id="user-persona-select" onchange="switchPersona(this.value)" style="background: transparent; color: var(--text-primary); border: none; font-size: 11px; outline: none; cursor: pointer;">
+            <option value="analyst_guest">Guest Analyst</option>
+            <option value="portfolio_mgr">Portfolio Manager</option>
+            <option value="compliance_auditor">Compliance & Risk Officer</option>
+            <option value="cfo_executive">CFO / Executive</option>
+          </select>
+        </div>
         <div class="topbar-pill" id="model-pill">
           <span>⚡</span>
           <span id="model-name">gpt-5</span>
         </div>
+        <button class="btn btn-ghost btn-sm" onclick="exportCurrentChat()" title="Export analysis report">📥 Export</button>
         <button class="btn btn-ghost btn-sm" onclick="newConversation()" title="New conversation">✏️ New</button>
       </div>
     </div>
@@ -1190,6 +1200,9 @@ const state = {
   activeId: null,     // currently selected conversation id (null = welcome screen)
   isStreaming: false, // true while a query is in flight
   healthData: {},     // last health check response
+  userId: 'analyst_guest',
+  userRole: 'Senior Financial Analyst',
+  tenantId: 'enterprise_workspace',
 };
 
 // ── Helper: Welcome / Homepage HTML ─────────────────────────────────────────
@@ -1218,6 +1231,9 @@ function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       conversations: state.conversations,
       activeId: state.activeId,
+      userId: state.userId,
+      userRole: state.userRole,
+      tenantId: state.tenantId,
     }));
   } catch(e) { /* quota exceeded — silently ignore */ }
 }
@@ -1229,6 +1245,9 @@ function loadState() {
     const saved = JSON.parse(raw);
     state.conversations = (saved.conversations || []).filter(c => c.messages && c.messages.length > 0);
     state.activeId = saved.activeId || null;
+    state.userId = saved.userId || 'analyst_guest';
+    state.userRole = saved.userRole || 'Senior Financial Analyst';
+    state.tenantId = saved.tenantId || 'enterprise_workspace';
     if (state.activeId && !state.conversations.some(c => c.id === state.activeId)) {
       state.activeId = state.conversations[0]?.id || null;
     }
@@ -1287,6 +1306,105 @@ function clearAllHistory() {
   saveState();
   renderAll();
   showToast('Chat history cleared', 'success');
+}
+
+function renameConversation(id, e) {
+  if (e) e.stopPropagation();
+  const conv = state.conversations.find(c => c.id === id);
+  if (!conv) return;
+  const newTitle = prompt('Rename analysis session:', conv.title);
+  if (newTitle && newTitle.trim()) {
+    conv.title = newTitle.trim();
+    saveState();
+    renderAll();
+    fetch(`${API_BASE}/sessions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-User-ID': state.userId },
+      body: JSON.stringify({ title: conv.title }),
+    }).catch(() => {});
+  }
+}
+
+function exportCurrentChat() {
+  const conv = activeConversation();
+  if (!conv || !conv.messages || conv.messages.length === 0) {
+    showToast('No messages in active session to export', 'warning');
+    return;
+  }
+  let md = `# Financial Analysis Report: ${conv.title}\n\n`;
+  md += `**Date:** ${new Date(conv.ts || Date.now()).toLocaleString()}\n`;
+  md += `**User Persona:** ${state.userRole} (${state.userId})\n`;
+  md += `**Workspace:** ${state.tenantId}\n\n---\n\n`;
+
+  conv.messages.forEach((m, idx) => {
+    const role = m.role === 'user' ? '### 👤 User Inquiry' : '### 🤖 EarningsOracle Synthesis';
+    md += `${role}\n\n${m.content}\n\n`;
+    if (m.meta?.citations && m.meta.citations.length > 0) {
+      md += `#### 📚 Grounded SEC References:\n`;
+      m.meta.citations.forEach(c => {
+        md += `- **[${c.index || 1}] ${c.company || c.ticker} (${c.doc_type || 'Filing'} ${c.fiscal_period || ''})** — *${c.section_title || 'Section'}* (Rerank score: ${c.rerank_score || 'N/A'})\n`;
+        if (c.excerpt) md += `  > "${c.excerpt.trim()}"\n`;
+      });
+      md += `\n`;
+    }
+    if (m.meta?.latency_seconds) {
+      md += `*Latency: ${(m.meta.latency_seconds).toFixed(2)}s | Tokens: ${m.meta.total_tokens || m.meta.tokens || 'N/A'}*\n\n`;
+    }
+    md += `---\n\n`;
+  });
+
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${conv.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_report.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Analysis exported successfully', 'success');
+}
+
+function switchPersona(persona) {
+  state.userId = persona;
+  const roles = {
+    'analyst_guest': 'Senior Financial Analyst',
+    'portfolio_mgr': 'Portfolio Manager',
+    'compliance_auditor': 'Compliance & Risk Officer',
+    'cfo_executive': 'CFO / Executive',
+  };
+  state.userRole = roles[persona] || 'Financial Analyst';
+  showToast(`Active persona: ${state.userRole}`, 'info');
+  saveState();
+  syncSessionsFromBackend();
+}
+
+async function syncSessionsFromBackend() {
+  try {
+    const resp = await fetch(`${API_BASE}/sessions?limit=50`, {
+      headers: { 'X-User-ID': state.userId, 'X-Tenant-ID': state.tenantId },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok) return;
+    const backendSessions = await resp.json();
+    if (!Array.isArray(backendSessions)) return;
+
+    backendSessions.forEach(bs => {
+      let existing = state.conversations.find(c => c.id === bs.session_id);
+      if (!existing) {
+        state.conversations.push({
+          id: bs.session_id,
+          title: bs.title || 'Analysis Session',
+          messages: [],
+          ts: (bs.updated_at || Date.now() / 1000) * 1000,
+        });
+      } else {
+        existing.title = bs.title || existing.title;
+      }
+    });
+    saveState();
+    renderAll();
+  } catch(e) {
+    // Graceful offline fallback
+  }
 }
 
 // ── UI Helpers ────────────────────────────────────────────────────────────────
@@ -1570,8 +1688,34 @@ function renderStats(meta) {
   return `<div class="message-stats">${chips.join('')}</div>`;
 }
 
+// ── Follow-up chips helper ───────────────────────────────────────────────────
+function renderFollowUpSuggestions(msg, isLast) {
+  if (!isLast || msg.isError || msg._streaming || !msg.content) return '';
+  const suggestions = [
+    'Break down performance by operating segment',
+    'Compare this against the prior year period',
+    'What key risks or headwinds were noted in the filing?',
+  ];
+  return `
+    <div class="follow-up-bar" style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.08);display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+      <span style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">💡 Suggested Follow-ups:</span>
+      ${suggestions.map(s => `
+        <button class="followup-btn" onclick="askFollowUp('${escapeHtml(s)}')" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:var(--text-secondary);padding:4px 10px;border-radius:12px;font-size:11px;cursor:pointer;transition:all 0.15s ease;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='#fff';" onmouseout="this.style.borderColor='rgba(255,255,255,0.12)';this.style.color='var(--text-secondary)';">
+          ${escapeHtml(s)} →
+        </button>
+      `).join('')}
+    </div>`;
+}
+
+function askFollowUp(text) {
+  const input = document.getElementById('chat-input');
+  input.value = text;
+  autoResize(input);
+  sendMessage();
+}
+
 // ── Render one message ────────────────────────────────────────────────────────
-function renderMessage(msg, idx) {
+function renderMessage(msg, idx, conv) {
   const isUser = msg.role === 'user';
   const avatar = isUser ? '👤' : '🤖';
   const who    = isUser ? 'You' : 'EarningsOracle';
@@ -1585,6 +1729,8 @@ function renderMessage(msg, idx) {
   const statsHtml    = !isUser ? renderStats(msg.meta) : '';
   const palHtml      = !isUser && msg.meta?.calculations && msg.meta.calculations.length > 0 ? renderCalculations(msg.meta.calculations, msgId) : '';
   const citHtml      = !isUser && msg.meta?.citations ? renderCitations(msg.meta.citations, msgId) : '';
+  const isLast       = conv && idx === conv.messages.length - 1;
+  const followUpHtml = !isUser ? renderFollowUpSuggestions(msg, isLast) : '';
 
   return `
     <div class="message ${msg.role}" id="${msgId}">
@@ -1596,6 +1742,7 @@ function renderMessage(msg, idx) {
         ${statsHtml}
         ${palHtml}
         ${citHtml}
+        ${followUpHtml}
       </div>
     </div>`;
 }
@@ -1615,7 +1762,7 @@ function renderChat() {
     return;
   }
 
-  area.innerHTML = conv.messages.map((m,i) => renderMessage(m,i)).join('');
+  area.innerHTML = conv.messages.map((m,i) => renderMessage(m,i, conv)).join('');
   title.textContent    = conv.title;
   subtitle.textContent = `${conv.messages.length} message${conv.messages.length!==1?'s':''}`;
   // Scroll to bottom
@@ -1642,6 +1789,8 @@ function renderHistory() {
       <div class="history-item ${active}" onclick="switchConversation('${c.id}')">
         <span class="history-icon">${msgCount > 0 ? '💬' : '✏️'}</span>
         <span class="history-text" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
+        <span class="badge" style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(255,255,255,0.08);color:var(--text-muted);margin-right:4px;">${msgCount}</span>
+        <button class="history-delete" onclick="renameConversation('${c.id}', event)" title="Rename" style="margin-right:2px;font-size:11px;">✏️</button>
         <button class="history-delete" onclick="deleteConversation('${c.id}', event)" title="Delete">✕</button>
       </div>`;
   }).join('');
@@ -1766,10 +1915,23 @@ async function doStreamingQuery(conv, question, filter) {
 
     const payload = { question };
     if (filter) payload.filter = filter;
+    if (conv.id) payload.conversation_id = conv.id;
+
+    // Send up to 8 prior turns for conversational context
+    const priorHistory = conv.messages
+      .slice(0, -1)
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content && !m.isError)
+      .slice(-8)
+      .map(m => ({ role: m.role, content: m.content }));
+    if (priorHistory.length > 0) payload.chat_history = priorHistory;
 
     const resp = await fetch(`${API_BASE}/query/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': state.userId || 'analyst_guest',
+        'X-Tenant-ID': state.tenantId || 'enterprise-alpha',
+      },
       body: JSON.stringify(payload),
     });
 
@@ -1912,10 +2074,23 @@ async function doStructuredQuery(conv, question, filter, verbose) {
 
     const payload = { question, verbose };
     if (filter) payload.filter = filter;
+    if (conv.id) payload.conversation_id = conv.id;
+
+    // Send up to 8 prior turns for conversational context
+    const priorHistory = conv.messages
+      .slice(0, -1)
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content && !m.isError)
+      .slice(-8)
+      .map(m => ({ role: m.role, content: m.content }));
+    if (priorHistory.length > 0) payload.chat_history = priorHistory;
 
     const resp = await fetch(`${API_BASE}/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': state.userId || 'analyst_guest',
+        'X-Tenant-ID': state.tenantId || 'enterprise-alpha',
+      },
       body: JSON.stringify(payload),
     });
 
@@ -1971,12 +2146,10 @@ document.getElementById('chat-input').addEventListener('input', function() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadState();
-// Always start on the welcome/home screen regardless of previous session.
-// The conversation history is still loaded and visible in the sidebar.
-state.activeId = null;
 renderAll();
 checkHealth();
 loadCompanies();
+syncSessionsFromBackend();
 setInterval(checkHealth, 30000); // refresh health every 30s
 updateFilterHint();
 </script>

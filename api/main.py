@@ -61,12 +61,18 @@ from qdrant_client import QdrantClient
 
 from api.errors import register_exception_handlers
 from api.metrics import PrometheusMiddleware  # ← NEW
-from api.middleware import RateLimitMiddleware, RequestIDMiddleware, TimingMiddleware
+from api.middleware import (
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    TimingMiddleware,
+    UserContextMiddleware,
+)
 from api.routes import (
     companies,
     health,
     metrics_route,  # ← NEW
     query,
+    sessions,
 )
 from config import configure_logging, settings
 from rag_pipeline import FinancialRAGPipeline
@@ -197,6 +203,13 @@ def create_app() -> FastAPI:
                     "Enables zero-code dynamic ticker onboarding for clients and frontends."
                 ),
             },
+            {
+                "name": "Sessions",
+                "description": (
+                    "Multi-user conversational chat history, session persistence, and thread management "
+                    "for enterprise AI chatbot workflows."
+                ),
+            },
         ],
     )
 
@@ -212,7 +225,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=["*"],  # ⚠  Tighten in production: ["https://your-app.com"]
         allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "OPTIONS", "PATCH", "DELETE"],
         allow_headers=["*"],
         expose_headers=[
             "X-Request-ID",
@@ -220,19 +233,24 @@ def create_app() -> FastAPI:
             "X-RateLimit-Limit",
             "X-RateLimit-Remaining",
             "X-RateLimit-Reset",
+            "X-User-ID",
+            "X-Tenant-ID",
         ],
     )
 
     # 2. Timing — reads request_id set by RequestIDMiddleware below
     app.add_middleware(TimingMiddleware)
 
-    # 3. Rate Limiting — returns 429 when IP budget is exceeded
+    # 3. Rate Limiting — returns 429 when user/IP budget is exceeded
     app.add_middleware(RateLimitMiddleware)
 
-    # 4. Request ID — sets request.state.request_id early
+    # 4. User Context — resolves user_id and tenant_id early
+    app.add_middleware(UserContextMiddleware)
+
+    # 5. Request ID — sets request.state.request_id early
     app.add_middleware(RequestIDMiddleware)
 
-    # 5. Prometheus — innermost of all, records metrics for every route
+    # 6. Prometheus — innermost of all, records metrics for every route
     #    including /metrics itself so you get full observability coverage.
     app.add_middleware(PrometheusMiddleware)
 
@@ -241,6 +259,7 @@ def create_app() -> FastAPI:
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(query.router, prefix="/query", tags=["Query"])
+    app.include_router(sessions.router, prefix="/sessions", tags=["Sessions"])
     app.include_router(health.router, prefix="/health", tags=["Health"])
     app.include_router(companies.router, prefix="/companies", tags=["Companies"])
     app.include_router(metrics_route.router)  # mounts GET /metrics

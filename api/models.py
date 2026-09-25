@@ -76,6 +76,13 @@ class MetadataFilterIn(BaseModel):
         return v
 
 
+class ChatMessage(BaseModel):
+    """Prior conversational turn in a multi-turn chat session."""
+
+    role: str = Field(..., description="Message role: 'user' | 'assistant' | 'system'")
+    content: str = Field(..., description="Message text content")
+
+
 class AskRequest(BaseModel):
     """Request body for POST /query and POST /query/stream."""
 
@@ -100,6 +107,70 @@ class AskRequest(BaseModel):
             "and retrieval_summary (ranked chunk diagnostics). Adds negligible overhead."
         ),
     )
+    conversation_id: str | None = Field(
+        default=None,
+        description="Optional session or conversation ID to link question to persistent chat history.",
+        examples=["session_1727230000000"],
+    )
+    chat_history: list[ChatMessage] | None = Field(
+        default=None,
+        description="Optional list of prior conversational turns for conversational context.",
+    )
+
+
+# ── Chat Session Management Models ────────────────────────────────────────────
+
+
+class ChatMessageRecord(BaseModel):
+    """Individual message record stored inside a chat session."""
+
+    role: str = Field(..., description="Role: 'user' or 'assistant'")
+    content: str = Field(..., description="Message text content")
+    timestamp: float = Field(..., description="UNIX timestamp")
+    citations: list[dict[str, Any]] = Field(
+        default_factory=list, description="Associated source citations"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Diagnostics and generation metadata"
+    )
+
+
+class SessionCreate(BaseModel):
+    """Request body to create a new session."""
+
+    title: str | None = Field(
+        default=None, max_length=120, description="Optional title for the session"
+    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Optional session metadata")
+
+
+class SessionUpdate(BaseModel):
+    """Request body to rename an existing session."""
+
+    title: str = Field(..., min_length=1, max_length=120, description="Updated session title")
+
+
+class SessionSummaryOut(BaseModel):
+    """Lightweight summary of a session for listing in sidebar/history."""
+
+    session_id: str
+    user_id: str
+    title: str
+    created_at: float
+    updated_at: float
+    message_count: int
+
+
+class SessionDetailOut(BaseModel):
+    """Full session details with message history and citations."""
+
+    session_id: str
+    user_id: str
+    title: str
+    created_at: float
+    updated_at: float
+    messages: list[ChatMessageRecord] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # ── Response sub-models ────────────────────────────────────────────────────────

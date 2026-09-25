@@ -79,3 +79,25 @@ Output ONLY the broader question. No explanation, no preamble.
 """
 
 STEPBACK_USER = "Specific question: {query}\n\nBroader/abstract version:"
+
+# ── Conversational Query Condensation ─────────────────────────────────────────
+
+CONVERSATIONAL_CONDENSE_SYSTEM = """\
+You are an expert financial assistant conversational query rewriter.
+Given the preceding conversation turns and a new follow-up question, rewrite the follow-up \
+question into a standalone, self-contained financial search query.
+
+Rules:
+1. Resolve all pronouns (e.g. "their", "it", "that", "this company") to explicit company names and tickers.
+2. If the user mentions an elliptical phrase (e.g. "now revenue 2025?", "and what about net margin?"), reconstruct the full question with the appropriate company and period from prior turns.
+3. If the question is already fully self-contained (e.g. mentions the company and metric explicitly), output it as-is.
+4. Output ONLY the standalone rewritten question. Do not answer it, do not add notes, labels, or formatting.
+"""
+
+CONVERSATIONAL_CONDENSE_USER = """\
+Conversation History:
+{chat_history}
+
+Follow-up Question: {query}
+
+Standalone Question:"""

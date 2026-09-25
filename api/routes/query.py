@@ -70,6 +70,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
+from api.chat_store import get_chat_store
 from api.dependencies import get_pipeline
 from api.metrics import record_generation_result  # ← NEW
 from api.models import AskRequest, AskResponse, CitationOut, ContextOut, UsageOut
@@ -231,10 +232,19 @@ async def ask(
     sanitized_question = gr_result.sanitized_query
     metadata_filter = _to_metadata_filter(body)
 
+    # ── Conversational Context ─────────────────────────────────────────────
+    chat_history: list[dict[str, str]] | None = None
+    if body.chat_history:
+        chat_history = [{"role": m.role, "content": m.content} for m in body.chat_history]
+    elif body.conversation_id:
+        store = get_chat_store()
+        chat_history = store.get_recent_history(body.conversation_id, limit=6)
+
     if body.verbose:
         result, query_summary, retrieval_summary = await pipeline.ask_verbose(
             question=sanitized_question,
             metadata_filter=metadata_filter,
+            chat_history=chat_history,
         )
     else:
         result = await pipeline.ask(
@@ -242,6 +252,7 @@ async def ask(
             metadata_filter=metadata_filter,
             request_id=rid,
             endpoint="/query",
+            chat_history=chat_history,
         )
         query_summary = retrieval_summary = None
 
@@ -253,12 +264,42 @@ async def ask(
         f"latency={result.latency_seconds:.2f}s"
     )
 
-    return _serialise(
+    serialized = _serialise(
         result,
         verbose=body.verbose,
         query_summary=query_summary,
         retrieval_summary=retrieval_summary,
     )
+
+    if body.conversation_id:
+        try:
+            store = get_chat_store()
+            user_id = getattr(request.state, "user_id", "default_user")
+            store.add_message(
+                session_id=body.conversation_id,
+                role="user",
+                content=body.question,
+                user_id=user_id,
+            )
+            citations_data = [c.model_dump() for c in serialized.citations]
+            store.add_message(
+                session_id=body.conversation_id,
+                role="assistant",
+                content=result.answer,
+                user_id=user_id,
+                citations=citations_data,
+                meta={
+                    "grounded": result.grounded,
+                    "confidence_score": serialized.confidence_score,
+                    "latency_seconds": result.latency_seconds,
+                    "model": result.model,
+                    "tokens": result.total_tokens,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"[{rid}] Failed to save chat turn: {e}")
+
+    return serialized
 
 
 @router.post(
@@ -301,34 +342,70 @@ async def ask_stream(
 
     metadata_filter = _to_metadata_filter(body)
 
+    # ── Conversational Context ─────────────────────────────────────────────
+    chat_history: list[dict[str, str]] | None = None
+    if body.chat_history:
+        chat_history = [{"role": m.role, "content": m.content} for m in body.chat_history]
+    elif body.conversation_id:
+        store = get_chat_store()
+        chat_history = store.get_recent_history(body.conversation_id, limit=6)
+
     async def _consume() -> AsyncGenerator[str, None]:
         """
         Async consumer: reads tokens directly and yields SSE data strings.
         """
+        tokens_collected: list[str] = []
+        final_meta: dict[str, Any] = {}
         try:
             stream: Any = pipeline.ask_streaming(
                 question=body.question,
                 metadata_filter=metadata_filter,
                 request_id=rid,
                 endpoint="/query/stream",
+                chat_history=chat_history,
             )
             if hasattr(stream, "__aiter__"):
                 async for item in stream:
                     if isinstance(item, dict):
+                        final_meta.update(item)
                         payload = json.dumps(item)
                     else:
+                        tokens_collected.append(item)
                         payload = json.dumps({"token": item})
                     yield f"data: {payload}\n\n"
             else:
                 for item in stream:
                     if isinstance(item, dict):
+                        final_meta.update(item)
                         payload = json.dumps(item)
                     else:
+                        tokens_collected.append(item)
                         payload = json.dumps({"token": item})
                     yield f"data: {payload}\n\n"
         except Exception as exc:
             logger.error(f"[{rid}] Streaming pipeline error: {type(exc).__name__}: {exc}")
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+        if body.conversation_id and tokens_collected:
+            try:
+                store = get_chat_store()
+                user_id = getattr(request.state, "user_id", "default_user")
+                store.add_message(
+                    session_id=body.conversation_id,
+                    role="user",
+                    content=body.question,
+                    user_id=user_id,
+                )
+                store.add_message(
+                    session_id=body.conversation_id,
+                    role="assistant",
+                    content="".join(tokens_collected),
+                    user_id=user_id,
+                    citations=final_meta.get("citations", []),
+                    meta=final_meta,
+                )
+            except Exception as e:
+                logger.warning(f"[{rid}] Failed to auto-save streaming turn to session: {e}")
 
         yield "data: [DONE]\n\n"
 

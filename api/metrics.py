@@ -127,6 +127,10 @@ _PATH_MAP: dict[str, str] = {
     "/query/": "/query",
     "/query/stream": "/query/stream",
     "/query/stream/": "/query/stream",
+    "/sessions": "/sessions",
+    "/sessions/": "/sessions",
+    "/companies": "/companies",
+    "/companies/": "/companies",
     "/health": "/health",
     "/health/": "/health",
     "/health/live": "/health/live",
@@ -140,7 +144,13 @@ _PATH_MAP: dict[str, str] = {
 
 def _normalise_path(path: str) -> str:
     """Return a low-cardinality endpoint label for *path*."""
-    return _PATH_MAP.get(path, "/other")
+    if path in _PATH_MAP:
+        return _PATH_MAP[path]
+    if path.startswith("/sessions/"):
+        return "/sessions"
+    if path.startswith("/companies/"):
+        return "/companies"
+    return "/other"
 
 
 # ── ASGI middleware ────────────────────────────────────────────────────────────
@@ -203,9 +213,9 @@ def record_generation_result(result: GenerationResult) -> None:
     context_tokens = getattr(result, "context_tokens_used", None)
     retrieval_failed = getattr(result, "retrieval_failed", False)
 
-    if prompt_tokens:
+    if prompt_tokens and isinstance(prompt_tokens, int | float):
         rag_llm_tokens_total.labels(model=model, token_type="prompt").inc(prompt_tokens)
-    if completion_tokens:
+    if completion_tokens and isinstance(completion_tokens, int | float):
         rag_llm_tokens_total.labels(model=model, token_type="completion").inc(completion_tokens)
 
     rag_grounded_responses_total.labels(grounded=str(grounded).lower()).inc()
@@ -217,7 +227,7 @@ def record_generation_result(result: GenerationResult) -> None:
     if citations:
         rag_citations_total.labels(valid="true").inc(len(citations))
 
-    if context_tokens is not None:
+    if context_tokens is not None and isinstance(context_tokens, int | float):
         rag_context_tokens_used.observe(context_tokens)
 
 

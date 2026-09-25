@@ -354,7 +354,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, rate(rag_retrieval_candidates_bucket[5m]))",
+          "expr": "histogram_quantile(0.5, sum(rate(rag_retrieval_candidates_bucket[5m])) by (le))",
           "legendFormat": "P50 Reranker Candidates",
           "range": true,
           "refId": "A"
@@ -362,7 +362,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, rate(rag_retrieval_results_returned_bucket[5m]))",
+          "expr": "histogram_quantile(0.5, sum(rate(rag_retrieval_results_returned_bucket[5m])) by (le))",
           "legendFormat": "P50 Chunks Passed to LLM",
           "range": true,
           "refId": "B"

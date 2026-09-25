@@ -34,6 +34,8 @@ from config import settings as _settings
 from config.llm_client import acomplete
 from query.models import TransformedQuery
 from query.prompts import (
+    CONVERSATIONAL_CONDENSE_SYSTEM,
+    CONVERSATIONAL_CONDENSE_USER,
     HYDE_SYSTEM,
     HYDE_USER,
     MULTI_QUERY_SYSTEM,
@@ -386,3 +388,52 @@ class QueryTransformer:
             ] = transformed
 
         return transformed
+
+    async def contextualize_query(
+        self,
+        question: str,
+        chat_history: list[dict[str, str]] | None,
+    ) -> str:
+        """
+        Rewrite an ambiguous or elliptical follow-up question in a conversational session
+        into a standalone, self-contained financial search query.
+
+        If chat_history is empty or none, returns question verbatim.
+        """
+        if not chat_history:
+            return question.strip()
+
+        history_lines = []
+        for msg in chat_history[-6:]:
+            role = msg.get("role", "user").capitalize()
+            content = msg.get("content", "").strip()
+            if content:
+                history_lines.append(f"{role}: {content}")
+
+        if not history_lines:
+            return question.strip()
+
+        history_text = "\n".join(history_lines)
+        user_content = CONVERSATIONAL_CONDENSE_USER.format(
+            chat_history=history_text,
+            query=question.strip(),
+        )
+
+        try:
+            condensed = await _call_llm(
+                system=CONVERSATIONAL_CONDENSE_SYSTEM,
+                user=user_content,
+                temperature=0.0,
+                max_tokens=150,
+                label="ConversationalCondense",
+            )
+            cleaned = condensed.strip().strip('"').strip("'")
+            if cleaned and len(cleaned) >= 5:
+                logger.debug(
+                    f"[QueryTransformer] Conversational rewrite: '{question}' -> '{cleaned}'"
+                )
+                return cleaned
+        except Exception as exc:
+            logger.warning(f"[QueryTransformer] Conversational query condensation failed: {exc}")
+
+        return question.strip()

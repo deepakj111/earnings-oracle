@@ -112,13 +112,85 @@ class TimingMiddleware:
         await self.app(scope, receive, send_with_timing)
 
 
+class UserContextMiddleware:
+    """
+    Extracts multi-tenant user and organization/workspace identity from incoming requests.
+
+    Inspects:
+      - X-User-ID: Authenticated user identity (e.g. analyst@fund.com or user_42)
+      - X-Tenant-ID: Multi-tenant organization / workspace identifier
+      - Authorization: Bearer token (parses token prefix or subject if present)
+
+    Stores:
+      - request.state.user_id
+      - request.state.tenant_id
+      - request.state.is_authenticated
+
+    Echoes:
+      - X-User-ID on the response for tracing and audit confirmation.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        default_user: str = "default_user",
+        default_tenant: str = "default_tenant",
+    ) -> None:
+        self.app = app
+        self.default_user = default_user
+        self.default_tenant = default_tenant
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        user_id = request.headers.get("x-user-id", "").strip()
+        tenant_id = request.headers.get("x-tenant-id", "").strip()
+        auth_header = request.headers.get("authorization", "").strip()
+
+        # If Authorization header provided: Bearer <token>
+        is_auth = False
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+            if token:
+                is_auth = True
+                if not user_id:
+                    # Use token prefix as user identification if no explicit header
+                    user_id = f"token_{token[:12]}"
+
+        final_user = user_id or self.default_user
+        final_tenant = tenant_id or self.default_tenant
+
+        scope.setdefault("state", {})
+        scope["state"]["user_id"] = final_user
+        scope["state"]["tenant_id"] = final_tenant
+        scope["state"]["is_authenticated"] = is_auth
+
+        async def send_with_user_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                h = MutableHeaders(scope=message)
+                h["X-User-ID"] = final_user
+                h["X-Tenant-ID"] = final_tenant
+            await send(message)
+
+        await self.app(scope, receive, send_with_user_headers)
+
+
 class RateLimitMiddleware:
     """
-    In-memory sliding window rate limiter per client IP.
+    Sliding-window rate limiter with User + IP multi-tier throttling.
 
-    - Adds standard RFC/IETF headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
-    - Returns 429 Too Many Requests if rate limit is exceeded
-    - Skips rate limiting for health checks, metrics, and documentation endpoints
+    Features:
+    - User-aware: Throttles by X-User-ID or API Token when present, avoiding NAT IP bottlenecking.
+    - IP fallback: Falls back to client IP for anonymous requests.
+    - Emits standard RFC rate limit headers:
+        X-RateLimit-Limit: <rpm>
+        X-RateLimit-Remaining: <remaining requests in current window>
+        X-RateLimit-Reset: <seconds until quota resets>
+    - Returns 429 Too Many Requests if rate limit is exceeded.
+    - Skips rate limiting for health checks, metrics, and documentation endpoints.
     """
 
     def __init__(
@@ -145,10 +217,10 @@ class RateLimitMiddleware:
         if now - self._last_cleanup > 60.0:
             window_start = now - 60.0
             cleaned = {}
-            for ip, ts_list in self._requests.items():
+            for key, ts_list in self._requests.items():
                 valid = [t for t in ts_list if t > window_start]
                 if valid:
-                    cleaned[ip] = valid
+                    cleaned[key] = valid
             self._requests = cleaned
             self._last_cleanup = now
 
@@ -166,12 +238,20 @@ class RateLimitMiddleware:
         client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
             request.client.host if request.client else "unknown"
         )
+        user_id = (
+            getattr(request.state, "user_id", None) or request.headers.get("x-user-id", "").strip()
+        )
+
+        # Prioritise user-based throttling key if authenticated, else client IP
+        throttle_key = (
+            f"user:{user_id}" if user_id and user_id != "default_user" else f"ip:{client_ip}"
+        )
 
         now = time.time()
         self._clean_stale(now)
 
         window_start = now - 60.0
-        timestamps = [t for t in self._requests.get(client_ip, []) if t > window_start]
+        timestamps = [t for t in self._requests.get(throttle_key, []) if t > window_start]
         current_count = len(timestamps)
 
         remaining = max(0, self.rpm - current_count)
@@ -187,7 +267,7 @@ class RateLimitMiddleware:
             ]
             rid = getattr(request.state, "request_id", "-")
             logger.warning(
-                f"[{rid}] Rate limit exceeded for {client_ip} on {path} ({self.rpm} RPM)"
+                f"[{rid}] Rate limit exceeded for {throttle_key} on {path} ({self.rpm} RPM)"
             )
             body = (
                 f'{{"error":"Too Many Requests","detail":"Rate limit of {self.rpm} req/min exceeded.",'
@@ -198,7 +278,7 @@ class RateLimitMiddleware:
             return
 
         timestamps.append(now)
-        self._requests[client_ip] = timestamps
+        self._requests[throttle_key] = timestamps
         remaining = max(0, self.rpm - len(timestamps))
 
         async def send_with_rate_limit_headers(message: Message) -> None:
@@ -215,5 +295,6 @@ class RateLimitMiddleware:
 __all__ = [
     "RequestIDMiddleware",
     "TimingMiddleware",
+    "UserContextMiddleware",
     "RateLimitMiddleware",
 ]

@@ -196,6 +196,7 @@ class FinancialRAGPipeline:
         request_id: str = "",
         endpoint: str = "/query",
         strict_verification: bool | None = None,
+        chat_history: list[dict[str, str]] | None = None,
     ) -> GenerationResult:
         pipeline_start = time.perf_counter()
         question = question.strip()
@@ -247,7 +248,12 @@ class FinancialRAGPipeline:
             span.set_attribute("guardrails.passed", True)
             question = guardrail_res.sanitized_query
 
-            # ── Semantic Cache Check ──────────────────────────────────────────────
+            # ── Conversational Query Condensation ─────────────────────────
+            if chat_history:
+                question = await self._transformer.contextualize_query(question, chat_history)
+                span.set_attribute("question.contextualized", question)
+
+            # ── Semantic Cache Check ──────────────────────────────────────
             query_vector = None
 
             try:
@@ -723,6 +729,7 @@ class FinancialRAGPipeline:
         enable_routing: bool = True,
         request_id: str = "",
         endpoint: str = "/query/stream",
+        chat_history: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[str | dict[str, Any]]:
         """
         Streaming pipeline: run L2 + L3 synchronously, then stream L4 tokens.
@@ -760,6 +767,10 @@ class FinancialRAGPipeline:
             return
 
         question = guardrail_res.sanitized_query
+
+        # ── Conversational Query Condensation ─────────────────────────────
+        if chat_history:
+            question = await self._transformer.contextualize_query(question, chat_history)
 
         routing = None
         if enable_routing:
@@ -989,6 +1000,7 @@ class FinancialRAGPipeline:
         question: str,
         metadata_filter: MetadataFilter | None = None,
         strict_verification: bool | None = None,
+        chat_history: list[dict[str, str]] | None = None,
     ) -> tuple[GenerationResult, str, str]:
         """
         Ask a question and return result + full diagnostic summaries.
@@ -1025,6 +1037,7 @@ class FinancialRAGPipeline:
             metadata_filter=metadata_filter,
             strict_verification=strict_verification,
             enable_routing=True,
+            chat_history=chat_history,
         )
 
         # Build diagnostic summaries from the stored last state (set by ask())
@@ -1049,6 +1062,7 @@ class FinancialRAGPipeline:
         question: str,
         metadata_filter: MetadataFilter | None = None,
         strict_verification: bool | None = None,
+        chat_history: list[dict[str, str]] | None = None,
     ) -> tuple[GenerationResult, str, str]:
         """Synchronous wrapper for ask_verbose()."""
         try:
@@ -1059,6 +1073,7 @@ class FinancialRAGPipeline:
                     question=question,
                     metadata_filter=metadata_filter,
                     strict_verification=strict_verification,
+                    chat_history=chat_history,
                 )
             )
         import concurrent.futures
@@ -1070,5 +1085,6 @@ class FinancialRAGPipeline:
                     question=question,
                     metadata_filter=metadata_filter,
                     strict_verification=strict_verification,
+                    chat_history=chat_history,
                 ),
             ).result()
