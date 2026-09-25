@@ -37,6 +37,7 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
     "ticker": "NVDA",
     "year": 2025
   },
+  "session_id": "sess_a1b2c3d4",
   "verbose": false
 }
 ```
@@ -48,6 +49,7 @@ Run the full four-layer RAG pipeline and return a structured JSON response with 
 | `filter.ticker` | string | ❌ | Any configured ticker (e.g. NVDA, WMT, NFLX, UNH, AAPL, MSFT) | Company ticker (case-insensitive, dynamic via CompanyRegistry) |
 | `filter.year` | integer | ❌ | 2020–2030 | Fiscal year |
 | `filter.quarter` | string | ❌ | Q1, Q2, Q3, Q4 | Fiscal quarter (case-insensitive) |
+| `session_id` | string | ❌ | Max 128 chars | Chat session ID for conversational memory and follow-up turns |
 | `verbose` | boolean | ❌ | default: `false` | Include query transform + retrieval diagnostics in response |
 
 **Response `200 OK`**
@@ -383,6 +385,188 @@ Retrieve the detailed profile and fiscal metadata for a specific company ticker.
 
 ---
 
+### Sessions
+
+Multi-user conversational chat history, session persistence, and thread management for enterprise AI chatbot workflows.
+
+All session endpoints support user and tenant scoping via headers:
+- `X-User-ID`: Scopes operations to the specified user (defaults to `default_user`).
+- `X-Tenant-ID`: Scopes operations to the specified tenant organization (defaults to `default_tenant`).
+
+#### `GET /sessions`
+
+Retrieve all active chat sessions for the current authenticated or guest user, ordered by most recently updated.
+
+**Query Parameters**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|:---:|---------|-------------|
+| `limit` | integer | ❌ | `50` | Maximum number of sessions to return (1–100) |
+
+**Response `200 OK`**
+
+```json
+[
+  {
+    "id": "sess_8f3d1e2a",
+    "user_id": "default_user",
+    "title": "NVIDIA FY2025 Data Center Analysis",
+    "message_count": 4,
+    "created_at": "2026-09-25T03:12:00Z",
+    "updated_at": "2026-09-25T03:15:22Z",
+    "metadata": {
+      "ticker": "NVDA",
+      "year": 2025
+    }
+  }
+]
+```
+
+---
+
+#### `POST /sessions`
+
+Initialize a new conversational session for multi-turn financial analysis.
+
+**Request body**
+
+```json
+{
+  "title": "Walmart vs Netflix Comparative Study",
+  "metadata": {
+    "primary_ticker": "WMT"
+  }
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|:---:|-------------|-------------|
+| `title` | string | ❌ | 1–255 chars | Optional display title (auto-generated if omitted) |
+| `metadata` | object | ❌ | JSON map | Optional user-defined session attributes |
+
+**Response `201 Created`**
+
+```json
+{
+  "id": "sess_9c4b2a11",
+  "user_id": "default_user",
+  "title": "Walmart vs Netflix Comparative Study",
+  "messages": [],
+  "created_at": "2026-09-25T04:00:00Z",
+  "updated_at": "2026-09-25T04:00:00Z",
+  "metadata": {
+    "primary_ticker": "WMT"
+  }
+}
+```
+
+---
+
+#### `GET /sessions/{session_id}`
+
+Retrieve the full conversational message history, verified calculations, and citation cards for a specific session ID.
+
+**Path parameters**
+
+| Parameter | Type | Required | Description |
+|-----------|------|:---:|-------------|
+| `session_id` | string | ✅ | Session identifier |
+
+**Response `200 OK`**
+
+```json
+{
+  "id": "sess_9c4b2a11",
+  "user_id": "default_user",
+  "title": "Walmart vs Netflix Comparative Study",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What was Walmart's global revenue in FY2026?",
+      "timestamp": "2026-09-25T04:01:00Z",
+      "citations": [],
+      "calculations": [],
+      "grounded": null,
+      "confidence_score": null
+    },
+    {
+      "role": "assistant",
+      "content": "Walmart reported total revenue of $681.0 billion for fiscal year 2026 [1]...",
+      "timestamp": "2026-09-25T04:01:03Z",
+      "citations": [
+        {
+          "index": 1,
+          "ticker": "WMT",
+          "fiscal_period": "FY2026",
+          "section_title": "Financial Highlights",
+          "excerpt": "Total revenue reached $681.0 billion..."
+        }
+      ],
+      "calculations": [],
+      "grounded": true,
+      "confidence_score": 0.95
+    }
+  ],
+  "created_at": "2026-09-25T04:00:00Z",
+  "updated_at": "2026-09-25T04:01:03Z",
+  "metadata": {}
+}
+```
+
+---
+
+#### `PATCH /sessions/{session_id}`
+
+Update the display title of an active chat session.
+
+**Request body**
+
+```json
+{
+  "title": "Walmart FY2026 Segment Margins"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "id": "sess_9c4b2a11",
+  "user_id": "default_user",
+  "title": "Walmart FY2026 Segment Margins",
+  "messages": [...],
+  "created_at": "2026-09-25T04:00:00Z",
+  "updated_at": "2026-09-25T04:05:00Z",
+  "metadata": {}
+}
+```
+
+---
+
+#### `DELETE /sessions/{session_id}`
+
+Permanently delete a chat session and its complete conversational history.
+
+**Response `204 No Content`**
+
+---
+
+#### `POST /sessions/{session_id}/clear`
+
+Clear all message history in a session while preserving the session ID, title, and metadata.
+
+**Response `200 OK`**
+
+```json
+{
+  "status": "cleared",
+  "session_id": "sess_9c4b2a11",
+  "message_count": 0
+}
+```
+
+---
+
 ### Web Frontend
 
 #### `GET /app` (or `GET /`)
@@ -430,7 +614,7 @@ Full dependency health check. Actively probes Qdrant connectivity, collection ex
 ```json
 {
   "status": "healthy",
-  "version": "0.1.0",
+  "version": "0.7.0",
   "uptime_seconds": 3627.4,
   "components": {
     "qdrant": {

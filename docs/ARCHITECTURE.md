@@ -207,7 +207,36 @@ The pipeline validates this invariant before writing. Breaking it would cause th
 
 ---
 
-## Layer 2: Query Transformation
+## Layer 2: Query Routing & Transformation
+
+### 1. Query Router & Intent Classification (`query/router.py`)
+
+Before transforming queries or executing vector search, every incoming query passes through Layer 2's structured router.
+
+```mermaid
+flowchart TD
+    Q["User Query"] --> GREET{"Greeting / Pleasantry?"}
+    GREET -- Yes --> FAST["Direct Conversational Response\n(0ms SEC search, 0 token waste)"]
+    GREET -- No --> HEUR{"Heuristic Ticker Match?"}
+    HEUR -- Found --> ROUTED["Classified QueryIntent\n(Target Ticker, Period, Sub-Type)"]
+    HEUR -- Ambiguous --> ROUTER_LLM["LLM Router / Intent Classifier\n(Intent, Multi-Hop Flag, Out-of-Scope)"]
+    ROUTER_LLM --> OUT{"Out of Scope?"}
+    OUT -- Yes --> REFUSE["Calibrated Refusal\n(Explain SEC 10-K/10-Q scope)"]
+    OUT -- No --> ROUTED
+```
+
+- **Conversational Greeting & Pleasantry Heuristic**:
+  - Fast-path regex / keyword classifier detects greetings (`"hello"`, `"hi"`, `"good morning"`), pleasantries (`"thank you"`, `"thanks"`, `"great job"`), and conversational continuations.
+  - Returns an immediate polite conversational response without querying vector databases, avoiding irrelevant SEC retrieval or hallucinated filings.
+- **Dynamic Entity & Fiscal Period Resolution**:
+  - Resolves corporate tickers (e.g. `NVDA`, `WMT`, `NFLX`, `UNH`, `AAPL`) using the dynamic `CompanyRegistry` (`config/companies.json`).
+  - Identifies fiscal periods (`FY2025`, `Q3 2024`) via `FiscalPeriodResolver`, mapping calendar dates to fiscal calendars (e.g. NVIDIA/Walmart January fiscal year-ends).
+- **Multi-Turn Conversational Context Resolution**:
+  - When invoked with an active `session_id`, resolves contextual pronouns and follow-up inquiries (e.g., *"What about operating margins?"* following a question on Walmart) using previous conversational turns.
+
+---
+
+### 2. Query Transformation (`query/transformer.py`)
 
 ### Motivation
 
@@ -611,11 +640,20 @@ The API layer implements pure ASGI middleware rather than Starlette's `BaseHTTPM
 
 - **`TimingMiddleware`**: Stamps `X-Response-Time` and records Prometheus request durations.
 - **`RequestIDMiddleware`**: Propagates or generates `X-Request-ID` across all spans.
+- **`UserContextMiddleware`**: Resolves authenticated or guest `user_id` and `tenant_id` from request state or `X-User-ID` / `X-Tenant-ID` headers for tenant isolation.
 - **`RateLimitMiddleware`**: In-memory sliding window rate limiting with RFC-compliant `X-RateLimit-*` headers.
 
 **Why pure ASGI (not BaseHTTPMiddleware)?**
 
 `BaseHTTPMiddleware` uses `anyio.create_task_group()` internally. When a route raises and the exception handler sends a 500 response, the inner task group re-raises via `ExceptionGroup` / `collapse_excgroups()` — crashing `TestClient` instead of returning the 500. Pure ASGI middleware wraps `send()` directly and never participates in exception propagation.
+
+### Conversational Session Management & Chat Store (`api/chat_store.py`)
+
+For multi-turn enterprise chatbot workflows, the backend provides stateful conversational session tracking:
+- **`ChatStore` Singleton**: Thread-safe storage layer supporting in-memory caching and persistent SQLite storage.
+- **Tenant & User Isolation**: All sessions are indexed by `(user_id, session_id)`. Operations enforce strict ownership boundaries so users cannot inspect or mutate other users' conversation histories.
+- **Sliding-Window History Pruning**: Automatically prunes older conversational turns when message count exceeds sliding window thresholds (`max_history_turns`), preventing prompt bloat and context window exhaustion while preserving critical conversational anchor context.
+- **Turn Attribution**: Each assistant message stores the verified answer prose, discrete citations, PAL arithmetic calculations, and grounding confidence scores, allowing the frontend to reconstruct rich interactive cards on reload.
 
 ### Health Check Hierarchy
 

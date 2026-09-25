@@ -55,17 +55,21 @@ cp .env.example .env
 # Option A (Recommended): Google Cloud Application Default Credentials (Zero Keys)
 gcloud auth application-default login
 
-# Option B: OpenAI API Key
-# Set RAG_LLM_PROVIDER=openai and OPENAI_API_KEY in .env
+# Option B: Direct Gemini API Key
+# Set RAG_LLM_PROVIDER=gemini and GEMINI_API_KEY in .env
+
+# Option C: OpenAI API Key (Auto-fallback supported)
+# Set OPENAI_API_KEY in .env (system auto-detects and defaults to 'openai' if Gemini/ADC is absent)
 ```
 
 Edit `.env` (minimum required keys):
 
 ```dotenv
-# Provider selection: "gemini" (default with ADC) or "openai"
+# Provider selection: "gemini" (default with ADC/API key) or "openai"
 RAG_LLM_PROVIDER="gemini"
 GOOGLE_CLOUD_PROJECT="gleaming-vision-509507-j6"
 GOOGLE_CLOUD_LOCATION="us-central1"
+# GEMINI_API_KEY="AIzaSy..."   # Required if not using Google Cloud ADC
 
 # Required by SEC EDGAR fair-access policy
 SEC_USER_AGENT="Firstname Lastname firstname@example.com"
@@ -237,14 +241,17 @@ Output includes filesystem stats, BM25 corpus summary (per-ticker/quarter distri
 ### Running tests
 
 ```bash
-# Full suite (885 tests with verbose output and timing)
+# Full suite (958 tests with verbose output and timing, maintaining ≥80% coverage)
 poetry run pytest tests/ -v --durations=10
 
 # Quiet (just counts)
 poetry run pytest tests/ -q
 
-# With coverage report
-poetry run pytest tests/ --cov=. --cov-report=term-missing
+# Exact CI coverage command (verifies 80% coverage requirement)
+poetry run pytest tests/ -m "not integration" \
+  --cov=ingestion --cov=query --cov=retrieval --cov=generation \
+  --cov=observability --cov=knowledge_graph --cov=evaluation \
+  --cov=api --cov=config --cov-fail-under=80
 
 # Single module
 poetry run pytest tests/test_chunker.py -v

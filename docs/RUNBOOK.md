@@ -133,7 +133,8 @@ SEC EDGAR ──▶ download_filings ──▶ parse_html ──▶ parent_child
                  ┌─────────────────────────────────────────────────────────────────┴─────┐
                  ▼                                 ▼                                     ▼
            Qdrant Dense                    BM25 Sparse Corpus                     Knowledge Graph
-    (text-embedding-3-small)             (Tuned financial BM25)              (Entity & Relation Graph)
+    (text-embedding-004 768d /          (Tuned financial BM25)              (Entity & Relation Graph)
+     text-embedding-3-small 1536d)
 ```
 
 ### Step 3.1: Download SEC Filings
@@ -143,7 +144,7 @@ poetry run python -m ingestion.download_filings
 ```
 
 ### Step 3.2: Execute Ingestion & Indexing Pipeline
-Runs full structure-aware chunking, Anthropic-style contextual enrichment, OpenAI embedding generation, BM25 indexing, and LLM Knowledge Graph extraction:
+Runs full structure-aware chunking, Anthropic-style contextual enrichment, Google Gemini / OpenAI embedding generation with vector dimension auto-healing, BM25 indexing, and LLM Knowledge Graph extraction:
 ```bash
 poetry run python -m ingestion.pipeline
 ```
@@ -167,8 +168,8 @@ poetry run python -m ingestion.pipeline --concurrency 4 --threads 8
 | *(default)* | Full end-to-end ingestion across all stores | First full indexing run |
 | `--fast` / `--no-kg` | Bypasses LLM Knowledge Graph extraction | Rapid smoke tests and evaluation iterations |
 | `--kg-only` | Re-runs only Knowledge Graph extraction | Recovering or enriching graph entities |
-| `--concurrency N` | Sets max concurrent documents processed | Tuning for OpenAI Tier TPM limits |
-| `--threads N` | Overrides ONNX / CPU thread pool | Running local ColBERT/Late Interaction |
+| `--concurrency N` | Sets max concurrent documents processed | Tuning for API rate/concurrency limits |
+| `--threads N` | Overrides worker thread pool count | Running CPU-bound tokenization / workers |
 
 ### Step 3.3: Verify Ingestion State & Idempotency
 Verify that all filings were successfully processed into Qdrant and BM25:
@@ -225,11 +226,17 @@ With the server running, open the following URLs in your browser:
 # 1. Check API health
 curl -s http://localhost:8000/health | python3 -m json.tool
 
-# 2. Execute a test query
+# 2. Create a persistent chat session
+curl -s -X POST http://localhost:8000/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Walmart FY2026 Analysis"}' | python3 -m json.tool
+
+# 3. Execute a test query (with session tracking)
 curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "What was Walmart global revenue and US net sales for fiscal year 2026?"
+    "question": "What was Walmart global revenue and US net sales for fiscal year 2026?",
+    "session_id": "sess_your_id"
   }' | python3 -m json.tool
 ```
 
@@ -241,7 +248,7 @@ The system comes pre-configured with full APM observability:
 
 ### 1. Distributed Tracing (Jaeger)
 - **Web UI**: [http://localhost:16686](http://localhost:16686)
-- **What to look for**: Select service `financial-rag-api` and click **Find Traces**. Inspect the flamegraphs to trace query latency across HyDE query expansion, hybrid retrieval (Dense + BM25), FlashRank reranking, and OpenAI generation.
+- **What to look for**: Select service `financial-rag-api` and click **Find Traces**. Inspect the flamegraphs to trace query latency across HyDE query expansion, hybrid retrieval (Dense + BM25), FlashRank reranking, and Gemini / OpenAI generation.
 
 ### 2. Prometheus Metrics
 - **Web UI**: [http://localhost:9090](http://localhost:9090)
@@ -445,11 +452,14 @@ Run the local test suite and quality gates to mirror the GitHub Actions CI/CD ma
 
 ### 1. Run Complete Test Suite
 ```bash
-# Run all 887 unit and integration tests
+# Run all 958 unit and integration tests
 poetry run pytest tests/
 
-# Run tests with terminal coverage report
-poetry run pytest tests/ --cov=. --cov-report=term-missing
+# Run tests with exact CI flags and coverage gate (≥80% required)
+poetry run pytest tests/ -m "not integration" \
+  --cov=ingestion --cov=query --cov=retrieval --cov=generation \
+  --cov=observability --cov=knowledge_graph --cov=evaluation \
+  --cov=api --cov=config --cov-fail-under=80
 ```
 
 ### 2. Code Formatting & Linting

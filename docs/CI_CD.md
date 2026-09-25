@@ -153,7 +153,66 @@ flowchart TD
 
 ---
 
-## 3. Local Development Gate: Pre-Commit Hooks
+## 3. CD Workflow Pipeline (`.github/workflows/cd.yml`)
+
+The Continuous Delivery (CD) pipeline runs automatically when CI succeeds on `main` or upon semver release tags (`v*.*.*`).
+
+```mermaid
+flowchart LR
+    CI([CI Success on main / Tag]) --> Build[Job 1: Build & Push GHCR]
+    Build --> Smoke[Job 2: Docker Smoke Test & Health Probes]
+    Smoke --> Deploy([Release Ready])
+```
+
+### Triggers & Concurrency
+```yaml
+on:
+  workflow_run:
+    workflows: ["CI — Lint, Typecheck, Security & Tests"]
+    branches: [main]
+    types: [completed]
+  push:
+    tags:
+      - "v*.*.*"
+```
+
+### CD Jobs
+
+#### Job 1: `build-and-push` (Multi-Platform Container Build & Registry Push)
+- **Runner**: `ubuntu-latest`
+- **Registry**: GitHub Container Registry (`ghcr.io/deepakj111/earnings-oracle`)
+- **Layer Caching**: Uses GitHub Actions Buildx layer cache (`type=gha,mode=max`) to accelerate rebuilds.
+- **Tagging Strategy** (via `docker/metadata-action`):
+  - `latest` (for `main` branch builds)
+  - `sha-<short_sha>` (for immutable commit-level traceability)
+  - `vX.Y.Z`, `vX.Y` (for semantic releases)
+- **Permissions**: `packages: write`, `contents: read`.
+
+#### Job 2: `smoke-test` (Hermetic Live Container Smoke Test)
+- **Runner**: `ubuntu-latest`
+- **Dependency**: Runs after `build-and-push` completes.
+- **Service Container**: Spins up `qdrant/qdrant:v1.11.0` on port 6333.
+- **Container Execution**:
+  Pulls and executes the newly published container image in an isolated environment with production environment variables:
+  ```bash
+  docker run -d \
+    --name rag_smoke \
+    --network host \
+    -e QDRANT_URL=http://localhost:6333 \
+    -e RAG_LLM_PROVIDER=gemini \
+    -e GEMINI_API_KEY=test-gemini-key-smoke-test \
+    -e OPENAI_API_KEY=sk-smoke-placeholder \
+    -e SEC_USER_AGENT="Smoke Test ci@example.com" \
+    -e RAG_CRAG_ENABLED=false \
+    ghcr.io/deepakj111/earnings-oracle:sha-<commit>
+  ```
+- **Liveness Probing**:
+  Executes an exponential-backoff polling loop against `http://localhost:8000/health/live` (up to 30 attempts, 150 seconds max timeout) to guarantee the container boots, passes configuration validation, starts Uvicorn ASGI workers, and serves requests without crash-looping.
+- **Cleanup**: Tears down the test containers upon step completion.
+
+---
+
+## 4. Local Development Gate: Pre-Commit Hooks
 
 Developers can run the identical checks locally before staging commits.
 
@@ -178,7 +237,7 @@ poetry run pre-commit run --all-files
 
 ---
 
-## 4. Failure Triage & Troubleshooting Guide
+## 5. Failure Triage & Troubleshooting Guide
 
 | Failure Mode | Diagnosis Step | Quick Fix Command |
 |:---|:---|:---|

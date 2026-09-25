@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-09-25
+
+### Added
+- **Zero-Friction Provider Auto-Detection & Resilient Fallback Cascade (`config/settings.py`)**:
+  - Implemented `_default_provider()` and `_has_adc_credentials()` helper functions.
+  - Automatically identifies available credentials across Google Cloud ADC, `GEMINI_API_KEY`, and `OPENAI_API_KEY`. When `OPENAI_API_KEY` is present and Gemini credentials are absent, the system seamlessly falls back to `"openai"` (`gpt-5-mini`, `gpt-5`, `text-embedding-3-small`, 1536-dim) without requiring explicit `RAG_LLM_PROVIDER` environment variables.
+  - Dynamic provider updates in `Settings.validate()` prevent startup crashes in OpenAI-only containers or test environments.
+- **Enterprise Chatbot Session Management (`api/routes/sessions.py`, `api/chat_store.py`)**:
+  - Added full conversational session lifecycle endpoints: `GET /sessions`, `POST /sessions`, `GET /sessions/{session_id}`, `PATCH /sessions/{session_id}`, `DELETE /sessions/{session_id}`, and `POST /sessions/{session_id}/clear`.
+  - Scoped message history by `user_id` and `tenant_id` with sliding-window history pruning.
+  - Integrated `session_id` parameter into `POST /query` and `POST /query/stream` for multi-turn conversational financial RAG.
+- **Conversational Greeting & Pleasantry Heuristic (`query/router.py`)**:
+  - Implemented fast-path classification in Layer 1 router to intercept greetings, pleasantries, and conversation starters without executing expensive SEC filing retrieval or hallucinating company filings.
+- **Architectural Decision Records ADR-023 & ADR-024**:
+  - Documented Conversational Intent Routing & Greeting Heuristic (ADR-023) and Zero-Friction Provider Auto-Detection & Resilient Fallback Cascade (ADR-024) in `docs/DESIGN_DECISIONS.md`.
+
+### Fixed
+- **CD Docker Smoke Test Credential Resolution (`.github/workflows/cd.yml`)**:
+  - Updated the GitHub Actions CD smoke test container configuration to provide `RAG_LLM_PROVIDER=gemini` and `GEMINI_API_KEY` placeholder, ensuring container health probes (`/health/live`) connect reliably without premature exit.
+- **CI Configuration Validation (`.github/workflows/ci.yml`)**:
+  - Added `GEMINI_API_KEY` stub to CI `validate-configs` step to align with default Gemini provider settings.
+- **Test Suite Expansion & Quality Gate**:
+  - Expanded test suite to **958 unit and integration tests** passing with **83.04% total test coverage** exceeding the 80% CI threshold.
+
+---
+
 ## [0.6.0] - 2026-09-24
 
 ### Added

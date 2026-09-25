@@ -225,18 +225,20 @@ Triggers:
 **Jobs**:
 
 1. **build-and-push**
-   - Docker Buildx with GitHub Actions layer cache (`type=gha`)
+   - Docker Buildx with GitHub Actions layer cache (`type=gha,mode=max`)
    - `docker/metadata-action` generates all tag variants
-   - Pushes to `ghcr.io/<owner>/financial-rag`
+   - Pushes to `ghcr.io/deepakj111/earnings-oracle`
    - `permissions: packages: write` for GHCR push
 
 2. **smoke-test** (after build)
-   - Spins up a real Qdrant service
-   - Pulls and runs the published image
-   - Polls `/health/live` for up to 150s
-   - Asserts `/health` status is `ok` or `degraded` (collection missing is acceptable — ingestion hasn't run)
+   - Spins up a real Qdrant service container (`qdrant/qdrant:v1.11.0`)
+   - Pulls and runs the published container image on `--network host`
+   - Passes test credentials:
+     `-e RAG_LLM_PROVIDER=gemini -e GEMINI_API_KEY=test-gemini-key-smoke-test -e OPENAI_API_KEY=sk-smoke-placeholder -e SEC_USER_AGENT="Smoke Test ci@example.com"`
+   - Polls `/health/live` for up to 150s (30 attempts × 5s)
+   - Asserts container initializes, passes configuration validation, and serves requests without crash-looping
 
-### CI environment variables
+### CI/CD environment variables
 
 Only the default `GITHUB_TOKEN` is required to push to GHCR:
 
@@ -244,7 +246,7 @@ Only the default `GITHUB_TOKEN` is required to push to GHCR:
 |----------|-------------|-------------|
 | `GITHUB_TOKEN` | CD | Auto-provided by GitHub Actions for GHCR push |
 
-*Note: No `OPENAI_API_KEY` secret is required! The pipeline injects a hardcoded placeholder (`sk-test-placeholder...`) directly in the workflow files. CI tests never call real OpenAI — all LLM calls are mocked via `unittest.mock.patch`.*
+*Note: No production API keys are required for CI/CD! The pipeline injects stubs (`GEMINI_API_KEY=test-gemini-stub-not-real`, `OPENAI_API_KEY=sk-stub-not-real`) directly in workflow files. CI unit and integration tests never invoke live paid endpoints — all LLM and embedding calls are safely mocked or hermetically stubbed.*
 
 ---
 
@@ -258,9 +260,17 @@ RAG_LLM_PROVIDER=gemini
 GOOGLE_CLOUD_PROJECT=gleaming-vision-509507-j6
 GOOGLE_CLOUD_LOCATION=us-central1
 
-# Option B: OpenAI API Key (Alternative)
+# Option B: Gemini API Key (Direct API)
+# RAG_LLM_PROVIDER=gemini
+# GEMINI_API_KEY=AIzaSy...
+
+# Option C: OpenAI API Key (Auto-fallback supported)
 # RAG_LLM_PROVIDER=openai
 # OPENAI_API_KEY=sk-...
+
+# Note on Provider Auto-Detection:
+# If OPENAI_API_KEY is present without GEMINI_API_KEY or ADC credentials,
+# the system automatically detects this and defaults to 'openai' gracefully.
 
 SEC_USER_AGENT="Company Name ops@company.com"
 QDRANT_URL=http://qdrant:6333              # Docker service name

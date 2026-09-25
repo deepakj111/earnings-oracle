@@ -326,7 +326,7 @@ The system is instrumented with native OpenTelemetry tracing (`observability/ote
   - `QueryRouter.route` (intent classification, ticker extraction)
   - `SemanticCache.get_cached_response` (vector similarity cache hit/miss)
   - `QueryTransformer.transform` (HyDE, Multi-Query, Step-Back)
-  - `HybridSearcher.retrieve` (Qdrant dense, ColBERT, BM25, and FlashRank reranking)
+  - `HybridSearcher.retrieve` (Qdrant dense, BM25 sparse, SEC FactStore, GraphRAG, and FlashRank cross-encoder reranking)
   - `Generator.generate` (LLM prompt synthesis, token consumption, context chunk injection)
 - **Flamegraphs**: Provide microsecond-level visibility into query execution waterfalls to immediately diagnose latency bottlenecks across network, embedding API, or local cross-encoders.
 
