@@ -11,7 +11,7 @@ Env var names follow the pattern: RAG_<SECTION>_<KEY> (all uppercase).
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from dotenv import load_dotenv
@@ -54,6 +54,36 @@ def _env_bool(key: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _has_adc_credentials() -> bool:
+    """Check if Google Cloud Application Default Credentials (ADC) are configured."""
+    adc_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.path.expanduser(
+        "~/.config/gcloud/application_default_credentials.json"
+    )
+    if os.path.exists(adc_path):
+        return True
+    win_adc = "/mnt/c/Users/deepa/AppData/Roaming/gcloud/application_default_credentials.json"
+    return os.path.exists(win_adc)
+
+
+def _default_provider() -> str:
+    """
+    Resolve active LLM provider.
+    Honors explicit RAG_LLM_PROVIDER if set.
+    Otherwise, if OPENAI_API_KEY is present without Gemini API key or ADC, defaults to 'openai'.
+    Defaults to 'gemini' for all other cases.
+    """
+    explicit = os.getenv("RAG_LLM_PROVIDER")
+    if explicit:
+        return explicit.strip().lower()
+    if (
+        os.getenv("OPENAI_API_KEY")
+        and not os.getenv("GEMINI_API_KEY")
+        and not _has_adc_credentials()
+    ):
+        return "openai"
+    return "gemini"
+
+
 # ── Layer 1: Query Routing ───────────────────────────────────────────────────
 
 
@@ -64,9 +94,7 @@ class QueryRouterConfig:
     model: str = field(
         default_factory=lambda: _env_str(
             "RAG_QUERY_ROUTER_MODEL",
-            "gemini-2.5-flash"
-            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
-            else "gpt-5-mini",
+            "gemini-2.5-flash" if _default_provider() in ("gemini", "vertex_ai") else "gpt-5-mini",
         )
     )
     temperature: float = field(default_factory=lambda: _env_float("RAG_QUERY_ROUTER_TEMP", 0.0))
@@ -83,9 +111,7 @@ class QueryTransformConfig:
     model: str = field(
         default_factory=lambda: _env_str(
             "RAG_QUERY_TRANSFORM_MODEL",
-            "gemini-2.5-flash"
-            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
-            else "gpt-5-mini",
+            "gemini-2.5-flash" if _default_provider() in ("gemini", "vertex_ai") else "gpt-5-mini",
         )
     )
 
@@ -177,9 +203,7 @@ class GenerationConfig:
     model: str = field(
         default_factory=lambda: _env_str(
             "RAG_GENERATION_MODEL",
-            "gemini-2.5-flash"
-            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
-            else "gpt-5",
+            "gemini-2.5-flash" if _default_provider() in ("gemini", "vertex_ai") else "gpt-5",
         )
     )
     temperature: float = field(default_factory=lambda: _env_float("RAG_GENERATION_TEMP", 0.1))
@@ -226,7 +250,7 @@ class EmbeddingConfig:
             # Default to text-embedding-004 (768-dim) when using Gemini/Vertex AI provider.
             # Switch to text-embedding-3-small (1536-dim) for OpenAI.
             "text-embedding-004"
-            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
+            if _default_provider() in ("gemini", "vertex_ai")
             else "text-embedding-3-small",
         )
     )
@@ -234,7 +258,7 @@ class EmbeddingConfig:
         default_factory=lambda: _env_int(
             "RAG_EMBEDDING_VECTOR_DIM",
             # text-embedding-004 outputs 768-dim; OpenAI text-embedding-3-small outputs 1536-dim.
-            768 if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai") else 1536,
+            768 if _default_provider() in ("gemini", "vertex_ai") else 1536,
         )
     )
 
@@ -323,7 +347,7 @@ class InfraConfig:
     gemini_api_key: str = field(default_factory=lambda: _env_str("GEMINI_API_KEY", ""))
     # Active LLM provider. Controls default model names and which API key is validated.
     # Values: "gemini" | "vertex_ai" | "openai" | "anthropic" | "auto"
-    provider: str = field(default_factory=lambda: _env_str("RAG_LLM_PROVIDER", "gemini"))
+    provider: str = field(default_factory=_default_provider)
     # Google Cloud project and location for Application Default Credentials (ADC) / Vertex AI
     google_cloud_project: str = field(
         default_factory=lambda: _env_str(
@@ -355,9 +379,7 @@ class EvaluationConfig:
     model: str = field(
         default_factory=lambda: _env_str(
             "RAG_EVAL_MODEL",
-            "gemini-2.5-flash"
-            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
-            else "gpt-5-mini",
+            "gemini-2.5-flash" if _default_provider() in ("gemini", "vertex_ai") else "gpt-5-mini",
         )
     )
     temperature: float = field(default_factory=lambda: _env_float("RAG_EVAL_TEMP", 0.0))
@@ -402,7 +424,7 @@ class ObservabilityConfig:
     )
 
 
-# ── Knowledge Graph ────────────────────────────────────────────────────────────
+# ── Knowledge Graph ────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -418,9 +440,7 @@ class KnowledgeGraphConfig:
     extraction_model: str = field(
         default_factory=lambda: _env_str(
             "RAG_KG_EXTRACTION_MODEL",
-            "gemini-2.5-flash"
-            if _env_str("RAG_LLM_PROVIDER", "gemini") in ("gemini", "vertex_ai")
-            else "gpt-5-mini",
+            "gemini-2.5-flash" if _default_provider() in ("gemini", "vertex_ai") else "gpt-5-mini",
         )
     )
     extraction_temperature: float = field(
@@ -481,27 +501,25 @@ class Settings:
 
     def _has_adc_credentials(self) -> bool:
         """Check if Google Cloud Application Default Credentials (ADC) are configured."""
-        adc_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.path.expanduser(
-            "~/.config/gcloud/application_default_credentials.json"
-        )
-        if os.path.exists(adc_path):
-            return True
-        win_adc = "/mnt/c/Users/deepa/AppData/Roaming/gcloud/application_default_credentials.json"
-        return os.path.exists(win_adc)
+        return _has_adc_credentials()
 
     def validate(self) -> None:
         provider = self.infra.provider.lower()
         if provider in ("gemini", "vertex_ai"):
             if not self.infra.gemini_api_key and not self._has_adc_credentials():
-                raise OSError(
-                    "Neither GEMINI_API_KEY nor Google Cloud Application Default Credentials (ADC) "
-                    "were found. Add GEMINI_API_KEY to your .env file or authenticate via "
-                    "'gcloud auth application-default login'."
-                )
-        elif provider == "openai":
+                if self.infra.openai_api_key and not os.getenv("RAG_LLM_PROVIDER"):
+                    object.__setattr__(self, "infra", replace(self.infra, provider="openai"))
+                    provider = "openai"
+                else:
+                    raise OSError(
+                        "Neither GEMINI_API_KEY nor Google Cloud Application Default Credentials (ADC) "
+                        "were found. Add GEMINI_API_KEY to your .env file or authenticate via "
+                        "'gcloud auth application-default login'."
+                    )
+        if provider == "openai":
             if not self.infra.openai_api_key:
                 raise OSError("OPENAI_API_KEY is not set. Add it to your .env file.")
-        else:
+        elif provider not in ("gemini", "vertex_ai", "openai"):
             # For 'auto' or custom providers: require at least one key or ADC
             if (
                 not self.infra.gemini_api_key

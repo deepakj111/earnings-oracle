@@ -136,6 +136,8 @@ jobs:
             --name rag_smoke \
             --network host \
             -e QDRANT_URL=http://localhost:6333 \
+            -e RAG_LLM_PROVIDER=gemini \
+            -e GEMINI_API_KEY=test-gemini-key-smoke-test \
             -e OPENAI_API_KEY=sk-smoke-placeholder \
             -e SEC_USER_AGENT="Smoke Test ci@example.com" \
             -e RAG_CRAG_ENABLED=false \

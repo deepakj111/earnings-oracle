@@ -320,6 +320,7 @@ jobs:
         run: |
           cat > .env << 'EOF'
           OPENAI_API_KEY=sk-stub-not-real
+          GEMINI_API_KEY=test-gemini-stub-not-real
           QDRANT_URL=http://localhost:6333
           SEC_USER_AGENT=CI stub@example.com
           GRAFANA_ADMIN_PASSWORD=stub-not-real
